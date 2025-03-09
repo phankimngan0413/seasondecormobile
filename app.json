@@ -2,6 +2,8 @@
   "expo": {
     "name": "seasondecormobile",
     "slug": "seasondecormobile",
+    "platforms": ["ios", "android", "web"],
+    "projectNameForProxy": "@baymaxphan/seasondecormobile", 
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",

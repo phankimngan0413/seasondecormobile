@@ -1,84 +1,104 @@
-import axios from "axios";
+import axios, { AxiosInstance } from "axios";
 import { getToken, handleSessionExpired } from "@/services/auth";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
+import { getUniqueId } from "react-native-device-info";
 
-// ✅ Kiểm tra Expo Tunnel (nếu có)
-const TUNNEL_API = Constants.expoConfig?.extra?.apiUrl; // Lấy URL của Expo Tunnel nếu có
+// ✅ Định nghĩa các địa chỉ API
+const TUNNEL_API = Constants.expoConfig?.extra?.apiUrl;
+const LAN_IP = "http://192.168.100.5:5297"; // 🔹 Địa chỉ IP máy tính
+const EMULATOR_IP = "http://10.0.2.2:5297"; // 🔹 Địa chỉ IP cho Android Emulator
+const LOCALHOST = "http://localhost:5297"; // 🔹 Dùng localhost nếu chạy trên web
 
-// ✅ Địa chỉ IP LAN nếu không dùng Tunnel
-const LAN_IP = "http://192.168.100.5:5297"; // ⚡️ Thay bằng IP thật của máy tính
+// ✅ Kiểm tra thiết bị đang chạy
+const isWeb = Platform.OS === "web";
 
-// ✅ Địa chỉ IP cho Android Emulator
-const EMULATOR_IP = "http://10.0.2.2:5297"; // Địa chỉ IP cho Android Emulator
+// 🔹 Hàm kiểm tra máy ảo chính xác hơn
+const isEmulator = async (): Promise<boolean> => {
+  const uniqueId = await getUniqueId();
+  return uniqueId.includes("emulator") || uniqueId.includes("genymotion");
+};
 
-// ✅ Chọn API URL tự động
-const isRealDevice = Platform.OS === "android" && Constants.isDevice; // Kiểm tra thiết bị Android thật
-const isWeb = Platform.OS === "web"; // Nếu là Web
-const isEmulator = Platform.OS === "android" && !Constants.isDevice; // Nếu chạy trên Android Emulator
+// 🔹 Xác định `BASE_URL`
+const setupBaseUrl = async (): Promise<string> => {
+  let BASE_URL = LAN_IP; // Mặc định IP máy tính
 
-// Cập nhật BASE_URL cho điện thoại thật, máy ảo hoặc khi dùng Expo Tunnel
-let BASE_URL = LAN_IP; // Mặc định là LAN_IP
-
-if (TUNNEL_API) {
-  BASE_URL = TUNNEL_API; // Nếu có Expo Tunnel, dùng URL Tunnel
-} else if (isRealDevice) {
-  BASE_URL = LAN_IP; // Nếu là điện thoại thật, dùng IP LAN
-} else if (isEmulator) {
-  BASE_URL = EMULATOR_IP; // Nếu là Android Emulator, dùng IP máy ảo
-} else if (isWeb) {
-  BASE_URL = "http://localhost:5297"; // Nếu là Web, dùng localhost
-}
-
-// In ra giá trị BASE_URL và kiểm tra thiết bị
-console.log("Platform OS:", Platform.OS);
-console.log("Device Check:", isRealDevice ? "Real Device" : isEmulator ? "Emulator" : "Web");
-console.log("🔵 API BASE URL:", BASE_URL);
-
-// ✅ Tạo instance Axios
-const apiClient = axios.create({
-  baseURL: BASE_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
-});
-
-// ✅ Thêm Token vào mỗi request
-apiClient.interceptors.request.use(
-  async (config) => {
-    try {
-      const token = await getToken();
-      if (token) {
-        config.headers["Authorization"] = `Bearer ${token}`;
-      }
-    } catch (error) {
-      console.error("🔴 Lỗi lấy Token:", error);
-    }
-    return config;
-  },
-  (error) => {
-    console.error("🔴 Lỗi request Axios:", error);
-    return Promise.reject(error);
+  if (TUNNEL_API) {
+    BASE_URL = TUNNEL_API;
+  } else if (isWeb) {
+    BASE_URL = LOCALHOST;
+  } else if (await isEmulator()) {
+    BASE_URL = EMULATOR_IP;
+  } else {
+    BASE_URL = LAN_IP;
   }
-);
 
-// ✅ Middleware: Xử lý response
-apiClient.interceptors.response.use(
-  (response) => response.data ?? response,
-  async (error) => {
-    if (error?.response) {
+  console.log("🌐 API BASE URL:", BASE_URL);
+  return BASE_URL;
+};
+
+// ✅ Biến lưu trữ instance của `apiClient`
+let apiClient: AxiosInstance | null = null; // 🛠️ Khai báo kiểu AxiosInstance
+
+// ✅ Hàm khởi tạo `apiClient`
+export const initApiClient = async (): Promise<AxiosInstance> => {
+  if (apiClient) return apiClient; // 🔹 Nếu đã có, trả về luôn
+
+  const baseURL = await setupBaseUrl();
+
+  apiClient = axios.create({
+    baseURL,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    timeout: 10000,
+  });
+
+  // ✅ Thêm Token vào mỗi request
+  apiClient.interceptors.request.use(
+    async (config) => {
+      try {
+        const token = await getToken();
+        if (token) {
+          config.headers["Authorization"] = `Bearer ${token}`;
+        }
+      } catch (error) {
+        console.error("❌ Lỗi khi lấy Token:", error);
+      }
+      return config;
+    },
+    (error) => {
+      console.error("❌ Lỗi request Axios:", error);
+      return Promise.reject(error);
+    }
+  );
+
+  // ✅ Xử lý response và lỗi API
+  apiClient.interceptors.response.use(
+    (response) => response.data ?? response,
+    async (error) => {
+      if (!error.response) {
+        console.error("❌ Không thể kết nối API:", error.message);
+        return Promise.reject({ message: "Mất kết nối tới máy chủ. Vui lòng kiểm tra mạng!" });
+      }
+
       const { status, data } = error.response;
-      console.error(`🔴 Lỗi API: ${status}`, data);
+      console.error(`❌ Lỗi API [${status}]:`, data);
 
-      // ❌ Xử lý lỗi 401 (Unauthorized)
       if (status === 401) {
         console.warn("⚠️ Token hết hạn, đăng xuất...");
         await handleSessionExpired();
       }
-    }
-    return Promise.reject(error);
-  }
-);
 
-// ✅ Xuất Axios instance
-export default apiClient;
+      return Promise.reject(data);
+    }
+  );
+
+  return apiClient;
+};
+
+// ✅ Xuất `apiClient` đã được khởi tạo (chỉ dùng nếu chắc chắn `initApiClient()` đã chạy trước)
+export const getApiClient = (): AxiosInstance => {
+  if (!apiClient) throw new Error("API client chưa được khởi tạo. Gọi initApiClient() trước.");
+  return apiClient;
+};

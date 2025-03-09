@@ -1,3 +1,4 @@
+import React from "react";
 import { Stack } from "expo-router";
 import { useTheme } from "@/constants/ThemeContext"; // ✅ Import ThemeContext để đổi theme
 import { TouchableOpacity, View } from "react-native";

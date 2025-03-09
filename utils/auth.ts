@@ -1,4 +1,4 @@
-import apiClient from "@/utils/axiosConfig";
+import {initApiClient} from "@/utils/axiosConfig";
 import { LogBox } from "react-native";
 
 // ✅ Ẩn lỗi Axios 400 từ LogBox
@@ -20,6 +20,7 @@ interface ILoginResponse {
 export const loginAPI = async (email: string, password: string): Promise<ILoginResponse> => {
   const url = "/api/Auth/login";
 
+  const apiClient = await initApiClient();
   console.log("🟡 API Endpoint:", apiClient.defaults.baseURL + url);
 
   try {

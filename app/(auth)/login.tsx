@@ -22,7 +22,7 @@ const LoginScreen: React.FC = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [errors, setErrors] = useState({ email: "", password: "" });
+  const [errors, setErrors] = useState<{ email: string; password: string }>({ email: "", password: "" });
 
   async function handleLogin() {
     setErrors({ email: "", password: "" });
@@ -37,6 +37,10 @@ const LoginScreen: React.FC = () => {
     }
     if (!password) {
       setErrors((prev) => ({ ...prev, password: "Password is required." }));
+      return;
+    }
+    if (password.length < 6) {
+      setErrors((prev) => ({ ...prev, password: "Password must be at least 6 characters long." }));
       return;
     }
 
