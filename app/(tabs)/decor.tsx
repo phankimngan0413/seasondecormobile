@@ -43,7 +43,7 @@ const ProductListScreen = () => {
           <TouchableOpacity
             onPress={() =>
               router.push({
-                pathname: "/product-detail/[id]",
+                pathname: "/product/product-detail/[id]",
                 params: { id: item.id.toString() },
               })
             }
@@ -63,6 +63,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f9f9f9",
+    
   },
   productList: {
     paddingHorizontal: 10,
@@ -71,7 +72,6 @@ const styles = StyleSheet.create({
   },
   productWrapper: {
     flex: 1, // ✅ Đảm bảo item hiển thị đúng trong 2 cột
-    margin: 5, // ✅ Khoảng cách giữa các item
   },
   errorText: {
     color: "red",
