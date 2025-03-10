@@ -4,24 +4,23 @@ import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { getUniqueId } from "react-native-device-info";
 
-// ✅ Định nghĩa các địa chỉ API
+// Define the API base URL dynamically depending on platform/environment
 const TUNNEL_API = Constants.expoConfig?.extra?.apiUrl;
-const LAN_IP = "http://192.168.100.5:5297"; // 🔹 Địa chỉ IP máy tính
-const EMULATOR_IP = "http://10.0.2.2:5297"; // 🔹 Địa chỉ IP cho Android Emulator
-const LOCALHOST = "http://localhost:5297"; // 🔹 Dùng localhost nếu chạy trên web
+const LAN_IP = "http://10.0.2.2:5297"; 
+const EMULATOR_IP = "http://10.0.2.2:5297"; 
+const LOCALHOST = "http://localhost:5297"; 
 
-// ✅ Kiểm tra thiết bị đang chạy
 const isWeb = Platform.OS === "web";
 
-// 🔹 Hàm kiểm tra máy ảo chính xác hơn
+// Check if the device is an emulator
 const isEmulator = async (): Promise<boolean> => {
   const uniqueId = await getUniqueId();
   return uniqueId.includes("emulator") || uniqueId.includes("genymotion");
 };
 
-// 🔹 Xác định `BASE_URL`
+// Set the base URL for API requests
 const setupBaseUrl = async (): Promise<string> => {
-  let BASE_URL = LAN_IP; // Mặc định IP máy tính
+  let BASE_URL = LAN_IP; 
 
   if (TUNNEL_API) {
     BASE_URL = TUNNEL_API;
@@ -37,12 +36,11 @@ const setupBaseUrl = async (): Promise<string> => {
   return BASE_URL;
 };
 
-// ✅ Biến lưu trữ instance của `apiClient`
-let apiClient: AxiosInstance | null = null; // 🛠️ Khai báo kiểu AxiosInstance
+let apiClient: AxiosInstance | null = null;
 
-// ✅ Hàm khởi tạo `apiClient`
+// Initialize Axios client
 export const initApiClient = async (): Promise<AxiosInstance> => {
-  if (apiClient) return apiClient; // 🔹 Nếu đã có, trả về luôn
+  if (apiClient) return apiClient;
 
   const baseURL = await setupBaseUrl();
 
@@ -54,7 +52,7 @@ export const initApiClient = async (): Promise<AxiosInstance> => {
     timeout: 10000,
   });
 
-  // ✅ Thêm Token vào mỗi request
+  // Request Interceptor: Attach Authorization token
   apiClient.interceptors.request.use(
     async (config) => {
       try {
@@ -73,7 +71,7 @@ export const initApiClient = async (): Promise<AxiosInstance> => {
     }
   );
 
-  // ✅ Xử lý response và lỗi API
+  // Response Interceptor: Handle API response and errors
   apiClient.interceptors.response.use(
     (response) => response.data ?? response,
     async (error) => {
@@ -97,7 +95,7 @@ export const initApiClient = async (): Promise<AxiosInstance> => {
   return apiClient;
 };
 
-// ✅ Xuất `apiClient` đã được khởi tạo (chỉ dùng nếu chắc chắn `initApiClient()` đã chạy trước)
+// Get the initialized API client
 export const getApiClient = (): AxiosInstance => {
   if (!apiClient) throw new Error("API client chưa được khởi tạo. Gọi initApiClient() trước.");
   return apiClient;

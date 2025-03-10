@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -6,9 +6,26 @@ import {
   TouchableOpacity,
   ScrollView,
   Image,
+  FlatList,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/constants/ThemeContext"; 
+import ProductCard from "../product/ProductCard";
+
+interface IProduct {
+  id: number;
+  productName: string;
+  productPrice: number;
+  rate: number;
+  totalSold: number;
+  imageUrls: string[];
+}
+import { getProductsAPI } from "@/utils/productAPI";
+import CustomButton from "@/components/ui/Button/Button";
+import { router } from "expo-router";
+
+
 export default function HomeScreen() {
   const { theme } = useTheme(); // ✅ Lấy theme từ Context
   const isDark = theme === "dark"; // ✅ Kiểm tra theme
@@ -20,14 +37,39 @@ export default function HomeScreen() {
   const handleTabChange = (index: number) => {
     setSelectedTab(index);
   };
-
+ 
   const handleNestedTabChange = (index: number, nestedIndex: number) => {
     setNestedSelectedTab((prev) => ({
       ...prev,
       [index]: nestedIndex,
     }));
   };
+  const [products, setProducts] = useState<IProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    try {
+      const data = await getProductsAPI();
+      setProducts(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddToCart = (product: any) => {
+    console.log("🛒 Added to cart:", product.productName);
+    // ✅ Thêm logic giỏ hàng tại đây (nếu có)
+  };
+
+  if (loading) return <ActivityIndicator size="large" color="#0000ff" />;
+  if (error) return <Text style={styles.errorText}>{error}</Text>;
   const tabsConfig = [
     {
       label: 'Living Room',
@@ -191,47 +233,10 @@ export default function HomeScreen() {
 </View>
 
 
-      {/* Highlight Section */}
-      <View style={styles.highlightSection}>
-        <Text style={styles.highlightTitle}>
-          Trusted by Founders and Entrepreneurs
-        </Text>
-        <Text style={[styles.highlightSubtitle,{ color: isDark ? "#fff" : "#333" }]}>
-          Join the growing community of homeowners who trust our platform for
-          their home decor needs.
-        </Text>
-      </View>
+    
 
       {/* Services Section */}
-      <View style={styles.services}>
-        <Text style={styles.servicesTitle}>Our Services</Text>
-        <Text style={[styles.servicesSubtitle,{ color: isDark ? "#fff" : "#333" }]}>
-          Explore the range of services we offer to enhance your living spaces.
-        </Text>
-        <View style={styles.servicesContainer}>
-          <TouchableOpacity style={styles.serviceItem}>
-            <Ionicons name="home" size={28} color="#333" />
-            <Text style={styles.serviceTitle}>Interior Design</Text>
-            <Text style={styles.serviceDescription}>
-              Complete room transformations with personalized design.
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.serviceItem}>
-            <Ionicons name="color-palette" size={28} color="#333" />
-            <Text style={styles.serviceTitle}>Home Styling</Text>
-            <Text style={styles.serviceDescription}>
-              Add style and functionality with curated home decor.
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.serviceItem}>
-            <Ionicons name="brush" size={28} color="#333" />
-            <Text style={styles.serviceTitle}>Consultation</Text>
-            <Text style={styles.serviceDescription}>
-              Get expert advice on how to make the most of your space.
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      
 
       {/* Home Decor Tips Section */}
       <View style={styles.tips}>
@@ -273,6 +278,35 @@ export default function HomeScreen() {
           />
         </TouchableOpacity>
       </View>
+
+      <Text style={styles.screenTitle}>Featured Products</Text>
+
+      {loading ? (
+        <ActivityIndicator size="large" color="#3498db" />
+      ) : error ? (
+        <Text style={styles.errorText}>{error}</Text>
+      ) : (
+        <>
+          <FlatList
+            data={products.slice(0, 6)} // ✅ Chỉ hiển thị 6 sản phẩm đầu
+            renderItem={({ item }) => <ProductCard product={item} onAddToCart={() => {}} />}
+            keyExtractor={(item) => item.id.toString()}
+            contentContainerStyle={styles.productList}
+            numColumns={2}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={<Text style={styles.emptyListText}>No products available</Text>}
+          />
+
+          {/* ✅ Nút Xem Thêm */}
+          <CustomButton
+            title="View More"
+            onPress={() => router.push("/decor")}
+            btnStyle={styles.viewMoreButton}
+            labelStyle={styles.viewMoreText}
+          />
+        </>
+      )}
+    
     </ScrollView>
   );
 }
@@ -283,8 +317,9 @@ const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     backgroundColor: "#fff",
-    paddingHorizontal: 20,
-    paddingTop: 40,
+        paddingTop: 40,
+    padding: 8,
+
   },
   hero: {
     justifyContent: "center",
@@ -372,60 +407,18 @@ const styles = StyleSheet.create({
   contentContainer: {
     marginTop: 20,
   },
-  highlightSection: {
-    marginVertical: 30,
-    alignItems: "center",
+  screenTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 16,
   },
-  highlightTitle: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: PRIMARY_COLOR,
-    marginBottom: 10,
+  productList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
   },
-  highlightSubtitle: {
-    fontSize: 16,
-    color: "#555",
-    textAlign: "center",
-  },
-  services: {
-    marginBottom: 40,
-  },
-  servicesTitle: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: PRIMARY_COLOR,
-    textAlign: "center",
-    marginBottom: 15,
-  },
-  servicesSubtitle: {
-    fontSize: 16,
-    textAlign: "center",
-    color: "#555",
-    marginBottom: 30,
-  },
-  servicesContainer: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    flexWrap: "wrap",
-  },
-  serviceItem: {
-    width: "30%",
-    padding: 15,
-    backgroundColor: "#f8f8f8",
-    borderRadius: 8,
-    marginBottom: 20,
-    textAlign: "center",
-  },
-  serviceTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  serviceDescription: {
-    fontSize: 14,
-    color: "#777",
-    marginTop: 10,
-  },
+ 
+
   tips: {
     marginBottom: 40,
   },
@@ -486,6 +479,18 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 20,
   },
+  errorText: {
+    color: "red",
+    fontSize: 16,
+    textAlign: "center",
+    marginVertical: 20,
+  },
+  emptyListText: {
+    fontSize: 18,
+    color: "#555",
+    textAlign: "center",
+    marginTop: 20,
+  },
   imageRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -514,5 +519,16 @@ const styles = StyleSheet.create({
   imageComparisonContainer: {
     marginTop: 20,
     alignItems: "center",
+  },
+  viewMoreButton: {
+    marginTop: 20,
+    backgroundColor: "#3498db",
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  viewMoreText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#fff",
   },
 });

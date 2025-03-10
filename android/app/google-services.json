@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "756855807439",
+    "project_id": "seasondecorapp",
+    "storage_bucket": "seasondecorapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:756855807439:android:86c2cf13b0b1f9a6c186ba",
+        "android_client_info": {
+          "package_name": "com.baymaxphan.seasondecormobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "756855807439-m147uiie2jqi5jiled7th8vct8mkuqhk.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.baymaxphan.seasondecormobile",
+            "certificate_hash": "df0ce18d7940882a7aa63e906c1c4d622b5cf0de"
+          }
+        },
+        {
+          "client_id": "756855807439-q5fnprcub049dpuqfsii64q14gbh1038.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD0Slv4CpCKcaKMsFdzOWBWo-k5X-F1mTE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "756855807439-q5fnprcub049dpuqfsii64q14gbh1038.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

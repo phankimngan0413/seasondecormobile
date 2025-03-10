@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Platform } from "react-native";
 import { Colors } from "@/constants/Colors";
 import { useTheme } from "@/constants/ThemeContext"; // ✅ Sử dụng ThemeContext
+import React from "react";
 
 export default function TabLayout() {
   const { theme } = useTheme(); // ✅ Lấy theme từ Context
