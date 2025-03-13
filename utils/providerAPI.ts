@@ -4,38 +4,31 @@ import { LogBox } from "react-native";
 // ✅ Ẩn lỗi Axios 400 từ LogBox
 LogBox.ignoreLogs(["AxiosError: Request failed with status code 400"]);
 
-// ✅ Interface cho sản phẩm
-// ✅ Thêm export để có thể sử dụng IProduct ở file khác
-export interface IProduct {
+// ✅ Interface cho nhà cung cấp
+export interface IProvider {
   id: number;
-  productName: string;
-  rate: number;
-  totalRate: number;
-  totalSold: number;
-  description: string;
-  productPrice: number;
-  quantity: number;
-  madeIn: string;
-  shipFrom: string;
-  categoryId: number;
-  imageUrls: string[];
-  reviews: any[];
-  
+  name: string;
+  slug: string;
+  bio: string;
+  phone: string;
+  address: string;
+  isProvider: boolean;
+  joinedDate: string;
+  followersCount: number;
+  followingCount: number;
 }
 
-
-// ✅ API GET danh sách sản phẩm
-export const getProductsAPI = async (): Promise<IProduct[]> => {
-  const url = "/api/Product/getList";
+// ✅ API GET danh sách nhà cung cấp
+export const getProvidersAPI = async (): Promise<IProvider[]> => {
+  const url = "/api/Provider/getAll";
 
   const apiClient = await initApiClient();
   console.log("🟡 API Endpoint:", apiClient.defaults.baseURL + url);
 
   try {
-    const response = await apiClient.get<IProduct[]>(url); // ✅ API trả về mảng
+    const response = await apiClient.get<IProvider[]>(url);
     console.log("🟢 Full API Response:", response.data);
 
-    // ✅ Nếu API trả về một mảng, trả về luôn
     if (Array.isArray(response.data)) {
       return response.data;
     }
@@ -43,7 +36,7 @@ export const getProductsAPI = async (): Promise<IProduct[]> => {
     console.error("🔴 API Response không hợp lệ:", response.data);
     return Promise.reject(new Error("Invalid response from server."));
   } catch (error: any) {
-    console.error("🔴 Get Products API Error:", error);
+    console.error("🔴 Get Providers API Error:", error);
 
     if (error.message.includes("Network Error")) {
       return Promise.reject(new Error("⚠️ Cannot connect to server. Please check your internet connection."));
@@ -53,19 +46,17 @@ export const getProductsAPI = async (): Promise<IProduct[]> => {
   }
 };
 
-
-// ✅ API GET chi tiết sản phẩm theo ID
-export const getProductDetailAPI = async (id: number): Promise<IProduct> => {
-  const url = `/api/Product/getById/${id}`;
+// ✅ API GET chi tiết nhà cung cấp theo ID
+export const getProviderDetailAPI = async (id: number): Promise<IProvider> => {
+  const url = `/api/Provider/getById/${id}`;
 
   const apiClient = await initApiClient();
   console.log("🟡 API Endpoint:", apiClient.defaults.baseURL + url);
 
   try {
-    const response = await apiClient.get<IProduct>(url); // ✅ API trả về object trực tiếp
+    const response = await apiClient.get<IProvider>(url);
     console.log("🟢 Full API Response:", response.data);
 
-    // ✅ API trả về một object, trả về luôn
     if (response.data && typeof response.data === "object") {
       return response.data;
     }
@@ -73,7 +64,7 @@ export const getProductDetailAPI = async (id: number): Promise<IProduct> => {
     console.error("🔴 API Response không hợp lệ:", response.data);
     return Promise.reject(new Error("Invalid response from server."));
   } catch (error: any) {
-    console.error("🔴 Get Product Detail API Error:", error);
+    console.error("🔴 Get Provider Detail API Error:", error);
 
     if (error.message.includes("Network Error")) {
       return Promise.reject(new Error("⚠️ Cannot connect to server. Please check your internet connection."));
@@ -82,4 +73,3 @@ export const getProductDetailAPI = async (id: number): Promise<IProduct> => {
     return Promise.reject(new Error("Network error, please try again."));
   }
 };
-

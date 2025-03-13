@@ -6,8 +6,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { getProductDetailAPI, IProduct } from "@/utils/productAPI";
 import { addToCartAPI } from "@/utils/cartAPI";
 import CustomButton from "@/components/ui/Button/Button";
-import { LinearGradient } from "expo-linear-gradient";
-import { getToken, getUserIdFromToken, handleSessionExpired } from "@/services/auth";
+import Ionicons from "react-native-vector-icons/Ionicons";
+import { getToken } from "@/services/auth";
 
 const ProductDetailScreen = () => {
   const { id } = useLocalSearchParams();
@@ -15,6 +15,7 @@ const ProductDetailScreen = () => {
   const [product, setProduct] = useState<IProduct | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
     fetchProductDetail();
@@ -35,9 +36,21 @@ const ProductDetailScreen = () => {
     }
   };
 
+  const handlePrev = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(currentIndex - 1);
+    }
+  };
+
+  const handleNext = () => {
+    if (product && product.imageUrls && currentIndex < product.imageUrls.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+    }
+  };
+
   const handleAddToCart = async () => {
     if (!product) return;
-  
+
     const token = await getToken();
     if (!token) {
       Alert.alert("🔒 Login Required", "You need to log in to add items to your cart.", [
@@ -46,7 +59,7 @@ const ProductDetailScreen = () => {
       ]);
       return;
     }
-  
+
     try {
       await addToCartAPI(product.id, 1, product.productPrice);
       Alert.alert("✅ Success", "Product added to cart!");
@@ -55,7 +68,6 @@ const ProductDetailScreen = () => {
       Alert.alert("❌ Error", errorMessage);
     }
   };
-  
 
   if (loading) return <ActivityIndicator size="large" color="#3498db" />;
   if (error) return <Text style={styles.errorText}>{error}</Text>;
@@ -63,15 +75,26 @@ const ProductDetailScreen = () => {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <TouchableOpacity activeOpacity={0.8}>
-        <LinearGradient colors={["#ddd", "#fff"]} style={styles.imageWrapper}>
-          {product.imageUrls.length > 0 ? (
-            <Image source={{ uri: product.imageUrls[0] }} style={styles.image} />
-          ) : (
-            <Text style={styles.noImageText}>No Image Available</Text>
-          )}
-        </LinearGradient>
-      </TouchableOpacity>
+      <View style={styles.imageContainer}>
+        {/* Left Arrow */}
+        <TouchableOpacity onPress={handlePrev} style={[styles.arrowButton, styles.leftArrow]}>
+          <Ionicons name="chevron-back" size={30} color="#fff" />
+        </TouchableOpacity>
+
+        {/* Image Display */}
+        {product.imageUrls && product.imageUrls.length > 0 && (
+          <Image
+            source={{ uri: product.imageUrls[currentIndex] + "?time=" + new Date().getTime() }}
+            style={styles.productImage}
+            onError={(e) => console.log("Image Load Error: ", e.nativeEvent.error)}
+          />
+        )}
+
+        {/* Right Arrow */}
+        <TouchableOpacity onPress={handleNext} style={[styles.arrowButton, styles.rightArrow]}>
+          <Ionicons name="chevron-forward" size={30} color="#fff" />
+        </TouchableOpacity>
+      </View>
 
       <View style={styles.productCard}>
         <Text style={styles.title}>{product.productName}</Text>
@@ -102,21 +125,27 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: 15,
     backgroundColor: "#f8f9fa",
-    alignItems: "center",
   },
-  imageWrapper: {
-    width: "100%",
-    height: 300,
-    borderRadius: 12,
+  imageContainer: {
+    position: "relative",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 15,
-    overflow: "hidden",
   },
-  image: {
-    width: "100%",
-    height: "100%",
+  productImage: {
+    width: 380, // You can adjust this based on your design needs
+    height: 300, // Fixed height for the images
     resizeMode: "cover",
+    marginRight: 10, // To add spacing between images
+    borderRadius: 8, // Optional, to round image corners
+  },
+  noImageContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    height: 300,
+    backgroundColor: "#ecf0f1",
+    borderRadius: 12,
+    marginBottom: 15,
   },
   noImageText: {
     color: "#7f8c8d",
@@ -133,6 +162,7 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 3,
     alignItems: "center",
+    marginTop: 15,
   },
   title: {
     fontSize: 26,
@@ -181,6 +211,24 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "bold",
     color: "#ffffff",
+  },
+  arrowButton: {
+    padding: 10,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    borderRadius: 50,
+    zIndex: 10,
+  },
+  leftArrow: {
+    position: "absolute",
+    left: 10,
+    top: "50%",
+    transform: [{ translateY: -15 }],
+  },
+  rightArrow: {
+    position: "absolute",
+    right: 10,
+    top: "50%",
+    transform: [{ translateY: -15 }],
   },
   errorText: {
     color: "red",

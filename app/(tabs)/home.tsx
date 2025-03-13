@@ -287,15 +287,26 @@ export default function HomeScreen() {
         <Text style={styles.errorText}>{error}</Text>
       ) : (
         <>
-          <FlatList
-            data={products.slice(0, 6)} // ✅ Chỉ hiển thị 6 sản phẩm đầu
-            renderItem={({ item }) => <ProductCard product={item} onAddToCart={() => {}} />}
-            keyExtractor={(item) => item.id.toString()}
-            contentContainerStyle={styles.productList}
-            numColumns={2}
-            showsVerticalScrollIndicator={false}
-            ListEmptyComponent={<Text style={styles.emptyListText}>No products available</Text>}
-          />
+           <FlatList
+         data={products.slice(0, 6)}
+        keyExtractor={(item) => item.id.toString()}
+        numColumns={2} // ✅ Đã sửa, không cần flexWrap
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            onPress={() =>
+              router.push({
+                pathname: "/product/product-detail/[id]",
+                params: { id: item.id.toString() },
+              })
+            }
+            style={styles.productWrapper} // ✅ Thêm style để căn chỉnh
+          >
+            <ProductCard product={item} onAddToCart={() => {}} />
+          </TouchableOpacity>
+        )}
+        contentContainerStyle={styles.productList}
+        showsVerticalScrollIndicator={false}
+      />
 
           {/* ✅ Nút Xem Thêm */}
           <CustomButton
@@ -416,10 +427,12 @@ const styles = StyleSheet.create({
   productList: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-  },
- 
-
-  tips: {
+},
+productWrapper: {
+  flex: 1,
+  margin: 8,
+},
+tips: {
     marginBottom: 40,
   },
   tipsTitle: {

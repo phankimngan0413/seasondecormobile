@@ -30,7 +30,11 @@ const ProductCard: React.FC<ProductProps> = ({ product, onAddToCart }) => {
     <View style={[styles.productCard, { backgroundColor: colors.card, shadowColor: colors.border }]}>
       {/* 🔹 Hiển thị ảnh sản phẩm hoặc placeholder */}
       {product.imageUrls.length > 0 ? (
-        <Image source={{ uri: product.imageUrls[0] }} style={styles.productImage} />
+        <Image 
+        source={{ uri: product.imageUrls[0] + "?time=" + new Date().getTime() }} 
+        style={styles.productImage} 
+        onError={(e) => console.log("Image Load Error: ", e.nativeEvent.error)}
+      />
       ) : (
         <View style={styles.noImageContainer}>
           <Ionicons name="image-outline" size={50} color="#ccc" />
