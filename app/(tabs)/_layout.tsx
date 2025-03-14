@@ -53,13 +53,21 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="chat"
+        options={{
+          title: "Chat",
+          tabBarIcon: ({ color }) => <Ionicons size={28} name="chatbubble-outline" color={color} />,
+        }}
+      />
+  
+      <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",
           tabBarIcon: ({ color }) => <Ionicons size={28} name="person-outline" color={color} />,
         }}
       />
-      
+      {/* Add Chat Screen Tab */}
     </Tabs>
   );
 }

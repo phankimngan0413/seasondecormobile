@@ -290,7 +290,6 @@ export default function HomeScreen() {
            <FlatList
          data={products.slice(0, 6)}
         keyExtractor={(item) => item.id.toString()}
-        numColumns={2} // ✅ Đã sửa, không cần flexWrap
         renderItem={({ item }) => (
           <TouchableOpacity
             onPress={() =>

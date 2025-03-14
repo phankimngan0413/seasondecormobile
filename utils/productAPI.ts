@@ -4,8 +4,6 @@ import { LogBox } from "react-native";
 // ✅ Ẩn lỗi Axios 400 từ LogBox
 LogBox.ignoreLogs(["AxiosError: Request failed with status code 400"]);
 
-// ✅ Interface cho sản phẩm
-// ✅ Thêm export để có thể sử dụng IProduct ở file khác
 export interface IProduct {
   id: number;
   productName: string;

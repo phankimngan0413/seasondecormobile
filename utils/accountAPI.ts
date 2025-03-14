@@ -36,23 +36,25 @@ export const updateAccountDetails = async (userData: any): Promise<any> => {
     if (!userId) throw new Error("No user ID in the token.");
 
     const apiClient = await initApiClient();
-    const response = await apiClient.put(`/api/AccountProfile/update-account`, userData, {
-      headers: {
-        Authorization: `Bearer ${token}`, // Attach the token to the request
-      },
-    });
+    const response = await apiClient.put(`/api/AccountManagement/update/${userId}`, userData);
     
-    return response.data; // Return the updated account data from the server
+    // Return the updated data from the server
+    return response.data;
   } catch (error) {
     console.error("Error updating account details: ", error);
     throw error;
   }
 };
+
+// Login API call
+
 export const updateAvatar = async (file: any): Promise<any> => {
   try {
     if (!file) {
       throw new Error("No file selected."); // Check if a file is selected
     }
+
+    console.log("Selected file:", file); // Log the file to ensure it's valid
 
     const token = await getToken();
     if (!token) throw new Error("No token found!");
@@ -64,7 +66,20 @@ export const updateAvatar = async (file: any): Promise<any> => {
 
     // Prepare FormData to send the file
     const formData = new FormData();
-    formData.append("file", file);  // Ensure the file is attached to the request
+
+    // Flatten the file structure if needed
+    const fileObject = file._parts ? file._parts[0][1] : file;
+
+    // Ensure the file is added to FormData as a proper File/Blob object
+    const blob = {
+      uri: fileObject.uri,
+      type: fileObject.type || "image/jpeg",
+      name: fileObject.fileName || "avatar.jpg",
+    };
+
+    formData.append("file", new Blob([blob.uri], { type: blob.type }), blob.name);
+
+    console.log("FormData:", formData); // Log FormData to check if the file is correctly appended
 
     const apiClient = await initApiClient();
     const response = await apiClient.put(`/api/AccountProfile/avatar`, formData, {

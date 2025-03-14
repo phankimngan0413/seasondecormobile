@@ -27,7 +27,7 @@ function ThemedStack() {
   const pathname = usePathname(); // ✅ Lấy đường dẫn hiện tại
 
   // **🔍 Kiểm tra nếu trang hiện tại là `/login` hoặc `/signup`, thì ẩn header**
-  const hideHeader = ["/login", "/signup"].includes(pathname);
+  const hideHeader = ["/login", "/signup","/chat"].includes(pathname);
 
   // Load fonts
   const [loaded] = useFonts({
@@ -90,10 +90,6 @@ function ThemedStack() {
                   />
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={() => router.push("/chat")}>
-                  <Ionicons name="chatbubble-ellipses-outline" size={30} color={theme === "dark" ? "white" : "black"} />
-                </TouchableOpacity>
-
                 <TouchableOpacity onPress={() => router.push("/cart")}>
                   <Ionicons name="cart-outline" size={30} color={theme === "dark" ? "white" : "black"} />
                 </TouchableOpacity>
@@ -103,7 +99,7 @@ function ThemedStack() {
       >
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="cart" options={{ title: "Giỏ hàng" }} />
-        <Stack.Screen name="chat" options={{ title: "Tin nhắn" }} />
+
     
       </Stack>
     </View>

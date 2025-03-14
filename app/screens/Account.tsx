@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, Alert, Button, Image } from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator, Alert, Button, Image, ScrollView } from "react-native";
 import { getAccountDetails, updateAccountDetails, updateAvatar } from "@/utils/accountAPI"; // Import your API functions
 import BirthdayDatePicker from "@/components/ui/DatePicker"; // Import BirthdayDatePicker
 import InputField from "@/components/InputField"; // Import the custom InputField
 import { launchImageLibrary, ImageLibraryOptions } from "react-native-image-picker"; // Import image picker
+import CustomButton from "@/components/ui/Button/Button";
 
 const AccountScreen = () => {
   const [userData, setUserData] = useState<any>(null);
@@ -68,7 +69,7 @@ const AccountScreen = () => {
       quality: 1,
       includeBase64: false,
     };
-
+  
     launchImageLibrary(options, (response) => {
       if (response.didCancel) {
         console.log("User cancelled image picker");
@@ -77,24 +78,38 @@ const AccountScreen = () => {
       } else {
         // Ensure assets is defined before accessing it
         if (response.assets && response.assets.length > 0) {
-          const newAvatar = response.assets[0].uri; // Get the URI of the selected image
-          if (newAvatar) {
-            setAvatar(newAvatar); // Update avatar state
+          const newAvatarUri = response.assets[0].uri; // Get the URI of the selected image
+  
+          if (newAvatarUri) {
+            setAvatar(newAvatarUri); // Update avatar state locally
+  
+            // Prepare the image for upload (in case you need to upload it to the API)
+            const formData = new FormData();
+            const imageFile = {
+              uri: newAvatarUri,
+              type: "image/png", // Use correct MIME type (adjust depending on your image type)
+              name: "avatar.png", // Adjust the name of the image file
+            } as any;
+
+            formData.append("file", imageFile);
+  
+            // Send the image to the server via your API
+            updateAvatar(formData)
+              .then(() => {
+                Alert.alert("Success", "Avatar updated successfully!");
+              })
+              .catch((error) => {
+                console.error("Avatar update failed:", error);
+                Alert.alert("Error", "Failed to update avatar.");
+              });
           }
-          updateAvatar(response.assets[0]) // Send the selected image to updateAvatar function
-            .then(() => {
-              Alert.alert("Success", "Avatar updated successfully!");
-            })
-            .catch((error) => {
-              console.error("Avatar update failed:", error);
-              Alert.alert("Error", "Failed to update avatar.");
-            });
         } else {
           console.log("No assets found in the response");
         }
       }
     });
   };
+  
 
   if (loading) {
     return <ActivityIndicator size="large" color="#3498db" />;
@@ -105,7 +120,8 @@ const AccountScreen = () => {
   }
 
   return (
-    <View style={styles.container}>
+    
+    <ScrollView style={styles.container}>
       <Text style={styles.title}>Account Information</Text>
 
       {/* Display Avatar */}
@@ -173,8 +189,8 @@ const AccountScreen = () => {
         onChange={setDob} // Updating dob on change
       />
 
-      <Button title="Update Profile" onPress={handleUpdate} disabled={loading} />
-    </View>
+      <CustomButton title="Update Profile" onPress={handleUpdate} disabled={loading} />
+    </ScrollView>
   );
 };
 
@@ -183,6 +199,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
     backgroundColor: "#fff",
+    
   },
   title: {
     fontSize: 24,
