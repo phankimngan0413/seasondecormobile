@@ -2,12 +2,18 @@ import React, { useEffect, useState } from "react";
 import { View, Text, ActivityIndicator, FlatList, StyleSheet, TouchableOpacity, Image } from "react-native";
 import { useRouter } from "expo-router";
 import { getProvidersAPI, IProvider } from "@/utils/providerAPI";
+import { useTheme } from "@/constants/ThemeContext"; // Import the theme context
+import { Colors } from "@/constants/Colors";
 
 const ProviderScreen = () => {
   const [providers, setProviders] = useState<IProvider[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const router = useRouter();
+
+  const { theme } = useTheme(); // Get the current theme
+  const validTheme = theme as "light" | "dark"; // Ensure theme is either light or dark
+  const colors = Colors[validTheme]; // Use colors based on the theme
 
   useEffect(() => {
     fetchProviders();
@@ -26,40 +32,39 @@ const ProviderScreen = () => {
 
   const handleProviderClick = (slug: string) => {
     router.push({
-      pathname: "/provider/slug",
+      pathname: "/provider/[slug]",
       params: { slug },
     });
   };
 
-  if (loading) return <ActivityIndicator size="large" color="#3498db" />;
-  if (error) return <Text style={styles.errorText}>{error}</Text>;
-  if (providers.length === 0) return <Text style={styles.noProviderText}>No providers available.</Text>;
+  if (loading) return <ActivityIndicator size="large" color={colors.primary} />;
+  if (error) return <Text style={[styles.errorText, { color: colors.text }]}>{error}</Text>;
+  if (providers.length === 0) return <Text style={[styles.noProviderText, { color: colors.text }]}>No providers available.</Text>;
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Providers</Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <Text style={[styles.title, { color: colors.text }]}>Providers</Text>
       <FlatList
         data={providers}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
           <TouchableOpacity
             onPress={() => handleProviderClick(item.slug)}
-            style={styles.providerWrapper}
+            style={[styles.providerWrapper, { borderColor: colors.primary, backgroundColor: colors.background }]} // Add white border
           >
-            {/* Căn giữa hình ảnh */}
             <View style={styles.avatarContainer}>
               <Image source={{ uri: item.avatar }} style={styles.avatar} />
             </View>
             <View style={styles.infoContainer}>
-              <Text style={styles.name}>{item.name}</Text>
-              <Text style={styles.businessName}>{item.businessName}</Text>
-              <Text style={styles.bio}>{item.bio}</Text>
-              <Text style={styles.address}>{item.address}</Text>
+              <Text style={[styles.name, { color: colors.text }]}>{item.name}</Text>
+              <Text style={[styles.businessName, { color: colors.primary }]}>{item.businessName}</Text>
+              <Text style={[styles.bio, { color: colors.secondary }]}>{item.bio}</Text>
+              <Text style={[styles.address, { color: colors.secondary }]}>{item.address}</Text>
               <View style={styles.actionsContainer}>
-                <TouchableOpacity style={styles.followButton}>
+                <TouchableOpacity style={[styles.followButton, { backgroundColor: colors.primary }]}>
                   <Text style={styles.followText}>Follow</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.messageButton}>
+                <TouchableOpacity style={[styles.messageButton, { backgroundColor: colors.secondary }]}>
                   <Text style={styles.messageText}>Message</Text>
                 </TouchableOpacity>
               </View>
@@ -76,37 +81,37 @@ const ProviderScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5", 
     paddingTop: 20,
+    paddingHorizontal: 15,
   },
   title: {
-    fontSize: 26,  
-    fontWeight: "700",  
-    color: "#333",
+    fontSize: 26,
+    fontWeight: "700",
+    marginBottom: 30,
     textAlign: "center",
-    marginBottom: 30,  
   },
   providerWrapper: {
     flexDirection: "row",
-    backgroundColor: "#fff",
     padding: 20,
     borderRadius: 15,
     marginBottom: 20,
+    borderWidth: 1, // Add a white border
+    borderColor: "#fff", // White border color
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 6,
-    elevation: 5, 
-    alignItems: "center", // Căn chỉnh các phần tử theo chiều ngang
+    elevation: 5,
+    alignItems: "center",
   },
   avatarContainer: {
-    alignItems: "center", // Căn giữa avatar
-    marginRight: 20,  // Khoảng cách giữa ảnh và thông tin
+    alignItems: "center",
+    marginRight: 20,
   },
   avatar: {
     width: 70,
     height: 70,
-    borderRadius: 35,  
+    borderRadius: 35,
   },
   infoContainer: {
     flex: 1,
@@ -115,21 +120,17 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 20,
     fontWeight: "600",
-    color: "#333",
   },
   businessName: {
     fontSize: 16,
-    color: "#3498db",
     marginTop: 8,
   },
   bio: {
     fontSize: 14,
-    color: "#7f8c8d",
     marginTop: 12,
   },
   address: {
     fontSize: 14,
-    color: "#7f8c8d",
     marginTop: 8,
   },
   actionsContainer: {
@@ -137,15 +138,10 @@ const styles = StyleSheet.create({
     marginTop: 15,
   },
   followButton: {
-    backgroundColor: "#3498db",  
-    borderRadius: 25,  // Increased roundness for a modern look
+    borderRadius: 25,
     paddingVertical: 12,
     paddingHorizontal: 25,
     marginRight: 15,
-    shadowColor: "#3498db", // Subtle shadow for elevation
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
   },
   followText: {
     color: "#fff",
@@ -153,14 +149,9 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   messageButton: {
-    backgroundColor: "#2ecc71",  
-    borderRadius: 25,  // Increased roundness for a modern look
+    borderRadius: 25,
     paddingVertical: 12,
     paddingHorizontal: 25,
-    shadowColor: "#2ecc71", // Subtle shadow for elevation
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
   },
   messageText: {
     color: "#fff",
@@ -168,7 +159,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   providerList: {
-    paddingHorizontal: 15,
     paddingBottom: 20,
   },
   errorText: {

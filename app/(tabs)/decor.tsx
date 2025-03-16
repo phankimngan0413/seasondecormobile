@@ -3,12 +3,19 @@ import { View, Text, ActivityIndicator, FlatList, StyleSheet, TouchableOpacity }
 import { useRouter } from "expo-router";
 import { getProductsAPI, IProduct } from "@/utils/productAPI";
 import ProductCard from "@/app/product/ProductCard";
+import { useTheme } from "@/constants/ThemeContext"; // Importing theme context
+import { Colors } from "@/constants/Colors"; // Importing theme colors
 
 const ProductListScreen = () => {
   const [products, setProducts] = useState<IProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const router = useRouter();
+
+  // Access current theme
+  const { theme } = useTheme();
+  const validTheme = theme as "light" | "dark"; // Ensure theme is either light or dark
+  const colors = Colors[validTheme]; // Use colors based on the current theme
 
   useEffect(() => {
     fetchProducts();
@@ -29,16 +36,16 @@ const ProductListScreen = () => {
     }
   };
 
-  if (loading) return <ActivityIndicator size="large" color="#0000ff" />;
-  if (error) return <Text style={styles.errorText}>{error}</Text>;
-  if (products.length === 0) return <Text style={styles.noProductText}>No products available.</Text>;
+  if (loading) return <ActivityIndicator size="large" color={colors.primary} />;
+  if (error) return <Text style={[styles.errorText, { color: colors.text }]}>{error}</Text>;
+  if (products.length === 0) return <Text style={[styles.noProductText, { color: colors.text }]}>No products available.</Text>;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <FlatList
         data={products}
         keyExtractor={(item) => item.id.toString()}
-        numColumns={2} // ✅ Đã sửa, không cần flexWrap
+        numColumns={2} // Display items in 2 columns
         renderItem={({ item }) => (
           <TouchableOpacity
             onPress={() =>
@@ -47,12 +54,12 @@ const ProductListScreen = () => {
                 params: { id: item.id.toString() },
               })
             }
-            style={styles.productWrapper} // ✅ Thêm style để căn chỉnh
+            style={styles.productWrapper}
           >
             <ProductCard product={item} onAddToCart={() => {}} />
           </TouchableOpacity>
         )}
-        contentContainerStyle={styles.productList}
+        contentContainerStyle={[styles.productList, { backgroundColor: colors.background }]}
         showsVerticalScrollIndicator={false}
       />
     </View>
@@ -62,16 +69,15 @@ const ProductListScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f9f9f9",
-    
+    paddingTop: 20,
+    paddingHorizontal: 10,
   },
   productList: {
-    paddingHorizontal: 10,
-    paddingBottom: 20,
     justifyContent: "space-between",
+    paddingBottom: 20,
   },
   productWrapper: {
-    flex: 1, // ✅ Đảm bảo item hiển thị đúng trong 2 cột
+    flex: 1, // Ensuring items are displayed correctly in 2 columns
   },
   errorText: {
     color: "red",

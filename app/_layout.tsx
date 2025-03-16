@@ -27,7 +27,7 @@ function ThemedStack() {
   const pathname = usePathname(); // ✅ Lấy đường dẫn hiện tại
 
   // **🔍 Kiểm tra nếu trang hiện tại là `/login` hoặc `/signup`, thì ẩn header**
-  const hideHeader = ["/login", "/signup","/chat"].includes(pathname);
+  const hideHeader = ["/login", "/signup"].includes(pathname);
 
   // Load fonts
   const [loaded] = useFonts({

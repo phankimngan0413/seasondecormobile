@@ -27,12 +27,20 @@ const ProductCard: React.FC<ProductProps> = ({ product, onAddToCart }) => {
   const colors = Colors[validTheme];
 
   return (
-    <View style={[styles.productCard, { backgroundColor: colors.card, shadowColor: colors.border }]}>
+    <View
+      style={[
+        styles.productCard,
+        {
+          backgroundColor: colors.card,
+          borderColor: colors.border, // Add border color based on theme
+        },
+      ]}
+    >
       {/* 🔹 Hiển thị ảnh sản phẩm hoặc placeholder */}
       {product.imageUrls.length > 0 ? (
-        <Image 
-          source={{ uri: product.imageUrls[0] + "?time=" + new Date().getTime() }} 
-          style={styles.productImage} 
+        <Image
+          source={{ uri: product.imageUrls[0] + "?time=" + new Date().getTime() }}
+          style={styles.productImage}
           onError={(e) => console.log("Image Load Error: ", e.nativeEvent.error)}
         />
       ) : (
@@ -56,12 +64,12 @@ const ProductCard: React.FC<ProductProps> = ({ product, onAddToCart }) => {
       </Text>
 
       {/* 🔹 Nút thêm vào giỏ hàng */}
-      <CustomButton 
-        title="Add to Cart" 
+      <CustomButton
+        title="Add to Cart"
         onPress={() => onAddToCart(product)}
-        icon={<Ionicons name="add-circle-outline" size={20} color={"#fff"} />} 
-        btnStyle={{ backgroundColor: PRIMARY_COLOR }} 
-        labelStyle={{ color: "#fff" }} 
+        icon={<Ionicons name="add-circle-outline" size={20} color={"#fff"} />}
+        btnStyle={{ backgroundColor: PRIMARY_COLOR }}
+        labelStyle={{ color: "#fff" }}
       />
     </View>
   );
@@ -70,7 +78,7 @@ const ProductCard: React.FC<ProductProps> = ({ product, onAddToCart }) => {
 const styles = StyleSheet.create({
   productCard: {
     width: width * 0.4, // ✅ Giảm kích thước để phù hợp 2 cột
-    padding: 10,
+    padding: 12,
     borderRadius: 8,
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -80,6 +88,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 12,
     marginHorizontal: 5, // ✅ Căn giữa giữa 2 card
+    borderWidth: 1, // Adding border width
+    borderColor: "#ddd", // Light border color for both themes
   },
   productImage: {
     width: "100%",

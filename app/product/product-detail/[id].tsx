@@ -8,6 +8,8 @@ import { addToCartAPI } from "@/utils/cartAPI";
 import CustomButton from "@/components/ui/Button/Button";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { getToken } from "@/services/auth";
+import { useTheme } from "@/constants/ThemeContext";
+import { Colors } from "@/constants/Colors";
 
 const ProductDetailScreen = () => {
   const { id } = useLocalSearchParams();
@@ -16,6 +18,9 @@ const ProductDetailScreen = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [currentIndex, setCurrentIndex] = useState(0);
+  const { theme } = useTheme();
+  const validTheme = theme as "light" | "dark";
+  const colors = Colors[validTheme];
 
   useEffect(() => {
     fetchProductDetail();
@@ -69,12 +74,12 @@ const ProductDetailScreen = () => {
     }
   };
 
-  if (loading) return <ActivityIndicator size="large" color="#3498db" />;
-  if (error) return <Text style={styles.errorText}>{error}</Text>;
-  if (!product) return <Text style={styles.noProductText}>No product details available.</Text>;
+  if (loading) return <ActivityIndicator size="large" color={colors.primary} />;
+  if (error) return <Text style={[styles.errorText, { color: colors.text }]}>{error}</Text>;
+  if (!product) return <Text style={[styles.noProductText, { color: colors.text }]}>No product details available.</Text>;
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.imageContainer}>
         {/* Left Arrow */}
         <TouchableOpacity onPress={handlePrev} style={[styles.arrowButton, styles.leftArrow]}>
@@ -96,23 +101,23 @@ const ProductDetailScreen = () => {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.productCard}>
-        <Text style={styles.title}>{product.productName}</Text>
-        <Text style={styles.price}>💰 ${product.productPrice.toFixed(2)}</Text>
-        <Text style={styles.description}>{product.description}</Text>
+      <View style={[styles.productCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Text style={[styles.title, { color: colors.text }]}>{product.productName}</Text>
+        <Text style={[styles.price, { color: colors.primary }]}>💰 ${product.productPrice.toFixed(2)}</Text>
+        <Text style={[styles.description, { color: colors.text }]}>{product.description}</Text>
 
-        <View style={styles.infoContainer}>
-          <Text style={styles.info}>📦 In Stock: {product.quantity}</Text>
-          <Text style={styles.info}>🌍 Made in: {product.madeIn}</Text>
-          <Text style={styles.info}>🚚 Ships from: {product.shipFrom}</Text>
+        <View style={[styles.infoContainer, { backgroundColor: colors.card }]}>
+          <Text style={[styles.info, { color: colors.text }]}>📦 In Stock: {product.quantity}</Text>
+          <Text style={[styles.info, { color: colors.text }]}>🌍 Made in: {product.madeIn}</Text>
+          <Text style={[styles.info, { color: colors.text }]}>🚚 Ships from: {product.shipFrom}</Text>
         </View>
 
-        <Text style={styles.rating}>⭐ {product.rate} / 5 ({product.totalRate} reviews)</Text>
+        <Text style={[styles.rating, { color: colors.icon }]}>⭐ {product.rate} / 5 ({product.totalRate} reviews)</Text>
 
         <CustomButton 
           title="🛒 Add to Cart" 
           onPress={handleAddToCart} 
-          btnStyle={styles.addToCartButton} 
+          btnStyle={[styles.addToCartButton, { backgroundColor: colors.primary }]} 
           labelStyle={styles.addToCartText} 
         />
       </View>
@@ -124,7 +129,6 @@ const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     padding: 15,
-    backgroundColor: "#f8f9fa",
   },
   imageContainer: {
     position: "relative",
@@ -133,27 +137,14 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   productImage: {
-    width: 380, // You can adjust this based on your design needs
-    height: 300, // Fixed height for the images
+    width: 380, 
+    height: 300, 
     resizeMode: "cover",
-    marginRight: 10, // To add spacing between images
-    borderRadius: 8, // Optional, to round image corners
-  },
-  noImageContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    height: 300,
-    backgroundColor: "#ecf0f1",
-    borderRadius: 12,
-    marginBottom: 15,
-  },
-  noImageText: {
-    color: "#7f8c8d",
-    fontStyle: "italic",
+    marginRight: 10,
+    borderRadius: 8,
   },
   productCard: {
     width: "100%",
-    backgroundColor: "#ffffff",
     borderRadius: 12,
     padding: 20,
     shadowColor: "#000",
@@ -163,47 +154,41 @@ const styles = StyleSheet.create({
     elevation: 3,
     alignItems: "center",
     marginTop: 15,
+    borderWidth: 1,
   },
   title: {
     fontSize: 26,
     fontWeight: "bold",
-    color: "#2c3e50",
     textAlign: "center",
     marginBottom: 5,
   },
   price: {
     fontSize: 22,
     fontWeight: "bold",
-    color: "#e74c3c",
     marginBottom: 10,
   },
   description: {
     fontSize: 15,
     textAlign: "center",
-    color: "#7f8c8d",
     marginBottom: 15,
   },
   infoContainer: {
     width: "100%",
     padding: 10,
     borderRadius: 8,
-    backgroundColor: "#ecf0f1",
     marginBottom: 10,
   },
   info: {
     fontSize: 15,
-    color: "#34495e",
     marginBottom: 5,
   },
   rating: {
     fontSize: 17,
     fontWeight: "bold",
-    color: "#f39c12",
     marginBottom: 10,
   },
   addToCartButton: {
     width: "100%",
-    backgroundColor: "#27ae60",
     paddingVertical: 14,
     borderRadius: 10,
   },

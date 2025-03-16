@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, Image, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity, FlatList } from "react-native";
+import { View, Text, ActivityIndicator, FlatList, StyleSheet, TouchableOpacity, Image, ScrollView } from "react-native";
+import { useRouter } from "expo-router";
 import { getProviderDetailAPI, getProductsByProviderAPI } from "@/utils/providerAPI";
+import { addContactAPI } from "@/utils/contactAPI";
 import { useSearchParams } from "expo-router/build/hooks";
-import ProductCard from "@/app/product/ProductCard"; // Import the ProductCard component
-import { IProvider } from "@/utils/providerAPI"; // Import the updated interface
-import { IProduct } from "@/utils/productAPI"; // Import the product interface
+import ProductCard from "@/app/product/ProductCard"; 
+import { IProvider } from "@/utils/providerAPI"; 
+import { IProduct } from "@/utils/productAPI"; 
 
 const ProviderDetailScreen = () => {
   const searchParams = useSearchParams();
@@ -13,6 +15,7 @@ const ProviderDetailScreen = () => {
   const [products, setProducts] = useState<IProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
+  const router = useRouter();
 
   useEffect(() => {
     const fetchProviderDetail = async () => {
@@ -32,6 +35,21 @@ const ProviderDetailScreen = () => {
 
     fetchProviderDetail();
   }, [slug]);
+
+  const handleMessageClick = async (receiverId: number) => {
+    try {
+      // Gọi API để thêm người này vào danh bạ
+      await addContactAPI(receiverId);
+      
+      // Sau khi thêm liên hệ, điều hướng sang trang chat
+      router.push({
+        pathname: `/chat/[receiverId]`, // Điều hướng tới trang chat với receiverId
+        params: { receiverId: receiverId },
+      });
+    } catch (err) {
+      console.error("Error adding contact or navigating to chat:", err);
+    }
+  };
 
   if (loading) {
     return <ActivityIndicator size="large" color="#3498db" />;
@@ -64,7 +82,10 @@ const ProviderDetailScreen = () => {
             <TouchableOpacity style={styles.followButton}>
               <Text style={styles.followButtonText}>Follow</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.messageButton}>
+            <TouchableOpacity 
+              style={styles.messageButton} 
+              onPress={() => handleMessageClick(provider.id)} // Passing provider id
+            >
               <Text style={styles.messageButtonText}>Message</Text>
             </TouchableOpacity>
           </View>
@@ -192,7 +213,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "bold",
     marginTop: 20,
-   
   },
   productList: {
     paddingBottom: 20,
