@@ -2,11 +2,15 @@ import React, { useEffect, useState } from "react";
 import { View, Text, ActivityIndicator, FlatList, StyleSheet, TouchableOpacity, Image, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { getProviderDetailAPI, getProductsByProviderAPI } from "@/utils/providerAPI";
-import { addContactAPI } from "@/utils/contactAPI";
+import { addContactAPI } from "@/utils/contactAPI"; // API to add contact
 import { useSearchParams } from "expo-router/build/hooks";
-import ProductCard from "@/app/product/ProductCard"; 
+import ProductCard from "@/app/product/ProductCard";  // Correct import for ProductCard
 import { IProvider } from "@/utils/providerAPI"; 
 import { IProduct } from "@/utils/productAPI"; 
+import { useTheme } from "@/constants/ThemeContext";
+import { Colors } from "@/constants/Colors";
+
+const PRIMARY_COLOR = "#5fc1f1"; // Define the primary color
 
 const ProviderDetailScreen = () => {
   const searchParams = useSearchParams();
@@ -16,6 +20,10 @@ const ProviderDetailScreen = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
   const router = useRouter();
+
+  const { theme } = useTheme(); // Get the current theme
+  const validTheme = theme as "light" | "dark"; // Ensure theme is either light or dark
+  const colors = Colors[validTheme]; // Use colors based on the theme
 
   useEffect(() => {
     const fetchProviderDetail = async () => {
@@ -36,54 +44,66 @@ const ProviderDetailScreen = () => {
     fetchProviderDetail();
   }, [slug]);
 
+  // Function to handle "Message" button click
   const handleMessageClick = async (receiverId: number) => {
     try {
-      // Gọi API để thêm người này vào danh bạ
-      await addContactAPI(receiverId);
-      
-      // Sau khi thêm liên hệ, điều hướng sang trang chat
-      router.push({
-        pathname: `/chat/[receiverId]`, // Điều hướng tới trang chat với receiverId
-        params: { receiverId: receiverId },
-      });
+      // Attempt to add the contact
+      const response = await addContactAPI(receiverId);
+  
+      // If the response indicates success or contact already exists, proceed to chat
+      if (response.success || response.message === "Contact already exists.") {
+        console.log("🟢 Navigating to chat...");
+        // Redirect to the chat page without needing the userId
+        router.push("/chat");
+      } else {
+        // If something goes wrong with adding contact
+        console.error("🔴 Error adding contact:", response.message);
+        throw new Error(response.message || "Failed to add contact.");
+      }
     } catch (err) {
-      console.error("Error adding contact or navigating to chat:", err);
+      // Log the error and proceed to chat anyway
+      console.error("🔴 Error adding contact or navigating to chat:", err);
+  
+      // Proceed to chat screen even if adding contact fails (e.g., contact already exists)
+      router.push("/chat");
     }
   };
+  
+  
+  
 
   if (loading) {
-    return <ActivityIndicator size="large" color="#3498db" />;
+    return <ActivityIndicator size="large" color={colors.primary} />;
   }
 
   if (error) {
-    return <Text style={styles.errorText}>{error}</Text>;
+    return <Text style={[styles.errorText, { color: colors.text }]}>{error}</Text>;
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}>
       {/* Provider Details Section */}
       {provider && (
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
           <Image source={{ uri: provider.avatar }} style={styles.avatar} />
-          <Text style={styles.name}>{provider.name}</Text>
-          <Text style={styles.businessName}>{provider.businessName}</Text>
-          <Text style={styles.bio}>{provider.bio}</Text>
-          <Text style={styles.phone}>{provider.phone}</Text>
-          <Text style={styles.address}>{provider.address}</Text>
-          <Text style={styles.joinedDate}>
+          <Text style={[styles.businessName, { color: PRIMARY_COLOR }]}>{provider.businessName}</Text>
+          <Text style={[styles.bio, { color: colors.text }]}>{provider.bio}</Text>
+          <Text style={[styles.phone, { color: colors.text }]}>{provider.phone}</Text>
+          <Text style={[styles.address, { color: colors.text }]}>{provider.address}</Text>
+          <Text style={[styles.joinedDate, { color: PRIMARY_COLOR }]} >
             Joined on: {new Date(provider.joinedDate).toLocaleDateString() || "Invalid Date"}
           </Text>
-          <Text style={styles.followers}>
+          <Text style={[styles.followers, { color: PRIMARY_COLOR }]} >
             Followers: {provider.followersCount} | Following: {provider.followingsCount}
           </Text>
 
           {/* Follow and Message buttons */}
           <View style={styles.buttonsContainer}>
-            <TouchableOpacity style={styles.followButton}>
+            <TouchableOpacity style={[styles.followButton, { backgroundColor: colors.primary }]}>
               <Text style={styles.followButtonText}>Follow</Text>
             </TouchableOpacity>
             <TouchableOpacity 
-              style={styles.messageButton} 
+              style={[styles.messageButton, { backgroundColor: colors.secondary }]} 
               onPress={() => handleMessageClick(provider.id)} // Passing provider id
             >
               <Text style={styles.messageButtonText}>Message</Text>
@@ -93,18 +113,21 @@ const ProviderDetailScreen = () => {
       )}
 
       {/* Products Section */}
-      <Text style={styles.productListTitle}>Products:</Text>
+      <Text style={[styles.productListTitle, { color: colors.text }]}>Products:</Text>
       {products.length > 0 ? (
         <FlatList
           data={products}
           keyExtractor={(item) => item.id.toString()}
           renderItem={({ item }) => (
-            <ProductCard product={item} onAddToCart={() => console.log(`Added ${item.productName} to cart`)} />
+            <ProductCard 
+              product={item} 
+              onAddToCart={() => console.log(`Added ${item.productName} to cart`)} 
+            />
           )}
           contentContainerStyle={styles.productList}
         />
       ) : (
-        <Text>No products available.</Text>
+        <Text style={{ color: colors.text }}>No products available.</Text>
       )}
     </ScrollView>
   );
@@ -114,12 +137,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: "#fff",
   },
   card: {
-    backgroundColor: "#fff",
     borderRadius: 10,
-    padding: 20,
+    padding: 10,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
@@ -134,12 +155,6 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     marginBottom: 20,
   },
-  name: {
-    fontSize: 28,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 10,
-  },
   businessName: {
     fontSize: 20,
     color: "#3498db",
@@ -148,7 +163,6 @@ const styles = StyleSheet.create({
   },
   bio: {
     fontSize: 16,
-    color: "#7f8c8d",
     marginBottom: 20,
     textAlign: "center",
   },
@@ -178,34 +192,26 @@ const styles = StyleSheet.create({
   followButton: {
     backgroundColor: "#3498db",
     borderRadius: 25,
-    paddingVertical: 12,
-    paddingHorizontal: 25,
-    shadowColor: "#3498db",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    width: "48%",
+    paddingVertical: 8, // Smaller padding
+    paddingHorizontal: 18, // Smaller horizontal padding
+    width: "48%", // Ensure button takes up less width
   },
   followButtonText: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 14, // Smaller font size for the text
     fontWeight: "bold",
     textAlign: "center",
   },
   messageButton: {
     backgroundColor: "#2ecc71",
     borderRadius: 25,
-    paddingVertical: 12,
-    paddingHorizontal: 25,
-    shadowColor: "#2ecc71",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    width: "48%",
+    paddingVertical: 8, // Smaller padding
+    paddingHorizontal: 18, // Smaller horizontal padding
+    width: "48%", // Ensure button takes up less width
   },
   messageButtonText: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 14, // Smaller font size for the text
     fontWeight: "bold",
     textAlign: "center",
   },
@@ -215,9 +221,9 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   productList: {
-    paddingBottom: 20,
     flexDirection: "row",
     flexWrap: "wrap",
+    justifyContent: "space-between",
   },
   errorText: {
     fontSize: 16,

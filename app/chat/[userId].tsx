@@ -1,71 +1,150 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity } from "react-native";
-import { SearchParams } from "expo-router"; 
-import { getChatHistoryAPI } from "@/utils/chatAPI"; 
-import { useTheme } from "@/constants/ThemeContext"; 
-import { Colors } from "@/constants/Colors"; 
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Image } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { signalRService } from "@/services/SignalRService";
+import { Colors } from "@/constants/Colors";
+import { useTheme } from "@/constants/ThemeContext";
+import { getUserIdFromToken } from "@/services/auth";
+import { useRouter } from "expo-router";
 import { useSearchParams } from "expo-router/build/hooks";
+import { launchImageLibrary } from 'react-native-image-picker';
+import { Ionicons } from "@expo/vector-icons";
+import { getChatHistoryAPI } from "@/utils/chatAPI";
 
 export default function ChatScreen() {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const userId = searchParams.get('userId');
   const [chatHistory, setChatHistory] = useState<any[]>([]);
-  const [senderName, setSenderName] = useState<string | null>(null);
   const [message, setMessage] = useState("");
-
-  // Access current theme
-  const { theme } = useTheme();
-  const validTheme = theme as "light" | "dark"; 
-  const colors = Colors[validTheme]; 
-
   const [error, setError] = useState<string | null>(null);
+  const { theme } = useTheme();
+  const validTheme = theme as "light" | "dark";
+  const colors = Colors[validTheme];
+  const [selectedImage, setSelectedImage] = useState<any>(null);
 
-  useEffect(() => {
-    const fetchChatHistory = async () => {
-      if (userId) {
-        try {
-          console.log(`🔍 Fetching chat history for userId: ${userId}`);
-          const history = await getChatHistoryAPI(Number(userId));
-          console.log("🟢 Chat History:", history);
+  const receiverId = searchParams.get("userId");
 
-          if (history.length === 0) {
-            setError("Please start the conversation.");
-          } else {
-            setChatHistory(history);
-            setSenderName(history[0].senderName as unknown as string);
-          }
-        } catch (error) {
-          console.error("🔴 Error fetching chat history:", error);
-          setError("Welcome to the chat! Feel free to start the conversation.");
+  const checkLogin = async () => {
+    const token = await AsyncStorage.getItem("user_token");
+    if (!token) {
+      console.error("No token found, redirecting to login...");
+      router.push("/login");
+    }
+  };
+
+  const fetchChatHistory = async (userId: number) => {
+    try {
+      const history = await getChatHistoryAPI(userId);
+      if (history.length > 0) {
+        setChatHistory(history);
+      } else {
+        setError("Please start the conversation.");
+      }
+    } catch (error) {
+      setError("Error fetching chat history.");
+    }
+  };
+  const handleSendMessage = async () => {
+    if (message.trim() === "" && !selectedImage) {
+      console.error("Message or image is required.");
+      return;
+    }
+  
+    const senderId = await getUserIdFromToken();
+    const receiverId = Number(searchParams.get("userId"));
+  
+    console.log(`Sender ID: ${senderId}, Receiver ID: ${receiverId}`);
+  
+    if (senderId === receiverId) {
+      console.error("You cannot send a message to yourself.");
+      return;
+    }
+  
+    try {
+      let fileData = [];
+  
+      // If an image is selected, convert it to base64
+      if (selectedImage) {
+        console.log("Selected image:", selectedImage);  // Log the selected image data
+  
+        // Convert image to Base64
+        const base64 = await fetch(selectedImage.uri)
+          .then((response) => response.blob())
+          .then((blob) => new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.readAsDataURL(blob);
+          }));
+  
+        // If base64 conversion is successful, push it to fileData
+        if (base64) {
+          fileData.push({
+            FileName: selectedImage.fileName,
+            Base64Content: base64,
+            ContentType: selectedImage.type,
+          });
+        } else {
+          console.error("Base64 conversion failed for the image.");
         }
       }
-    };
-
-    if (userId) {
-      fetchChatHistory();
+  
+      // Log message and file data
+      console.log("Message to send:", message);
+      console.log("File data to send:", fileData);
+  
+      // Check that fileData or message are valid
+      if (!message.trim() && fileData.length === 0) {
+        console.error("No valid message or file to send.");
+        return;
+      }
+  
+      // Send the message with file data if valid
+      await signalRService.sendMessage(receiverId, message, fileData);
+  
+      setMessage(""); // Clear the message input
+      setSelectedImage(null); // Clear the selected image
+      setChatHistory((prev) => [
+        ...prev,
+        { id: Date.now().toString(), senderId, receiverId, message, sentTime: new Date() },
+      ]);
+    } catch (error) {
+      console.error("Error sending message:", error);
     }
-  }, [userId]);
-
-  const handleSendMessage = () => {
-    if (message.trim() === "") return;
-    const newMessage = {
-      id: Date.now(), 
-      message,
-      senderId: 1,
-      receiverId: 2,
-      sentTime: new Date(),
-    };
-    setChatHistory(prev => [...prev, newMessage]);
-    setMessage("");
   };
+  
+
+  const pickImage = () => {
+    launchImageLibrary({ mediaType: 'photo' }, (response) => {
+      if (response.didCancel) {
+        console.log("User cancelled image picker");
+      } else if (response.errorCode) {
+        console.error("ImagePicker Error: ", response.errorMessage);
+      } else if (response.assets && response.assets.length > 0) {
+        setSelectedImage(response.assets[0]);
+      }
+    });
+  };
+
+  useEffect(() => {
+    signalRService.onMessageReceived((newMessage: any) => {
+      setChatHistory((prev) => [...prev, newMessage]);
+    });
+  }, []);
+
+  useEffect(() => {
+    checkLogin();
+    if (receiverId) {
+      fetchChatHistory(Number(receiverId));
+    }
+  }, [receiverId]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.chatHeader}>
-        {senderName && <Text style={[styles.senderName, { color: colors.text }]}>Chatting with {senderName}</Text>}
-        <Text style={[styles.greeting, { color: colors.text }]}>
-          Welcome to the chat! Feel free to start the conversation.
+        <Text style={[styles.senderName, { color: colors.text }]}>
+          Chatting with User {receiverId}
         </Text>
+        <Text style={[styles.greeting, { color: colors.text }]}>Start the conversation below:</Text>
       </View>
 
       <FlatList
@@ -75,29 +154,39 @@ export default function ChatScreen() {
           <View
             style={[
               styles.messageContainer,
-              item.senderId === 1 ? styles.messageSender : styles.messageReceiver,
+              item.senderId === Number(receiverId) ? styles.messageReceiver : styles.messageSender,
             ]}
           >
             <Text style={[styles.messageText, { color: colors.text }]}>{item.message}</Text>
-            <Text style={[styles.messageTime, { color: colors.text }]}>
+            <Text style={[styles.messageTime, { color: colors.icon }]}>
               {new Date(item.sentTime).toLocaleTimeString()}
             </Text>
           </View>
         )}
         style={styles.chatList}
-        contentContainerStyle={styles.chatContent}
       />
 
+      {selectedImage && (
+        <View style={styles.selectedImageContainer}>
+          <Image source={{ uri: selectedImage.uri }} style={styles.selectedImage} />
+        </View>
+      )}
+
       <View style={styles.inputContainer}>
+        <TouchableOpacity onPress={pickImage} style={[styles.iconButton]}>
+          <Ionicons name="image-outline" size={24} color={colors.icon} />
+        </TouchableOpacity>
+
         <TextInput
-          style={[styles.input, { backgroundColor: colors.background }]}
+          style={[styles.input, { backgroundColor: colors.inputBackground, color: colors.text }]}
           placeholder="Type a message..."
           placeholderTextColor={colors.inputPlaceholder}
           value={message}
           onChangeText={setMessage}
         />
-        <TouchableOpacity onPress={handleSendMessage} style={[styles.sendButton, { backgroundColor: colors.primary }]}>
-          <Text style={styles.sendButtonText}>Send</Text>
+
+        <TouchableOpacity onPress={handleSendMessage} style={[styles.iconButton]}>
+          <Ionicons name="paper-plane-outline" size={24} color={colors.icon} />
         </TouchableOpacity>
       </View>
     </View>
@@ -111,10 +200,7 @@ const styles = StyleSheet.create({
   },
   chatHeader: {
     marginBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#ddd",
     paddingBottom: 10,
-    alignItems: "center",
   },
   senderName: {
     fontSize: 20,
@@ -129,9 +215,6 @@ const styles = StyleSheet.create({
     flex: 1,
     marginBottom: 20,
   },
-  chatContent: {
-    paddingBottom: 20,
-  },
   messageContainer: {
     padding: 12,
     borderRadius: 12,
@@ -143,7 +226,7 @@ const styles = StyleSheet.create({
     alignSelf: "flex-end",
   },
   messageReceiver: {
-    backgroundColor: "#8a5555",
+    backgroundColor: "#9c8181",
     alignSelf: "flex-start",
   },
   messageText: {
@@ -158,7 +241,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderTopWidth: 1,
-    borderTopColor: "#ddd",
     paddingVertical: 10,
   },
   input: {
@@ -168,14 +250,19 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     fontSize: 16,
   },
-  sendButton: {
-    marginLeft: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+  iconButton: {
+    padding: 10,
     borderRadius: 20,
   },
-  sendButtonText: {
-    color: "#fff",
-    fontSize: 16,
+  selectedImageContainer: {
+    marginVertical: 10,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  selectedImage: {
+    width: 150,
+    height: 150,
+    borderRadius: 10,
+    marginBottom: 10,
   },
 });

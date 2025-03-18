@@ -1,4 +1,4 @@
-import { initApiClient } from "@/utils/axiosConfig";
+import { initApiClient } from "@/config/axiosConfig";
 import { getToken, getUserIdFromToken } from "@/services/auth";
 
 export const createCartAPI = async () => {

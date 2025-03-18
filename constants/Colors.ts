@@ -20,6 +20,8 @@ export const Colors = {
     primary: "#0A7EA4",  
     secondary: "#3A99D8",  
     danger: "#FF4444",  
+    cardBackground: "#f4f4f4",
+    inputBackground: "#F8F9FA",
   },
   dark: {
     text: "#ECEDEE",  
@@ -39,5 +41,7 @@ export const Colors = {
     primary: "#0A7EA4",  
     secondary: "#3A99D8",  
     danger: "#FF4444",  
+    cardBackground: "#333",
+    inputBackground: "#1E1E1E",
   },
 };

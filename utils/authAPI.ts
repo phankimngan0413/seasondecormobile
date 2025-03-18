@@ -1,4 +1,4 @@
-import {initApiClient} from "@/utils/axiosConfig";
+import {initApiClient} from "@/config/axiosConfig";
 import { LogBox } from "react-native";
 
 // ✅ Ẩn lỗi Axios 400 từ LogBox

@@ -1,4 +1,4 @@
-import { initApiClient } from "@/utils/axiosConfig"; // Assuming your axiosConfig is correctly set up
+import { initApiClient } from "@/config/axiosConfig"; // Assuming your axiosConfig is correctly set up
 import { LogBox } from "react-native";
 
 // Ignoring Axios 400 Errors for cleaner logs
@@ -6,15 +6,24 @@ LogBox.ignoreLogs(["AxiosError: Request failed with status code 400"]);
 
 // Interface for message data
 export interface IMessage {
-  senderName(senderName: any): unknown;
   id: number;
   senderId: number;
+  senderName: string;
   receiverId: number;
+  receiverName: string;
   message: string;
   sentTime: string;
   isRead: boolean;
-  files: any[]; // You can define a better type for files
+  files: ChatFileResponse[]; // list of files attached
 }
+
+export interface ChatFileResponse {
+  fileId: number;
+  fileName: string;
+  fileUrl: string;
+  uploadedAt: string;
+}
+
 
 // API to fetch all chat conversations (chat list)
 export const getChatHistoryAPI = async (userId: number): Promise<IMessage[]> => {

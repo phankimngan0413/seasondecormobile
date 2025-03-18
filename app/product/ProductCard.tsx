@@ -67,9 +67,9 @@ const ProductCard: React.FC<ProductProps> = ({ product, onAddToCart }) => {
       <CustomButton
         title="Add to Cart"
         onPress={() => onAddToCart(product)}
-        icon={<Ionicons name="add-circle-outline" size={20} color={"#fff"} />}
-        btnStyle={{ backgroundColor: PRIMARY_COLOR }}
-        labelStyle={{ color: "#fff" }}
+        icon={<Ionicons name="add-circle-outline" size={18} color={"#fff"} />} // Smaller icon size
+        btnStyle={styles.smallButton} // Apply smaller button style
+        labelStyle={styles.smallButtonText} // Apply smaller text style
       />
     </View>
   );
@@ -127,6 +127,20 @@ const styles = StyleSheet.create({
   rateText: {
     fontSize: 10, // Giảm kích thước font chữ cho đánh giá và số lượng đã bán
     marginBottom: 6,
+    textAlign: "center",
+  },
+  // Smaller button and text styles
+  smallButton: {
+    backgroundColor: PRIMARY_COLOR,
+    borderRadius: 20,
+    paddingVertical: 8, // Smaller padding
+    paddingHorizontal: 18, // Smaller horizontal padding
+    width: "100%", // Full width for button
+  },
+  smallButtonText: {
+    color: "#fff",
+    fontSize: 14, // Smaller font size for button text
+    fontWeight: "bold",
     textAlign: "center",
   },
 });

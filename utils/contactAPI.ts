@@ -1,4 +1,4 @@
-import { initApiClient } from "@/utils/axiosConfig"; // Assuming your axiosConfig is correctly set up
+import { initApiClient } from "@/config/axiosConfig"; // Assuming your axiosConfig is correctly set up
 import { LogBox } from "react-native";
 
 // Ignoring Axios 400 Errors for cleaner logs
@@ -42,41 +42,31 @@ export const getContactsAPI = async (): Promise<IContact[]> => {
     return Promise.reject(new Error("Failed to fetch contacts from the server."));
   }
 };
-export const addContactAPI = async (receiverId: number): Promise<IContact> => {
+// Defining the correct response interface
+interface IAddContactResponse {
+  success: boolean;
+  message?: string;
+}
+
+export const addContactAPI = async (receiverId: number): Promise<IAddContactResponse> => {
   const url = `/api/contact/add/${receiverId}`; // API endpoint to add a new contact
 
   const apiClient = await initApiClient();
   try {
     // Make POST request to the API
     const response = await apiClient.post(url); // Send POST request to add a contact
-
-    // Log the entire response object to check its structure
-    console.log("🟢 Full API Response:", response);
-    console.log("🟢 Response Status:", response.status); // If available
-
-    // Ensure response.data exists before checking success and message
     if (response.data && response.data.success !== undefined) {
-      if (response.data.success) {
-        console.log("🟢 Contact added successfully:", response.data);
-        return response.data; // Return the added contact
-      } else {
-        // Handle failure response (e.g., "Contact already exists")
-        console.error("🔴 Error message:", response.data.message || "Unknown error");
-        throw new Error(response.data.message || "Failed to add contact.");
-      }
+      return response.data; // Returning the response that contains success and message
     } else {
-      console.error("🔴 Invalid response format:", response.data);
       throw new Error("Invalid response format from server.");
     }
   } catch (error: any) {
     console.error("🔴 Add Contact API Error:", error);
 
-    // Log detailed error information
     if (error.response) {
       console.error("Error Response Data:", error.response.data);
-      console.error("Error Response Status:", error.response.status); // Log status code for debugging
     } else {
-      console.error("Error Message:", error.message); // Log the error message if no response
+      console.error("Error Message:", error.message);
     }
 
     // Return a user-friendly error message

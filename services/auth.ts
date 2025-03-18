@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Alert } from "react-native";
 import { router } from "expo-router";
-import {jwtDecode} from "jwt-decode";
+import { jwtDecode } from "jwt-decode";
 
 // 📌 **Key lưu trữ token**
 const TOKEN_KEY = "user_token";
@@ -10,6 +10,9 @@ const TOKEN_KEY = "user_token";
 export const getToken = async (): Promise<string | null> => {
   try {
     const token = await AsyncStorage.getItem(TOKEN_KEY);
+    if (!token) {
+      console.warn("🔴 Token không tồn tại.");
+    }
     return token || null;
   } catch (error) {
     console.error("🔴 Lỗi khi lấy token:", error);
@@ -42,7 +45,10 @@ export const removeToken = async (): Promise<void> => {
 export const getUserIdFromToken = async (): Promise<number | null> => {
   try {
     const token = await getToken();
-    if (!token) return null;
+    if (!token) {
+      console.warn("No token found, unable to extract user ID.");
+      return null;
+    }
 
     // 🔥 Giải mã token để lấy ID
     const decoded: any = jwtDecode(token);
@@ -64,7 +70,6 @@ export const getUserIdFromToken = async (): Promise<number | null> => {
   }
 };
 
-
 // ✅ **Xử lý khi phiên đăng nhập hết hạn**
 export const handleSessionExpired = async (): Promise<void> => {
   try {
@@ -83,5 +88,5 @@ export const handleSessionExpired = async (): Promise<void> => {
 // ✅ **Chuyển hướng về màn hình login**
 const redirectToLogin = () => {
   console.log("🔵 Chuyển hướng về trang đăng nhập...");
-  router.replace("/(auth)/login");
+  router.replace("/(auth)/login"); // Make sure to replace with your actual login page path
 };

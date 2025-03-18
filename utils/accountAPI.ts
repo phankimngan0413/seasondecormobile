@@ -1,4 +1,4 @@
-import { initApiClient } from "@/utils/axiosConfig";
+import { initApiClient } from "@/config/axiosConfig";
 import { getToken, setToken } from "@/services/auth"; // Your utility to get and set the token
 import { jwtDecode } from "jwt-decode";
 

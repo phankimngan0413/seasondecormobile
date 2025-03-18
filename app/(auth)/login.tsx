@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 import InputField from "@/components/InputField";
 import CustomButton from "@/components/ui/Button/Button";
 import { Ionicons } from "@expo/vector-icons";
-import { loginAPI } from "@/utils/auth";
+import { loginAPI } from "@/utils/authAPI";
 import { setToken } from "@/services/auth";
 import Logo from "@/components/Logo/Logo";
 import { useTheme } from "@/constants/ThemeContext";

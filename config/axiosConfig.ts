@@ -1,26 +1,26 @@
 import axios, { AxiosInstance } from "axios";
-import { getToken, handleSessionExpired } from "@/services/auth";
+import { getToken, handleSessionExpired } from "@/services/auth"; // Token handling
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { getUniqueId } from "react-native-device-info";
 
-// Define the API base URL dynamically depending on platform/environment
-const TUNNEL_API = Constants.expoConfig?.extra?.apiUrl;
-const LAN_IP = "http://10.0.2.2:5297"; 
-const EMULATOR_IP = "http://10.0.2.2:5297"; 
-const LOCALHOST = "http://localhost:5297"; 
+// Lấy các giá trị BASE_URL từ biến môi trường
+const TUNNEL_API = process.env.REACT_APP_API_URL;
+const LAN_IP = process.env.REACT_APP_LAN_IP || "http://10.0.2.2:5297";
+const EMULATOR_IP = process.env.REACT_APP_EMULATOR_IP || "http://10.0.2.2:5297";
+const LOCALHOST = process.env.REACT_APP_LOCALHOST_URL || "http://localhost:5297";
 
 const isWeb = Platform.OS === "web";
 
-// Check if the device is an emulator
+// Kiểm tra xem có phải emulator không
 const isEmulator = async (): Promise<boolean> => {
   const uniqueId = await getUniqueId();
   return uniqueId.includes("emulator") || uniqueId.includes("genymotion");
 };
 
-// Set the base URL for API requests
+// Thiết lập BASE_URL cho API requests
 const setupBaseUrl = async (): Promise<string> => {
-  let BASE_URL = LAN_IP; 
+  let BASE_URL = LAN_IP;
 
   if (TUNNEL_API) {
     BASE_URL = TUNNEL_API;
@@ -38,7 +38,7 @@ const setupBaseUrl = async (): Promise<string> => {
 
 let apiClient: AxiosInstance | null = null;
 
-// Initialize Axios client
+// Khởi tạo Axios client
 export const initApiClient = async (): Promise<AxiosInstance> => {
   if (apiClient) return apiClient;
 
@@ -52,7 +52,7 @@ export const initApiClient = async (): Promise<AxiosInstance> => {
     timeout: 10000,
   });
 
-  // Request Interceptor: Attach Authorization token
+  // Request Interceptor: Thêm Authorization token
   apiClient.interceptors.request.use(
     async (config) => {
       try {
@@ -61,30 +61,30 @@ export const initApiClient = async (): Promise<AxiosInstance> => {
           config.headers["Authorization"] = `Bearer ${token}`;
         }
       } catch (error) {
-        console.error("❌ Lỗi khi lấy Token:", error);
+        console.error("❌ Error while getting token:", error);
       }
       return config;
     },
     (error) => {
-      console.error("❌ Lỗi request Axios:", error);
+      console.error("❌ Axios request error:", error);
       return Promise.reject(error);
     }
   );
 
-  // Response Interceptor: Handle API response and errors
+  // Response Interceptor: Xử lý API response và errors
   apiClient.interceptors.response.use(
     (response) => response.data ?? response,
     async (error) => {
       if (!error.response) {
-        console.error("❌ Không thể kết nối API:", error.message);
-        return Promise.reject({ message: "Mất kết nối tới máy chủ. Vui lòng kiểm tra mạng!" });
+        console.error("❌ API connection error:", error.message);
+        return Promise.reject({ message: "No connection to the server. Please check your network!" });
       }
 
       const { status, data } = error.response;
-      console.error(`❌ Lỗi API [${status}]:`, data);
+      console.error(`❌ API Error [${status}]:`, data);
 
       if (status === 401) {
-        console.warn("⚠️ Token hết hạn, đăng xuất...");
+        console.warn("⚠️ Token expired, logging out...");
         await handleSessionExpired();
       }
 
@@ -95,8 +95,8 @@ export const initApiClient = async (): Promise<AxiosInstance> => {
   return apiClient;
 };
 
-// Get the initialized API client
+// Lấy API client đã khởi tạo
 export const getApiClient = (): AxiosInstance => {
-  if (!apiClient) throw new Error("API client chưa được khởi tạo. Gọi initApiClient() trước.");
+  if (!apiClient) throw new Error("API client not initialized. Call initApiClient() first.");
   return apiClient;
 };

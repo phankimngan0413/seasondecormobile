@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { initApiClient } from "@/utils/axiosConfig";  // Ensure Axios instance is initialized correctly
+import { initApiClient } from "@/config/axiosConfig";  // Ensure Axios instance is initialized correctly
 import { LogBox } from "react-native";  // Correct import for React Native
 
 // Ignore warnings for common Axios issues (like 400 errors)

@@ -310,7 +310,7 @@ export default function HomeScreen() {
           {/* ✅ Nút Xem Thêm */}
           <CustomButton
             title="View More"
-            onPress={() => router.push("/decor")}
+            onPress={() => router.push("/product/productlist")}
             btnStyle={styles.viewMoreButton}
             labelStyle={styles.viewMoreText}
           />
@@ -328,7 +328,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     backgroundColor: "#fff",
         paddingTop: 40,
-    padding: 8,
+    padding: 12,
 
   },
   hero: {

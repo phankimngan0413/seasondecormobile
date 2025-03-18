@@ -1,20 +1,27 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Image } from "react-native";
 import { useRouter } from "expo-router"; // Importing useRouter for navigation
 import { getContactsAPI } from "@/utils/contactAPI"; // API to fetch contacts
 import { useTheme } from "@/constants/ThemeContext"; // Importing the theme context
 import { Colors } from "@/constants/Colors"; // Import colors for themes
+import { signalRService } from "@/services/SignalRService"; // Assuming SignalRService is already set up
 
 export default function ChatScreen() {
   const [searchText, setSearchText] = useState(""); // For search filter
   const [contacts, setContacts] = useState<any[]>([]); // Store contacts data
   const router = useRouter(); // Initialize the router for navigation
-
-  // Access current theme
-  const { theme } = useTheme();
+  const { theme } = useTheme(); // Access current theme
   const validTheme = theme as "light" | "dark"; // Ensure theme is either light or dark
   const colors = Colors[validTheme]; // Use colors based on the current theme
 
+  const flatListRef = useRef<FlatList>(null); // Reference to FlatList for scrolling
+  interface Message {
+    contactId: number;
+    contactName: string;
+    message: string;
+    avatar: string | null;
+    lastMessageTime: string;
+  }
   // Fetching contact data from the API
   useEffect(() => {
     const fetchContacts = async () => {
@@ -32,6 +39,20 @@ export default function ChatScreen() {
     };
 
     fetchContacts();
+    
+    // Listen for new messages via SignalR
+    signalRService.onMessageReceived((newMessage: Message) => {
+      console.log("New message received:", newMessage);
+      
+      // Add the new message to the contacts array and ensure it's at the top
+      setContacts((prevContacts) => [newMessage, ...prevContacts]);
+
+      // Optionally, scroll the list to the top
+      if (flatListRef.current) {
+        flatListRef.current.scrollToOffset({ animated: true, offset: 0 });
+      }
+    });
+
   }, []);
 
   // Handle navigation to the chat page of a selected contact
@@ -54,18 +75,18 @@ export default function ChatScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Search Bar */}
       <View style={styles.searchContainer}>
-      <TextInput
-  style={[styles.searchInput, { backgroundColor: colors.card, color: colors.text }]} // Set text color based on theme
-  placeholder="Search by Receiver Name"
-  placeholderTextColor={colors.inputPlaceholder}
-  value={searchText}
-  onChangeText={setSearchText}
-/>
-
+        <TextInput
+          style={[styles.searchInput, { backgroundColor: colors.card, color: colors.text }]} // Set text color based on theme
+          placeholder="Search by Receiver Name"
+          placeholderTextColor={colors.inputPlaceholder}
+          value={searchText}
+          onChangeText={setSearchText}
+        />
       </View>
 
       {/* Contacts List */}
       <FlatList
+        ref={flatListRef} // Reference to FlatList for programmatic scrolling
         data={filteredContacts}
         keyExtractor={(item) => item.contactId.toString()}
         renderItem={({ item }) => (
