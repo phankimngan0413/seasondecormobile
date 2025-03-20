@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, ActivityIndicator, FlatList, StyleSheet, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
-import { getDecorServicesAPI, IDecorService } from "@/utils/decorserviceAPI"; // Importing the API
+import { getDecorServicesAPI, IDecor } from "@/utils/decorserviceAPI"; // Importing the API
 import DecorCard from "@/components/DecorCard"; // DecorCard component for rendering each decor
 import { useTheme } from "@/constants/ThemeContext"; // Importing theme context
 import { Colors } from "@/constants/Colors"; // Importing theme colors
 
 const DecorListScreen = () => {
-  const [decorServices, setDecorServices] = useState<IDecorService[]>([]);
+  const [decorServices, setDecorServices] = useState<IDecor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null); // Added state for selected season
@@ -39,28 +39,19 @@ const DecorListScreen = () => {
 
   // Filter decor services based on the selected season
   const filteredDecorServices = selectedSeason
-  ? decorServices.filter((decor) =>
-      decor.seasons.some((season) => {
-        console.log("Decor seasons: ", decor.seasons); // Log the entire array of seasons
-        console.log("Season object: ", season); // Log the entire season object
-
-        // Check if seasonName exists
-        if (season && season.seasonName) {
-          const seasonName = season.seasonName.trim().toLowerCase(); // Safely access seasonName
-          const selected = selectedSeason.trim().toLowerCase(); // Ensure the selected season is properly trimmed
-
-          console.log("Comparing: ", seasonName, selected); // Check the comparison
-
-          // Compare the season names
-          return seasonName === selected;
-        } else {
-          console.log("Season name is undefined or empty.");
-          return false; // If seasonName is undefined, return false
-        }
-      })
-    )
-  : decorServices; // If no season selected, return all decor services
-
+    ? decorServices.filter((decor) =>
+        Array.isArray(decor.seasons) &&
+        decor.seasons.length > 0 &&
+        decor.seasons.some((season: string | { seasonName: string }) => {
+          if (typeof season === "string") {
+            return season.trim().toLowerCase() === selectedSeason.trim().toLowerCase();
+          } else if (season?.seasonName) {
+            return season.seasonName.trim().toLowerCase() === selectedSeason.trim().toLowerCase();
+          }
+          return false;
+        })
+      )
+    : decorServices; // If no selectedSeason, show all
 
   if (loading) {
     return (
@@ -90,10 +81,12 @@ const DecorListScreen = () => {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Season Tabs */}
       <View style={styles.seasonTabs}>
-        {["Spring", "Summer", "Fall", "Winter"].map((season) => (
+        {["Spring", "Summer", "Autumn", "Winter"].map((season) => (
           <TouchableOpacity
             key={season}
-            onPress={() => setSelectedSeason(season)}
+            onPress={() => {
+              setSelectedSeason(season);
+            }}
             style={[
               styles.seasonTab,
               selectedSeason === season && { backgroundColor: colors.primary },
@@ -120,14 +113,13 @@ const DecorListScreen = () => {
           <TouchableOpacity
             onPress={() =>
               router.push({
-                pathname: "/decor",
-                params: { id: item.id.toString() },
+                pathname: "/decor/[id]", // Navigating to the dynamic route `/decor/[id]`
+                params: { id: item.id.toString() }, // Pass the decor id as a parameter
               })
             }
             style={styles.decorWrapper}
           >
-            {/* Pass the entire seasons array */}
-            <DecorCard decor={{ ...item, seasons: item.seasons }} />
+            <DecorCard decor={item} />
           </TouchableOpacity>
         )}
         contentContainerStyle={[styles.decorList, { backgroundColor: colors.background }]}

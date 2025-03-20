@@ -14,11 +14,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "756855807439-m147uiie2jqi5jiled7th8vct8mkuqhk.apps.googleusercontent.com",
+          "client_id": "756855807439-s61ps37vmtv81biirf7g2isbnj8tvcsm.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.baymaxphan.seasondecormobile",
-            "certificate_hash": "df0ce18d7940882a7aa63e906c1c4d622b5cf0de"
+            "certificate_hash": "6635572db56f18df0143414cf16efc548919b948"
           }
         },
         {

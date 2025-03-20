@@ -1,68 +1,106 @@
-// Assuming this is the code in your DecorCard component
-import React from 'react';
-import { View, Text, Image, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from "react";
+import { View, Text, ActivityIndicator, FlatList, StyleSheet, TouchableOpacity } from "react-native";
+import { useRouter } from "expo-router";
+import { getProductsAPI, IProduct } from "@/utils/productAPI";
+import ProductCard from "@/app/product/ProductCard";
+import { useTheme } from "@/constants/ThemeContext"; // Importing theme context
+import { Colors } from "@/constants/Colors"; // Importing theme colors
 
-// Interface for Decor Service
-interface IDecor {
-  id: number;
-  style: string;
-  basePrice: number;
-  description: string;
-  province: string;
-  createAt: string;
-  accountId: number;
-  decorCategoryId: number;
-  favoriteCount: number;
-  images: string[]; // Array of image URIs
-  seasons: string[];
-}
+const ProductListScreen = () => {
+  const [products, setProducts] = useState<IProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const router = useRouter();
 
-const DecorCard = ({ decor }: { decor: IDecor }) => {
-  const imageUrl = decor.images.length > 0 ? decor.images[0] : 'https://via.placeholder.com/150'; // Use the first valid image
+  // Access current theme
+  const { theme } = useTheme();
+  const validTheme = theme as "light" | "dark"; // Ensure theme is either light or dark
+  const colors = Colors[validTheme]; // Use colors based on the current theme
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    try {
+      const data = await getProductsAPI();
+      if (Array.isArray(data)) {
+        setProducts(data);
+      } else {
+        setError("Invalid data format received.");
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) return <ActivityIndicator size="large" color={colors.primary} />;
+  if (error) return <Text style={[styles.errorText, { color: colors.text }]}>{error}</Text>;
+  if (products.length === 0) return <Text style={[styles.noProductText, { color: colors.text }]}>No products available.</Text>;
 
   return (
-    <View style={styles.card}>
-      <Image source={{ uri: imageUrl }} style={styles.image} />
-      <Text style={styles.title}>{decor.style}</Text>
-      <Text style={styles.price}>${decor.basePrice}</Text>
-      <Text style={styles.description} numberOfLines={2}>
-        {decor.description}
-      </Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <FlatList
+        data={products}
+        keyExtractor={(item) => item.id.toString()}
+        numColumns={2} // Display items in 2 columns
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            onPress={() =>
+              router.push({
+                pathname: "/product/product-detail/[id]",
+                params: { id: item.id.toString() },
+              })
+            }
+            style={styles.productWrapper}
+          >
+            <ProductCard product={item} onAddToCart={() => {}} />
+          </TouchableOpacity>
+        )}
+        contentContainerStyle={[styles.productList, { backgroundColor: colors.background }]}
+        showsVerticalScrollIndicator={false}
+      />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    padding: 10,
-    elevation: 5,
-    alignItems: "center",
-    justifyContent: "center",
+  container: {
+    paddingTop: 20,
+    paddingHorizontal: 10,
+    flex: 1,
+    justifyContent: "center",  // Center content vertically
+    alignItems: "center",      // Center content horizontally
   },
-  image: {
-    width: "100%",
-    height: 150,
-    borderRadius: 8,
-    marginBottom: 10,
+  productList: {
+    justifyContent: "center", // Center items vertically in the list
+    alignItems: "center",     // Center items horizontally in the list
+    paddingBottom: 20,
+    flexDirection: "row",     // Ensure the products are in a row (for 2 columns)
+    flexWrap: "wrap",         // Allow wrapping of products into multiple rows
+    width: "100%",            // Ensure the product list takes full width
   },
-  title: {
-    fontSize: 16,
-    fontWeight: "bold",
+  productWrapper: {
+    flexBasis: "48%",         // Take up about half of the width (for 2 columns)
+    marginHorizontal: "1%",   // Add some space between items
+    marginBottom: 20,         // Add space below each item
+    alignItems: "center",     // Center items inside each product wrapper
+    justifyContent: "center", // Ensure content is centered within the wrapper
+  },
+  errorText: {
+    color: "red",
     textAlign: "center",
+    marginTop: 20,
   },
-  price: {
-    fontSize: 14,
-    color: "#888",
-    marginTop: 5,
-  },
-  description: {
-    fontSize: 12,
-    color: "#555",
-    marginTop: 5,
+  noProductText: {
+    color: "gray",
     textAlign: "center",
+    marginTop: 20,
+    fontStyle: "italic",
   },
 });
 
-export default DecorCard;
+
+export default ProductListScreen;

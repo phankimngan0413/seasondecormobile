@@ -62,15 +62,6 @@ const ProductCard: React.FC<ProductProps> = ({ product, onAddToCart }) => {
       <Text style={[styles.rateText, { color: colors.icon }]}>
         ⭐ {product.rate} | 📦 Sold: {product.totalSold}
       </Text>
-
-      {/* 🔹 Nút thêm vào giỏ hàng */}
-      <CustomButton
-        title="Add to Cart"
-        onPress={() => onAddToCart(product)}
-        icon={<Ionicons name="add-circle-outline" size={18} color={"#fff"} />} // Smaller icon size
-        btnStyle={styles.smallButton} // Apply smaller button style
-        labelStyle={styles.smallButtonText} // Apply smaller text style
-      />
     </View>
   );
 };
@@ -100,7 +91,7 @@ const styles = StyleSheet.create({
   },
   noImageContainer: {
     width: "100%",
-    height: 120, // Giảm chiều cao của container
+    height: 150, // Giảm chiều cao của container
     borderRadius: 6,
     backgroundColor: "#f0f0f0",
     justifyContent: "center",
@@ -113,7 +104,7 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   productTitle: {
-    fontSize: 12, // Giảm kích thước chữ cho tên sản phẩm
+    fontSize: 16, // Giảm kích thước chữ cho tên sản phẩm
     fontWeight: "600",
     marginBottom: 5,
     textAlign: "center",

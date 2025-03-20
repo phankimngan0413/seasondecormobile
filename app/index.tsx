@@ -6,14 +6,14 @@ export default function Index() {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    // Đợi 100ms để đảm bảo RootLayout đã mount trước khi điều hướng
+    // Wait for 100ms to ensure RootLayout is mounted before navigation
     const timeout = setTimeout(() => setIsReady(true), 100);
     return () => clearTimeout(timeout);
   }, []);
 
   useEffect(() => {
     if (isReady) {
-      router.replace("/(tabs)/home"); // Điều hướng vào trang Home khi Expo Router sẵn sàng
+      router.replace("/(tabs)/home"); // Navigate to the home page when Expo Router is ready
     }
   }, [isReady]);
 

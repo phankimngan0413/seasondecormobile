@@ -22,6 +22,10 @@ export const Colors = {
     danger: "#FF4444",  
     cardBackground: "#f4f4f4",
     inputBackground: "#F8F9FA",
+    titleColor: "#000000",      // Black color for the title
+    priceColor: "#FF6347",      // Red color for the price
+    descriptionColor: "#555555",// Dark gray color for description
+    seasonColor: "#1E90FF",     // Blue color for seasons
   },
   dark: {
     text: "#ECEDEE",  
@@ -43,5 +47,9 @@ export const Colors = {
     danger: "#FF4444",  
     cardBackground: "#333",
     inputBackground: "#1E1E1E",
+    titleColor: "#0A7EA4",      // White color for the title
+    priceColor: "#FF6347",      // Gold color for the price
+    descriptionColor: "#FFFFFF",// Light gray color for description
+    seasonColor: "#1E90FF", 
   },
 };

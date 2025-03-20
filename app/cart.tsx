@@ -26,11 +26,11 @@ const CartScreen = () => {
   interface CartItem {
     productId: number;
     productName: string;
-    productPrice: number;
+    unitPrice: number;
     quantity: number;
-    imageUrls: string[];
+    image: string;
   }
-  
+
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -51,7 +51,6 @@ const CartScreen = () => {
       }
 
       const cartData = await getCartAPI(userId);
-      console.log("🟢 API Response:", cartData);
 
       if (cartData?.cartItems) {
         setCartItems(cartData.cartItems || []);
@@ -68,46 +67,54 @@ const CartScreen = () => {
   };
 
   const calculateTotal = (items: any[]) => {
-    const total = items.reduce((sum, item) => sum + item.productPrice * item.quantity, 0);
+    const total = items.reduce((sum, item) => {
+      const price = item.unitPrice && item.quantity ? item.unitPrice * item.quantity : 0;
+      return sum + price;
+    }, 0);
     setTotalPrice(total);
   };
-
   const handleDeleteCartItem = async (productId: number) => {
     try {
-      setLoading(true);
+      setLoading(true); // Set loading state to true while removing the product
+  
       const userId = await getUserIdFromToken();
       if (!userId) {
         Alert.alert("❌ Error", "You need to log in first.");
         return;
       }
-
-      await removeProductFromCartAPI(userId, productId);
-
-      // Animation trước khi xóa sản phẩm
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start(() => {
-        const updatedCart = cartItems.filter((item) => item.productId !== productId);
-        setCartItems(updatedCart);
-        calculateTotal(updatedCart);
-      });
-
-      Alert.alert("✅ Removed", "Product removed from cart.");
-    } catch (error) {
-      Alert.alert("❌ Error", "Failed to remove product.");
+  
+      // Call the removeProductFromCartAPI function to remove the product
+      const response = await removeProductFromCartAPI(userId, productId);
+  
+      // Check if the cartItems array exists inside response.data
+      if (response && response.data && response.data.cartItems) {
+        setCartItems(response.data.cartItems); // Update the cart items with the new list
+        calculateTotal(response.data.cartItems); // Recalculate the total price
+        Alert.alert("✅ Removed", response.message); // Show success message
+      } else {
+        throw new Error("Failed to remove product.");
+      }
+    } catch (error: any) {
+      console.error("Error removing product:", error);
+      Alert.alert("❌ Error", error.message || "Failed to remove product.");
     } finally {
-      setLoading(false);
+      setLoading(false); // Set loading state to false when done
     }
   };
-
+  
   const renderCartItem = ({ item }: { item: CartItem }) => (
     <Animated.View style={[styles.productCard, { backgroundColor: colors.card, opacity: fadeAnim }]}>
-      <Image source={{ uri: item.imageUrls?.[0] || "https://via.placeholder.com/150" }} style={styles.productImage} />
+      <Image
+        source={{ uri: item.image || "https://via.placeholder.com/150" }}
+        style={styles.productImage}
+      />
       <View style={styles.productInfo}>
         <Text style={[styles.productTitle, { color: colors.text }]}>{item.productName}</Text>
-        <Text style={[styles.productPrice, { color: colors.primary }]}>₫{item.productPrice.toFixed(2)}</Text>
+        <Text style={[styles.productPrice, { color: colors.primary }]}>
+          {isNaN(item.unitPrice) || item.unitPrice === undefined || item.unitPrice === null
+            ? '₫0.00' 
+            : new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(item.unitPrice)}
+        </Text>
         <Text style={[styles.productQuantity, { color: colors.text }]}>Quantity: {item.quantity}</Text>
       </View>
       <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteCartItem(item.productId)}>
@@ -139,8 +146,10 @@ const CartScreen = () => {
             <Text style={[styles.orderSummary, { color: colors.text }]}>Order Summary</Text>
 
             <View style={styles.summaryItem}>
-              <Text style={[styles.summaryLabel, { color: colors.text }]}>Total Price</Text>
-              <Text style={[styles.summaryValue, { color: colors.primary }]}>₫{totalPrice.toFixed(0)}</Text>
+              <Text style={[styles.summaryLabel, { color: colors.text }]}>Total Price:</Text>
+              <Text style={[styles.summaryValue, { color: colors.primary }]}>
+                {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalPrice)}
+              </Text>
             </View>
 
             <CustomButton
@@ -156,7 +165,6 @@ const CartScreen = () => {
   );
 };
 
-// Giao diện giỏ hàng trống + Nút chuyển sang trang danh sách sản phẩm
 const EmptyState = ({ onBrowseProducts }: { onBrowseProducts: () => void }) => {
   const { theme } = useTheme();
   const colors = Colors[theme as "light" | "dark"];
@@ -182,7 +190,15 @@ const styles = StyleSheet.create({
   productCard: { flexDirection: "row", padding: 16, borderRadius: 12, marginBottom: 16, elevation: 5 },
   productImage: { width: 80, height: 80, borderRadius: 8, marginRight: 10 },
   productInfo: { flex: 1 },
-  deleteButton: { backgroundColor: "#FF5722", padding: 8, borderRadius: 50 },
+  deleteButton: {
+    backgroundColor: "#FF5722",
+    padding: 12,
+    borderRadius: 50, 
+    justifyContent: "center", 
+    alignItems: "center", 
+    height: 50, 
+    width: 50, 
+  },
   productTitle: { fontSize: 18, fontWeight: "bold" },
   orderSummary: { padding: 16, borderRadius: 12, marginTop: 20 },
   productQuantity: { fontSize: 16, marginTop: 4 },
@@ -193,7 +209,7 @@ const styles = StyleSheet.create({
   errorText: { fontSize: 16, color: 'red', textAlign: 'center', marginVertical: 10 },
   summaryValue: { fontSize: 16, fontWeight: "bold" },
   productList: { paddingBottom: 20 },
-  productPrice: { fontSize: 16, fontWeight: "bold", marginTop: 4 },
+  productPrice: { fontSize: 18, fontWeight: "bold", marginTop: 4 },
 });
 
 export default CartScreen;
