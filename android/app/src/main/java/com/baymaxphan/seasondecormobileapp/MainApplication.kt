@@ -1,4 +1,4 @@
-package com.baymaxphan.seasondecormobile
+package com.baymaxphan.seasondecormobileapp
 
 import android.app.Application
 import android.content.res.Configuration

@@ -1,13 +1,17 @@
 {
   "expo": {
-    "name": "seasondecormobile",
-    "slug": "seasondecormobile",
-    "platforms": ["ios", "android", "web"],
-    "projectNameForProxy": "@baymaxphan/seasondecormobile", 
+    "name": "seasondecormobileapp",
+    "slug": "seasondecormobileapp",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+    "projectNameForProxy": "@baymaxphan/seasondecormobileapp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "com.baymaxphan.seasondecormobile",
+    "scheme": "com.baymaxphan.seasondecormobileapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -18,7 +22,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.baymaxphan.seasondecormobile"
+      "package": "com.baymaxphan.seasondecormobileapp"
     },
     "web": {
       "bundler": "metro",
@@ -45,7 +49,7 @@
         "origin": false
       },
       "eas": {
-        "projectId": "50fe8ae3-adf8-4fe1-819d-73db9b857968"
+        "projectId": "ac46eeba-ea91-41cd-9938-625a5b5e1902"
       }
     }
   }

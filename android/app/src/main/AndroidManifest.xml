@@ -24,9 +24,9 @@
         <action android:name="android.intent.action.VIEW"/>
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
-        <data android:scheme="myapp"/>
-        <data android:scheme="com.baymaxphan.seasondecormobile"/>
-        <data android:scheme="exp+seasondecormobile"/>
+        <data android:scheme="com.baymaxphan.seasondecormobileapp"/>
+        <data android:scheme="com.baymaxphan.seasondecormobileapp"/>
+        <data android:scheme="exp+seasondecormobileapp"/>
       </intent-filter>
     </activity>
   </application>

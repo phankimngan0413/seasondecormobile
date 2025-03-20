@@ -1,4 +1,4 @@
-package com.baymaxphan.seasondecormobile
+package com.baymaxphan.seasondecormobileapp
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

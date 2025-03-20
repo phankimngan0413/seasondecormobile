@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import InputField from "@/components/InputField";
@@ -9,6 +9,9 @@ import { setToken } from "@/services/auth";
 import Logo from "@/components/Logo/Logo";
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
+import * as Google from "expo-auth-session/providers/google"; // Google login import
+import { googleLoginAPI } from "@/utils/authAPI"; // Import your googleLoginAPI function
+import { makeRedirectUri } from 'expo-auth-session';
 
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -23,6 +26,49 @@ const LoginScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<{ email: string; password: string }>({ email: "", password: "" });
+
+  // Google Login State
+  const [googleUserInfo, setGoogleUserInfo] = useState<{ displayName: string; idToken: string } | null>(null);
+
+  // Google OAuth client IDs
+  const googleExpoClientId = "269748534933-pfelsope967cksdg624uhahaj99apdgu.apps.googleusercontent.com";
+  const googleAndroidStandaloneClientId = "269748534933-mk0kjr1k5rcutol5bb7nqdj52bbn1udm.apps.googleusercontent.com";
+
+  const redirectUri = makeRedirectUri({
+    // You can add additional configurations here if needed
+  });
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    clientId: googleExpoClientId,
+    androidClientId: googleAndroidStandaloneClientId,
+    scopes: ["profile", "email"],
+    redirectUri: redirectUri,
+  });
+
+  useEffect(() => {
+    if (response?.type === "success") {
+      const { id_token } = response.params;
+      if (id_token) {
+        setGoogleUserInfo({ displayName: "Google User", idToken: id_token });
+        // Send the idToken to your API using googleLoginAPI
+        googleLoginAPI(id_token) // Calling the googleLoginAPI function to send the token
+          .then((response) => {
+            console.log("Google Login API response:", response);
+            if (response.token) {
+              setToken(response.token); // Save the token after successful API response
+              router.replace("/(tabs)/profile"); // Navigate to profile
+            } else {
+              throw new Error("Invalid Google login response");
+            }
+          })
+          .catch((error) => {
+            console.error("Error during Google login API call:", error);
+            Alert.alert("Google Login Failed", error.message || "Something went wrong");
+          });
+      } else {
+        Alert.alert("Google Login Failed", "No idToken returned.");
+      }
+    }
+  }, [response]);
 
   async function handleLogin() {
     setErrors({ email: "", password: "" });
@@ -120,7 +166,7 @@ const LoginScreen: React.FC = () => {
       {/* Google Login */}
       <CustomButton
         title="Continue with Google"
-        onPress={() => console.log("Google Login")}
+        onPress={() => promptAsync()} // Trigger Google login prompt
         icon={<Ionicons name="logo-google" size={20} color="#fff" />}
       />
 
