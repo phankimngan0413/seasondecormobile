@@ -7,6 +7,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -16,6 +17,7 @@ import { useTheme } from "@/constants/ThemeContext";
 import { jwtDecode } from "jwt-decode";
 import { getToken, removeToken } from "@/services/auth";
 import ProfileMenu from "@/components/ProfileMenu";
+import { getAccountDetails } from "@/utils/accountAPI"; // Import getAccountDetails
 
 interface DecodedToken {
   email: string;
@@ -28,7 +30,7 @@ export default function ProfileScreen() {
   const validTheme = theme as "light" | "dark";
   const colors = Colors[validTheme];
 
-  const [profile, setProfile] = useState<{ email: string; name: string } | null>(null);
+  const [profile, setProfile] = useState<{ email: string; name: string; avatar: string | null } | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,9 +47,13 @@ export default function ProfileScreen() {
         }
 
         const decoded: DecodedToken = jwtDecode(token);
+
+        // Fetch account details, including the avatar image
+        const accountData = await getAccountDetails(); // Fetch account data from the API
         setProfile({
           email: decoded.email,
           name: decoded.unique_name,
+          avatar: accountData.avatar || null, // Ensure avatar is fetched from account data
         });
       } catch (error) {
         setError("Failed to load profile. Please try again.");
@@ -65,7 +71,7 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}> 
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={[styles.loadingText, { color: colors.primary }]}>Loading profile...</Text>
       </View>
@@ -74,9 +80,19 @@ export default function ProfileScreen() {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={[styles.scrollContainer, { backgroundColor: colors.background }]}> 
-        <LinearGradient colors={[colors.primary, colors.secondary]} style={[styles.header, { backgroundColor: colors.primary }]}> 
+      <ScrollView contentContainerStyle={[styles.scrollContainer, { backgroundColor: colors.background }]}>
+        <LinearGradient
+          colors={[colors.primary, colors.secondary]}
+          style={[styles.header, { backgroundColor: colors.primary }]}
+        >
           <View style={styles.profileInfo}>
+            {profile?.avatar ? (
+              <Image source={{ uri: profile.avatar }} style={styles.avatar} />
+            ) : (
+              <View style={styles.avatarFallback}>
+                <Text style={styles.avatarText}>{profile?.name[0]}</Text>
+              </View>
+            )}
             <Text style={[styles.username, { color: "#fff" }]}>{profile?.name}</Text>
             <Text style={[styles.email, { color: "#fff" }]}>{profile?.email}</Text>
           </View>
@@ -99,6 +115,25 @@ const styles = StyleSheet.create({
   scrollContainer: { flexGrow: 1, paddingBottom: 20 },
   header: { padding: 40, paddingTop: 70, alignItems: "center" },
   profileInfo: { alignItems: "center", marginTop: 20 },
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    marginBottom: 10,
+  },
+  avatarFallback: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: "#ccc",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  avatarText: {
+    fontSize: 30,
+    color: "#fff",
+  },
   username: { fontSize: 22, fontWeight: "bold" },
   email: { fontSize: 16 },
   content: { padding: 20, alignItems: "center" },

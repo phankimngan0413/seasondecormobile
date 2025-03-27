@@ -68,7 +68,7 @@ const ProductCard: React.FC<ProductProps> = ({ product, onAddToCart }) => {
 
 const styles = StyleSheet.create({
   productCard: {
-    width: width * 0.4, // ✅ Giảm kích thước để phù hợp 2 cột
+    width: width * 0.45, // ✅ Giảm kích thước để phù hợp 2 cột
     padding: 12,
     borderRadius: 8,
     shadowOpacity: 0.1,

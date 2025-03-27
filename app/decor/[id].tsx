@@ -1,10 +1,19 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Image, ActivityIndicator, ScrollView, TouchableOpacity } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router"; 
+import {
+  View,
+  Text,
+  StyleSheet,
+  Image,
+  ActivityIndicator,
+  ScrollView,
+  TouchableOpacity,
+} from "react-native";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { getDecorServiceByIdAPI } from "@/utils/decorserviceAPI"; // Assuming you have an API to fetch decor details
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
+import CustomButton from "@/components/ui/Button/Button"; // Assuming you have a custom button component
 
 const DecorDetailScreen = () => {
   const { id } = useLocalSearchParams();
@@ -50,6 +59,11 @@ const DecorDetailScreen = () => {
     } else {
       setCurrentIndex(0); // Loop back to the first image
     }
+  };
+
+  const handleBooking = () => {
+    // Here you can navigate to the booking page or trigger any booking logic
+    router.push(`/booking/[id]`); // Example routing for booking
   };
 
   if (loading) {
@@ -103,14 +117,15 @@ const DecorDetailScreen = () => {
             <Text style={[styles.seasonsTitle, { color: colors.text }]}>Available Seasons:</Text>
             {decorDetail.seasons.length > 0 ? (
               decorDetail.seasons.map((season: string, index: number) => (
-                <Text key={index} style={[styles.seasonText, { color: colors.text }]}>
-                  {season}
-                </Text>
+                <Text key={index} style={[styles.seasonText, { color: colors.text }]}>{season}</Text>
               ))
             ) : (
               <Text style={[styles.noSeasonsText, { color: colors.text }]}>No seasons available</Text>
             )}
           </View>
+
+          {/* Booking Button */}
+          <CustomButton title="Book Now" onPress={handleBooking} style={{ backgroundColor: colors.primary, marginTop: 20 }} />
         </>
       ) : (
         <Text style={[styles.noDataText, { color: colors.text }]}>No details available.</Text>

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useGetAllAddress, useCreateAddress, useUpdateAddress, useDeleteAddress, useSetDefaultAddress } from './AddressAPI'; // Importing from the correct file
+import { useGetAllAddress, useCreateAddress, useUpdateAddress, useDeleteAddress, useSetDefaultAddress } from '../AddressAPI'; // Importing from the correct file
 
 // Fetch all addresses
 export function useFetchAllAddresses() {

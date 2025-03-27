@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, ActivityIndicator, FlatList, StyleSheet, TouchableOpacity, Image, ScrollView } from "react-native";
+import { View, Text, ActivityIndicator, FlatList, StyleSheet, TouchableOpacity, Image } from "react-native";
 import { useRouter } from "expo-router";
 import { getProviderDetailAPI, getProductsByProviderAPI } from "@/utils/providerAPI";
 import { addContactAPI } from "@/utils/contactAPI"; // API to add contact
@@ -44,33 +44,22 @@ const ProviderDetailScreen = () => {
     fetchProviderDetail();
   }, [slug]);
 
-  // Function to handle "Message" button click
   const handleMessageClick = async (receiverId: number) => {
     try {
-      // Attempt to add the contact
       const response = await addContactAPI(receiverId);
-  
-      // If the response indicates success or contact already exists, proceed to chat
+
       if (response.success || response.message === "Contact already exists.") {
         console.log("🟢 Navigating to chat...");
-        // Redirect to the chat page without needing the userId
         router.push("/chat");
       } else {
-        // If something goes wrong with adding contact
         console.error("🔴 Error adding contact:", response.message);
         throw new Error(response.message || "Failed to add contact.");
       }
     } catch (err) {
-      // Log the error and proceed to chat anyway
       console.error("🔴 Error adding contact or navigating to chat:", err);
-  
-      // Proceed to chat screen even if adding contact fails (e.g., contact already exists)
       router.push("/chat");
     }
   };
-  
-  
-  
 
   if (loading) {
     return <ActivityIndicator size="large" color={colors.primary} />;
@@ -81,55 +70,82 @@ const ProviderDetailScreen = () => {
   }
 
   return (
-    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Provider Details Section */}
-      {provider && (
-        <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
-          <Image source={{ uri: provider.avatar }} style={styles.avatar} />
-          <Text style={[styles.businessName, { color: PRIMARY_COLOR }]}>{provider.businessName}</Text>
-          <Text style={[styles.bio, { color: colors.text }]}>{provider.bio}</Text>
-          <Text style={[styles.phone, { color: colors.text }]}>{provider.phone}</Text>
-          <Text style={[styles.address, { color: colors.text }]}>{provider.address}</Text>
-          <Text style={[styles.joinedDate, { color: PRIMARY_COLOR }]} >
-            Joined on: {new Date(provider.joinedDate).toLocaleDateString() || "Invalid Date"}
-          </Text>
-          <Text style={[styles.followers, { color: PRIMARY_COLOR }]} >
-            Followers: {provider.followersCount} | Following: {provider.followingsCount}
-          </Text>
+    <FlatList
+      data={[{ key: "provider" }, { key: "products" }]}
+      keyExtractor={(item) => item.key}
+      renderItem={({ item }) => {
+        switch (item.key) {
+          case "provider":
+            return (
+              <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
+                {provider && (
+                  <>
+                    <Image source={{ uri: provider.avatar }} style={styles.avatar} />
+                    <Text style={[styles.businessName, { color: PRIMARY_COLOR }]}>{provider.businessName}</Text>
+                    <Text style={[styles.bio, { color: colors.text }]}>{provider.bio}</Text>
+                    <Text style={[styles.phone, { color: colors.text }]}>{provider.phone}</Text>
+                    <Text style={[styles.address, { color: colors.text }]}>{provider.address}</Text>
+                    <Text style={[styles.joinedDate, { color: PRIMARY_COLOR }]} >
+                      Joined on: {new Date(provider.joinedDate).toLocaleDateString() || "Invalid Date"}
+                    </Text>
+                    <Text style={[styles.followers, { color: PRIMARY_COLOR }]} >
+                      Followers: {provider.followersCount} | Following: {provider.followingsCount}
+                    </Text>
 
-          {/* Follow and Message buttons */}
-          <View style={styles.buttonsContainer}>
-            <TouchableOpacity style={[styles.followButton, { backgroundColor: colors.primary }]}>
-              <Text style={styles.followButtonText}>Follow</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.messageButton, { backgroundColor: colors.secondary }]} 
-              onPress={() => handleMessageClick(provider.id)} // Passing provider id
-            >
-              <Text style={styles.messageButtonText}>Message</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
+                    {/* Follow and Message buttons */}
+                    <View style={styles.buttonsContainer}>
+                      <TouchableOpacity style={[styles.followButton, { backgroundColor: colors.primary }]}>
+                        <Text style={styles.followButtonText}>Follow</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={[styles.messageButton, { backgroundColor: colors.secondary }]} 
+                        onPress={() => handleMessageClick(provider.id)} // Passing provider id
+                      >
+                        <Text style={styles.messageButtonText}>Message</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
+              </View>
+            );
 
-      {/* Products Section */}
-      <Text style={[styles.productListTitle, { color: colors.text }]}>Products:</Text>
-      {products.length > 0 ? (
-        <FlatList
-          data={products}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={({ item }) => (
-            <ProductCard 
-              product={item} 
-              onAddToCart={() => console.log(`Added ${item.productName} to cart`)} 
-            />
-          )}
-          contentContainerStyle={styles.productList}
-        />
-      ) : (
-        <Text style={{ color: colors.text }}>No products available.</Text>
-      )}
-    </ScrollView>
+          case "products":
+            return (
+              <View>
+                <Text style={[styles.productListTitle, { color: colors.text }]}>Products:</Text>
+                {products.length > 0 ? (
+                 <FlatList
+                 data={products.slice(0, 6)} // Display the first 6 products
+                 keyExtractor={(item) => item.id.toString()}
+                 renderItem={({ item }) => (
+                   <TouchableOpacity
+                     onPress={() =>
+                       router.push({
+                         pathname: "/product/product-detail/[id]",
+                         params: { id: item.id.toString() },
+                       })
+                     }
+                     style={styles.productWrapper}
+                   >
+                     <ProductCard product={item} onAddToCart={function (product: any): void {
+                       throw new Error("Function not implemented.");
+                     } } />
+                   </TouchableOpacity>
+                 )}
+                 numColumns={2} // Display products in a grid layout
+                 contentContainerStyle={styles.productList}
+               />
+                ) : (
+                  <Text style={{ color: colors.text }}>No products available.</Text>
+                )}
+              </View>
+            );
+
+          default:
+            return null;
+        }
+      }}
+    />
   );
 };
 
@@ -192,38 +208,45 @@ const styles = StyleSheet.create({
   followButton: {
     backgroundColor: "#3498db",
     borderRadius: 25,
-    paddingVertical: 8, // Smaller padding
-    paddingHorizontal: 18, // Smaller horizontal padding
-    width: "48%", // Ensure button takes up less width
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    width: "48%",
   },
   followButtonText: {
     color: "#fff",
-    fontSize: 14, // Smaller font size for the text
+    fontSize: 14,
     fontWeight: "bold",
     textAlign: "center",
   },
   messageButton: {
     backgroundColor: "#2ecc71",
     borderRadius: 25,
-    paddingVertical: 8, // Smaller padding
-    paddingHorizontal: 18, // Smaller horizontal padding
-    width: "48%", // Ensure button takes up less width
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    width: "48%",
   },
   messageButtonText: {
     color: "#fff",
-    fontSize: 14, // Smaller font size for the text
+    fontSize: 14,
     fontWeight: "bold",
     textAlign: "center",
   },
   productListTitle: {
-    fontSize: 20,
+    fontSize: 25,
     fontWeight: "bold",
     marginTop: 20,
   },
   productList: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "space-between",
+    justifyContent: "center",  // This will center the items horizontally
+    alignItems: "center", // This will center the items vertically (if needed)
+  },
+  productWrapper:{
+    width: "50%",  // This will allow two products per row, adjust as needed
+    marginBottom: 20,
+    alignItems: "center", // Center content inside the wrapper (like text)
+
   },
   errorText: {
     fontSize: 16,

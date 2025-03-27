@@ -15,6 +15,7 @@ export default function ChatScreen() {
   const colors = Colors[validTheme]; // Use colors based on the current theme
 
   const flatListRef = useRef<FlatList>(null); // Reference to FlatList for scrolling
+
   interface Message {
     contactId: number;
     contactName: string;
@@ -22,6 +23,7 @@ export default function ChatScreen() {
     avatar: string | null;
     lastMessageTime: string;
   }
+
   // Fetching contact data from the API
   useEffect(() => {
     const fetchContacts = async () => {
@@ -85,31 +87,35 @@ export default function ChatScreen() {
       </View>
 
       {/* Contacts List */}
-      <FlatList
-        ref={flatListRef} // Reference to FlatList for programmatic scrolling
-        data={filteredContacts}
-        keyExtractor={(item) => item.contactId.toString()}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[styles.contactContainer, { backgroundColor: colors.card }]} // Set card color to the theme background color
-            onPress={() => handleConversationClick(item.contactId)} // Navigate to chat when clicked
-          >
-            {/* Contact Avatar */}
-            <Image
-              source={item.avatar ? { uri: item.avatar } : require("@/assets/images/default-avatar.png")}
-              style={styles.avatar}
-            />
-            <View style={styles.textContainer}>
-              <Text style={[styles.contactName, { color: colors.text }]}>{item.contactName}</Text>
-              <Text style={[styles.lastMessage, { color: colors.icon }]} numberOfLines={1}>
-                {item.message || "No messages yet"}
-              </Text>
-            </View>
-            <Text style={[styles.timeText, { color: colors.icon }]}>{item.lastMessageTime || "No time"}</Text>
-          </TouchableOpacity>
-        )}
-        style={styles.contactsList}
-      />
+      {filteredContacts.length === 0 && searchText !== "" ? (
+        <Text style={[styles.noDataText, { color: colors.text }]}>No contacts found</Text>
+      ) : (
+        <FlatList
+          ref={flatListRef} // Reference to FlatList for programmatic scrolling
+          data={filteredContacts}
+          keyExtractor={(item) => item.contactId.toString()}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[styles.contactContainer, { backgroundColor: colors.card }]} // Set card color to the theme background color
+              onPress={() => handleConversationClick(item.contactId)} // Navigate to chat when clicked
+            >
+              {/* Contact Avatar */}
+              <Image
+                source={item.avatar ? { uri: item.avatar } : require("@/assets/images/default-avatar.png")}
+                style={styles.avatar}
+              />
+              <View style={styles.textContainer}>
+                <Text style={[styles.contactName, { color: colors.text }]}>{item.contactName}</Text>
+                <Text style={[styles.lastMessage, { color: colors.icon }]} numberOfLines={1}>
+                  {item.message || "No messages yet"}
+                </Text>
+              </View>
+              <Text style={[styles.timeText, { color: colors.icon }]}>{item.lastMessageTime || "No time"}</Text>
+            </TouchableOpacity>
+          )}
+          style={styles.contactsList}
+        />
+      )}
     </View>
   );
 }
@@ -167,5 +173,10 @@ const styles = StyleSheet.create({
     color: "#999",
     paddingLeft: 10,
     alignSelf: "flex-end",
+  },
+  noDataText: {
+    fontSize: 18,
+    color: "#ccc",
+    textAlign: "center",
   },
 });

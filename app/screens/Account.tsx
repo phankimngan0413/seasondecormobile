@@ -27,7 +27,11 @@ const AccountScreen = () => {
         setLastName(data.lastName);
         setPhone(data.phone);
         setSlug(data.slug);
-        setDob(new Date(data.dateOfBirth)); // Format the date accordingly
+        
+        const fetchedDob = new Date(data.dateOfBirth); // Format the date accordingly
+        console.log(fetchedDob); // Check if the date is correct
+        setDob(fetchedDob); // Update the dob state
+  
         setAvatar(data.avatar); // Set the avatar URL from the API response
         setGender(data.gender); // Set the gender from the API response
       } catch (err) {
@@ -36,7 +40,7 @@ const AccountScreen = () => {
         setLoading(false);
       }
     };
-
+  
     fetchData();
   }, []);
 
@@ -142,8 +146,7 @@ const AccountScreen = () => {
         icon="pencil" // Example icon
         value={slug}
         onChangeText={setSlug}
-        placeholder="Enter slug"
-      />
+        placeholder="Enter slug" label={""}      />
 
       <View style={styles.row}>
         <View style={styles.column}>
@@ -152,8 +155,7 @@ const AccountScreen = () => {
             icon="person"
             value={firstName}
             onChangeText={setFirstName}
-            placeholder="Enter first name"
-          />
+            placeholder="Enter first name" label={""}          />
         </View>
         <View style={styles.column}>
           <Text style={styles.label}>Last Name:</Text>
@@ -161,8 +163,7 @@ const AccountScreen = () => {
             icon="person"
             value={lastName}
             onChangeText={setLastName}
-            placeholder="Enter last name"
-          />
+            placeholder="Enter last name" label={""}          />
         </View>
       </View>
 
@@ -171,23 +172,22 @@ const AccountScreen = () => {
         icon="call"
         value={phone}
         onChangeText={setPhone}
-        placeholder="Enter phone number"
-      />
+        placeholder="Enter phone number" label={""}      />
 
       <Text style={styles.label}>Gender:</Text>
       <InputField
         icon="person" // Gender icon
         value={gender}
         onChangeText={setGender}
-        placeholder="Enter gender"
-      />
+        placeholder="Enter gender" label={""}      />
 
       {/* Integrating BirthdayDatePicker */}
       <BirthdayDatePicker
-        label="Date of Birth"
-        selectedDate={dob}
-        onChange={setDob} // Updating dob on change
-      />
+  label="Date of Birth"
+  selectedDate={dob instanceof Date && !isNaN(dob.getTime()) ? dob : new Date()} // Set default if invalid
+  onChange={setDob}
+/>
+
 
       <CustomButton title="Update Profile" onPress={handleUpdate} disabled={loading} />
     </ScrollView>

@@ -1,17 +1,13 @@
 import React, { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Image,
-  FlatList,
-  ActivityIndicator,
-} from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Image, FlatList, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "@/constants/ThemeContext"; 
-import ProductCard from "../product/ProductCard";
+import { useTheme } from "@/constants/ThemeContext";
+import { tabsConfig, PRIMARY_COLOR } from "@/config/tabsConfig"; // Import tabsConfig
+import { getProductsAPI } from "@/utils/productAPI"; // Assuming this is the function that fetches the products
+import ProductCard from "../product/ProductCard"; // Assuming this is your ProductCard component
+import CustomButton from "@/components/ui/Button/Button";
+import { router } from "expo-router";
+
 
 interface IProduct {
   id: number;
@@ -21,37 +17,28 @@ interface IProduct {
   totalSold: number;
   imageUrls: string[];
 }
-import { getProductsAPI } from "@/utils/productAPI";
-import CustomButton from "@/components/ui/Button/Button";
-import { router } from "expo-router";
-
 
 export default function HomeScreen() {
-  const { theme } = useTheme(); // ✅ Lấy theme từ Context
-  const isDark = theme === "dark"; // ✅ Kiểm tra theme
-  const [selectedTab, setSelectedTab] = useState(0);
-  const [nestedSelectedTab, setNestedSelectedTab] = useState<{
-    [key: number]: number;
-  }>({});
+  const { theme } = useTheme(); // Get theme from context
+  const isDark = theme === "dark"; // Check if theme is dark
+  const [selectedTab, setSelectedTab] = useState(0); // Store selected tab index
+  const [nestedSelectedTab, setNestedSelectedTab] = useState<{ [key: number]: number }>({});
+  const [products, setProducts] = useState<IProduct[]>([]); // State to store fetched products
+  const [loading, setLoading] = useState(true); // Loading state for products
+  const [error, setError] = useState(""); // Error handling state
 
-  const handleTabChange = (index: number) => {
-    setSelectedTab(index);
-  };
- 
+  // Handle tab change
+  const handleTabChange = (index: number) => setSelectedTab(index);
+
+  // Handle nested tab change
   const handleNestedTabChange = (index: number, nestedIndex: number) => {
     setNestedSelectedTab((prev) => ({
       ...prev,
       [index]: nestedIndex,
     }));
   };
-  const [products, setProducts] = useState<IProduct[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
-  useEffect(() => {
-    fetchProducts();
-  }, []);
-
+  // Fetch products from API
   const fetchProducts = async () => {
     try {
       const data = await getProductsAPI();
@@ -63,273 +50,179 @@ export default function HomeScreen() {
     }
   };
 
-  const handleAddToCart = (product: any) => {
-    console.log("🛒 Added to cart:", product.productName);
-    // ✅ Thêm logic giỏ hàng tại đây (nếu có)
-  };
+  // Fetch products when component mounts
+  useEffect(() => {
+    fetchProducts();
+  }, []);
 
-  if (loading) return <ActivityIndicator size="large" color="#0000ff" />;
+  // Automatically select the first nested tab when the selected tab changes
+  useEffect(() => {
+    if (tabsConfig[selectedTab]?.nestedTabs) {
+      setNestedSelectedTab((prev) => ({
+        ...prev,
+        [selectedTab]: 0, // Automatically selects the first nested tab
+      }));
+    }
+  }, [selectedTab]);
+
+  if (loading) return <ActivityIndicator size="large" color="#3498db" />;
   if (error) return <Text style={styles.errorText}>{error}</Text>;
-  const tabsConfig = [
-    {
-      label: 'Living Room',
-      icon: 'tv-outline',
-      nestedTabs: [
-        {
-          label: "Spring's Living Room",
-          beforeImage: 'https://havenly.com/blog/wp-content/uploads/2023/05/Screen-Shot-2022-01-24-at-4.26.21-PM-700x455.jpg',
-          afterImage: 'https://havenly.com/blog/wp-content/uploads/2023/05/kyliefitts_havenly_melissashome_7-3-700x466.jpg',
-        },
-        {
-          label: "Jenna's Living Room",
-          beforeImage: 'https://havenly.com/blog/wp-content/uploads/2022/06/phpL8m1FZ-700x525.jpeg',
-          afterImage: 'https://havenly.com/blog/wp-content/uploads/2022/06/laurenmurdoch_020420_685575_01-700x473.jpg',
-        },
-        
-      ],
-    },
-    {
-      label: 'Bedroom',
-      icon: 'bed-outline',
-      nestedTabs: [
-        {
-          label: "Spring's Bedroom",
-          beforeImage: 'https://havenly.com/blog/wp-content/uploads/2022/06/php5kBn3J-700x525.jpeg',
-          afterImage: 'https://havenly.com/blog/wp-content/uploads/2022/06/kyliefitts_havenly_julibauer_16-700x457.jpg',
-        },
-        {
-          label: "Jenna's Bedroom",
-          beforeImage: 'https://havenly.com/blog/wp-content/uploads/2023/11/daniellechiprut_021220_designerhometour_before06-700x452.jpg',
-          afterImage: 'https://havenly.com/blog/wp-content/uploads/2023/11/daniellechiprut_021220_designerhometour_22-2-700x448.jpg',
-        },
-      ],
-    },
-    {
-      label: 'Dining Room',
-      icon: 'restaurant-outline',
-      nestedTabs: [
-        {
-          label: "Spring's Dining Room",
-          beforeImage: 'https://havenly.com/blog/wp-content/uploads/2023/05/IMG_2180-1-700x933.jpg',
-          afterImage: 'https://havenly.com/blog/wp-content/uploads/2023/05/kyliefitts_havenly_bradyburke_19-1-700x993.jpg',
-        },
-      ],
-    },
-    {
-      label: 'Bathroom',
-      icon: 'water-outline',
-      nestedTabs: [
-        {
-          label: "Spring's Bathroom",
-          beforeImage: 'https://havenly.com/blog/wp-content/uploads/2022/06/83f085b3f15ab843a8d27e40397d876a-uncropped_scaled_within_1536_1152-700x467.jpg',
-          afterImage: 'https://havenly.com/blog/wp-content/uploads/2022/06/kyliefitts_havenly-process_51-3-700x1015.jpg',
-        },
-      ],
-    },
-  ];
-
 
   return (
-    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: isDark ? "#121212" : "#fff" }]}>
-      {/* Hero Section */}
-      <View style={styles.hero}>
-        <Image
-          source={{
-            uri: "https://havenly.com/blog/wp-content/uploads/2023/05/kyliefitts_havenly_melissashome_7-3-700x466.jpg",
-          }}
-          style={styles.heroImage}
-        />
-        <Text style={[styles.heroTitle, { color: isDark ? "#fff" : "#333" }]}>
-          Transform Your Home with Expert Design
-        </Text>
-        <Text style={[styles.heroSubtitle,{ color: isDark ? "#bbb" : "#777" }]}>
-          Our platform connects you with talented decorators to make your dream
-          home a reality.
-        </Text>
-        <TouchableOpacity style={styles.heroButton}>
-          <Text style={styles.heroButtonText}>Get Started</Text>
-        </TouchableOpacity>
-      </View>
+    <FlatList
+      data={[{ key: "hero" }, { key: "tabs" }, { key: "nestedTabs" }, { key: "services" }, { key: "products" }]}
+      keyExtractor={(item) => item.key}
+      renderItem={({ item }) => {
+        switch (item.key) {
+          case "hero":
+            return (
+              <View style={styles.hero}>
+                <Image
+                  source={{
+                    uri: "https://havenly.com/blog/wp-content/uploads/2023/05/kyliefitts_havenly_melissashome_7-3-700x466.jpg",
+                  }}
+                  style={styles.heroImage}
+                />
+                <Text style={[styles.heroTitle, { color: isDark ? "#fff" : "#333" }]}>
+                  Transform Your Home with Expert Design
+                </Text>
+                <Text style={[styles.heroSubtitle, { color: isDark ? "#bbb" : "#777" }]}>
+                  Our platform connects you with talented decorators to make your dream home a reality.
+                </Text>
+                <TouchableOpacity style={styles.heroButton}>
+                  <Text style={styles.heroButtonText}>Get Started</Text>
+                </TouchableOpacity>
+              </View>
+            );
 
-      {/* Tabs */}
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, selectedTab === 0 && styles.activeTab]}
-          onPress={() => handleTabChange(0)}
-        >
-          <Ionicons name="home-outline" size={30} color={selectedTab === 0 ? PRIMARY_COLOR : "#888"} />
-        </TouchableOpacity>
+          case "tabs":
+            return (
+              <View style={styles.tabContainer}>
+                {tabsConfig.map((tab, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[styles.tab, selectedTab === index && styles.activeTab]}
+                    onPress={() => handleTabChange(index)}
+                  >
+                    <Ionicons name={tab.icon} size={30} color={selectedTab === index ? PRIMARY_COLOR : "#888"} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            );
 
-        <TouchableOpacity
-          style={[styles.tab, selectedTab === 1 && styles.activeTab]}
-          onPress={() => handleTabChange(1)}
-        >
-          <Ionicons name="bed-outline" size={30} color={selectedTab === 1 ? PRIMARY_COLOR : "#888"} />
-        </TouchableOpacity>
+          case "nestedTabs":
+            return (
+              <View style={styles.imageComparisonContainer}>
+                <View style={styles.imageRow}>
+                  <View style={styles.imageWrapper}>
+                    <Text style={[styles.imageLabel, { color: isDark ? "#fff" : "#333" }]}>Before</Text>
+                    <Image
+                      source={{
+                        uri: tabsConfig[selectedTab]?.nestedTabs[nestedSelectedTab[selectedTab]]?.beforeImage,
+                      }}
+                      style={styles.image}
+                    />
+                  </View>
+                  <View style={styles.imageWrapper}>
+                    <Text style={[styles.imageLabel, { color: isDark ? "#fff" : "#333" }]}>After</Text>
+                    <Image
+                      source={{
+                        uri: tabsConfig[selectedTab]?.nestedTabs[nestedSelectedTab[selectedTab]]?.afterImage,
+                      }}
+                      style={styles.image}
+                    />
+                  </View>
+                </View>
+              </View>
+            );
 
-        <TouchableOpacity
-          style={[styles.tab, selectedTab === 2 && styles.activeTab]}
-          onPress={() => handleTabChange(2)}
-        >
-          <Ionicons name="restaurant-outline" size={30} color={selectedTab === 2 ? PRIMARY_COLOR : "#888"} />
-        </TouchableOpacity>
+            case "services":
+              return (
+                <View style={styles.decorServiceSection}>
+                  <Text style={styles.decorServiceTitle}>Our Decor Services</Text>
+                  <Text style={[styles.decorServiceSubtitle, { color: isDark ? "#fff" : "#333" }]}>
+                    Transform your space with our professional decor services tailored just for you.
+                  </Text>
+                  <FlatList
+                    data={[
+                      {
+                        label: "Living Room Design",
+                        imageUrl: "https://static.asianpaints.com/content/dam/asianpaintsbeautifulhomes/gallery/living-room/contemporary-living-room-with-brick-wall-and-modern-decor/modern-living-room-with-brick-wall.jpg.transform/bh-image-gallery/image.webp",
+                        description: "Bring a fresh, modern look to your living room.",
+                      },
+                      {
+                        label: "Bedroom Styling",
+                        imageUrl: "https://www.nichepursuits.com/wp-content/uploads/2023/06/2-11-1024x581.png",
+                        description: "Turn your bedroom into a relaxing sanctuary.",
+                      },
+                  
+                    ]}
+                    keyExtractor={(item, index) => item.label + index}
+                    renderItem={({ item }) => (
+                      <View style={styles.decorServiceItem}>
+                        <Image source={{ uri: item.imageUrl }} style={styles.decorServiceImage} />
+                        <Text style={[styles.decorServiceText, { color: isDark ? "#fff" : "#333" }]}>{item.label}</Text>
+                        <Text style={[styles.decorServiceDescription, { color: isDark ? "#bbb" : "#555" }]}>
+                          {item.description}
+                        </Text>
+                      </View>
+                    )}
+                    horizontal
+                    contentContainerStyle={styles.decorServiceList}
+                  />
+        
+                </View>
+                
+              );
+            
+            
 
-        <TouchableOpacity
-          style={[styles.tab, selectedTab === 3 && styles.activeTab]}
-          onPress={() => handleTabChange(3)}
-        >
-          <Ionicons name="water-outline" size={30} color={selectedTab === 3 ? PRIMARY_COLOR : "#888"} />
-        </TouchableOpacity>
-      </View>
+          case "products":
+            return (
+              <View style={styles.productSection}>
+                <Text style={[styles.screenTitle, { color: isDark ? "#fff" : "#333" }]}>Featured Products</Text>
+                <FlatList
+                  data={products.slice(0, 6)} // Display the first 6 products
+                  keyExtractor={(item) => item.id.toString()}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      onPress={() =>
+                        router.push({
+                          pathname: "/product/product-detail/[id]",
+                          params: { id: item.id.toString() },
+                        })
+                      }
+                      style={styles.productWrapper}
+                    >
+                      <ProductCard product={item} onAddToCart={function (product: any): void {
+                        throw new Error("Function not implemented.");
+                      } } />
+                    </TouchableOpacity>
+                  )}
+                  numColumns={2} // Display products in a grid layout
+                  contentContainerStyle={styles.productList}
+                />
+                <CustomButton
+                  title="View More"
+                  onPress={() => router.push("/product/productlist")}
+                  btnStyle={styles.viewMoreButton}
+                  labelStyle={styles.viewMoreText}
+                />
+              </View>
+            );
 
-      {/* Nested Tabs for each section */}
-      <View style={styles.nestedTabsContainer}>
-        {tabsConfig[selectedTab].nestedTabs.map((nestedTab, nestedIndex) => (
-          <TouchableOpacity
-            key={nestedIndex}
-            style={[
-              styles.nestedTab,
-              nestedSelectedTab[selectedTab] === nestedIndex &&
-                styles.activeNestedTab,
-            ]}
-            onPress={() => handleNestedTabChange(selectedTab, nestedIndex)}
-          >
-            <Text
-              style={[
-                styles.nestedTabText,
-                nestedSelectedTab[selectedTab] === nestedIndex &&
-                  styles.activeNestedTabText,
-              ]}
-            >
-              {nestedTab.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* Content */}
-      <View style={styles.imageComparisonContainer}>
-  
-  <View style={styles.imageRow}>
-    <View style={styles.imageWrapper}>
-      <Text style={[styles.imageLabel,{ color: isDark ? "#fff" : "#333" }]}>Before</Text>
-      <Image
-        source={{
-          uri: tabsConfig[selectedTab].nestedTabs[nestedSelectedTab[selectedTab]]?.beforeImage,
-        }}
-        style={styles.image}
-      />
-    </View>
-    <View style={styles.imageWrapper}>
-      <Text style={[styles.imageLabel,{ color: isDark ? "#fff" : "#333" }]}>After</Text>
-      <Image
-        source={{
-          uri: tabsConfig[selectedTab].nestedTabs[nestedSelectedTab[selectedTab]]?.afterImage,
-        }}
-        style={styles.image}
-      />
-    </View>
-  </View>
-</View>
-
-
-    
-
-      {/* Services Section */}
-      
-
-      {/* Home Decor Tips Section */}
-      <View style={styles.tips}>
-        <Text style={styles.tipsTitle}>Home Decor Tips</Text>
-        <Text style={[styles.tipsSubtitle,{ color: isDark ? "#fff" : "#333" }]}>
-          Check out some of our top tips for transforming your home.
-        </Text>
-        <View style={styles.tipsContainer}>
-          <TouchableOpacity style={styles.tipItem}>
-            <Image
-              source={{ uri: "https://havenly.com/blog/wp-content/uploads/2022/08/IMG_1503-960x1317.jpg" }}
-              style={styles.tipImage}
-            />
-            <Text style={[styles.tipTitle,{ color: isDark ? "#fff" : "#333" }]}>
-              How to Choose the Perfect Paint Color
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.tipItem}>
-            <Image
-              source={{ uri: "https://havenly.com/blog/wp-content/uploads/2022/08/MorganLevy-3252-700x1050.jpg" }}
-              style={styles.tipImage}
-            />
-            <Text style={[styles.tipTitle,{ color: isDark ? "#fff" : "#333" }]}>
-              Maximizing Small Spaces: Smart Design Tips
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Call-to-Action Section */}
-      <View style={styles.cta}>
-        <TouchableOpacity style={styles.ctaButton}>
-          <Text style={styles.ctaButtonText}>Get Your Free Consultation</Text>
-          <Ionicons
-            name="arrow-forward"
-            size={20}
-            color="#fff"
-            style={styles.ctaButtonIcon}
-          />
-        </TouchableOpacity>
-      </View>
-
-      <Text style={styles.screenTitle}>Featured Products</Text>
-
-      {loading ? (
-        <ActivityIndicator size="large" color="#3498db" />
-      ) : error ? (
-        <Text style={styles.errorText}>{error}</Text>
-      ) : (
-        <>
-           <FlatList
-         data={products.slice(0, 6)}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            onPress={() =>
-              router.push({
-                pathname: "/product/product-detail/[id]",
-                params: { id: item.id.toString() },
-              })
-            }
-            style={styles.productWrapper} // ✅ Thêm style để căn chỉnh
-          >
-            <ProductCard product={item} onAddToCart={() => {}} />
-          </TouchableOpacity>
-        )}
-        contentContainerStyle={styles.productList}
-        showsVerticalScrollIndicator={false}
-      />
-
-          {/* ✅ Nút Xem Thêm */}
-          <CustomButton
-            title="View More"
-            onPress={() => router.push("/product/productlist")}
-            btnStyle={styles.viewMoreButton}
-            labelStyle={styles.viewMoreText}
-          />
-        </>
-      )}
-    
-    </ScrollView>
+          default:
+            return null;
+        }
+      }}
+    />
   );
 }
-
-const PRIMARY_COLOR = "#5fc1f1"; 
 
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    backgroundColor: "#fff",
-        paddingTop: 40,
-    padding: 12,
-
+    paddingTop: 40,
   },
   hero: {
     justifyContent: "center",
@@ -341,23 +234,15 @@ const styles = StyleSheet.create({
     height: 250,
     borderRadius: 10,
   },
-  cardImage: {
-    width: "100%",
-    height: 200,
-    borderRadius: 8,
-    marginBottom: 10,
-  },
   heroTitle: {
     fontSize: 32,
     fontWeight: "bold",
     textAlign: "center",
     marginTop: 20,
-    color: "#333",
   },
   heroSubtitle: {
     fontSize: 18,
     textAlign: "center",
-    color: "#555",
     marginBottom: 30,
     paddingHorizontal: 10,
   },
@@ -372,6 +257,90 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "bold",
   },
+  shopCategoriesSection: {
+    marginTop: 20,
+  },
+  shopCategoriesTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 16,
+    color: PRIMARY_COLOR,
+  },
+  shopCategoryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  shopCategory: {
+    width: "30%",
+    alignItems: "center",
+  },
+  shopCategoryImage: {
+    width: "100%",
+    height: 150,
+    borderRadius: 10,
+  },
+  shopCategoryLabel: {
+    fontSize: 16,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginTop: 10,
+  },
+  shopCategoryDescription: {
+    fontSize: 14,
+    textAlign: "center",
+    marginTop: 5,
+    color: "#777",
+  },
+  shopCategoryInfo: {
+    marginTop: 20,
+    alignItems: "center",
+  },
+  shopCategoryInfoText: {
+    fontSize: 14,
+    textAlign: "center",
+    marginBottom: 10,
+    color: "#777",
+  },
+  productSection: {
+    marginTop: 20,
+  },
+  screenTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  productList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",  // This will center the items horizontally
+    alignItems: "center", // This will center the items vertically (if needed)
+  },
+  productWrapper: {
+    width: "50%",  // This will allow two products per row, adjust as needed
+    marginBottom: 20,
+    alignItems: "center", // Center content inside the wrapper (like text)
+  },
+  
+  viewMoreButton: {
+    marginTop: 20,
+    backgroundColor: "#3498db",
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  viewMoreText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#fff",
+  },
+  errorText: {
+    color: "red",
+    fontSize: 16,
+    textAlign: "center",
+    marginTop: 20,
+  },
+
   tabContainer: {
     flexDirection: "row",
     marginBottom: 20,
@@ -388,124 +357,21 @@ const styles = StyleSheet.create({
     borderBottomWidth: 3,
     borderBottomColor: PRIMARY_COLOR,
   },
-  tabText: {
+  tabLabel: {
     fontSize: 16,
     color: "#888",
   },
   activeTabText: {
     color: PRIMARY_COLOR,
   },
-  nestedTabsContainer: {
-    flexDirection: "row",
-    marginBottom: 20,
-  },
-  nestedTab: {
-    padding: 10,
-    borderRadius: 5,
-    marginRight: 10,
-    backgroundColor: "#ddd",
-  },
-  activeNestedTab: {
-    backgroundColor: PRIMARY_COLOR,
-  },
-  nestedTabText: {
-    color: "#333",
-  },
-  activeNestedTabText: {
-    color: "#fff",
-  },
-  contentContainer: {
+  imageComparisonContainer: {
     marginTop: 20,
-  },
-  screenTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  productList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-},
-productWrapper: {
-  flex: 1,
-  margin: 8,
-},
-tips: {
-    marginBottom: 40,
-  },
-  tipsTitle: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: PRIMARY_COLOR,
-    textAlign: "center",
-    marginBottom: 15,
-  },
-  tipsSubtitle: {
-    fontSize: 16,
-    textAlign: "center",
-    color: "#555",
-    marginBottom: 30,
-  },
-  tipsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    flexWrap: "wrap",
-  },
-  tipItem: {
-    width: "45%",
-    marginBottom: 20,
     alignItems: "center",
-  },
-  tipImage: {
-    width: "100%",
-    height: 150,
-    borderRadius: 8,
-    marginBottom: 10,
-  },
-  tipTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
-    textAlign: "center",
-  },
-  cta: {
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  ctaButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: PRIMARY_COLOR,
-    paddingVertical: 15,
-    paddingHorizontal: 40,
-    borderRadius: 8,
-  },
-  ctaButtonText: {
-    color: "#fff",
-    fontSize: 18,
-    marginRight: 10,
-    fontWeight: "bold",
-  },
-  ctaButtonIcon: {
-    color: "#fff",
-    fontSize: 20,
-  },
-  errorText: {
-    color: "red",
-    fontSize: 16,
-    textAlign: "center",
-    marginVertical: 20,
-  },
-  emptyListText: {
-    fontSize: 18,
-    color: "#555",
-    textAlign: "center",
-    marginTop: 20,
   },
   imageRow: {
     flexDirection: "row",
     justifyContent: "space-between",
+    width: "100%",
   },
   imageWrapper: {
     width: "48%",
@@ -515,7 +381,7 @@ tips: {
     fontSize: 16,
     fontWeight: "bold",
     marginBottom: 5,
-    color: "#666",
+    color: "#333",
   },
   image: {
     width: "100%",
@@ -528,19 +394,46 @@ tips: {
     shadowOpacity: 0.2,
     shadowRadius: 4,
   },
-  imageComparisonContainer: {
+
+  decorServiceSection: {
     marginTop: 20,
+  },
+  decorServiceTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 16,
+    color: PRIMARY_COLOR,
+  },
+  decorServiceSubtitle: {
+    fontSize: 16,
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  decorServiceList: {
+    marginBottom: 20,
+  },
+  decorServiceItem: {
+    marginRight: 10,
+    width: 200,
     alignItems: "center",
   },
-  viewMoreButton: {
-    marginTop: 20,
-    backgroundColor: "#3498db",
-    paddingVertical: 12,
-    borderRadius: 10,
+  decorServiceImage: {
+    width: "100%",
+    height: 120,
+    borderRadius: 8,
+    marginBottom: 10,
   },
-  viewMoreText: {
+  decorServiceText: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#fff",
+    textAlign: "center",
   },
+  decorServiceDescription: {
+    fontSize: 14,
+    textAlign: "center",
+    marginTop: 5,
+    color: "#777",
+  },
+
 });

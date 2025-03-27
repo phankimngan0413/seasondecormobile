@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
-import { useSetDefaultAddress } from "@/utils/address/AddressAPI";
+import { useSetDefaultAddress } from "@/utils/AddressAPI";
 import useDeleteConfirmModal from "@/hooks/useDeleteConfirmModal";
 import useAddressModal from "@/hooks/useAddressModal";
 

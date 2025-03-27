@@ -135,9 +135,8 @@ const LoginScreen: React.FC = () => {
         onChangeText={(text) => {
           setEmail(text.trim());
           setErrors((prev) => ({ ...prev, email: isValidEmail(text) ? "" : "Invalid email format." }));
-        }}
-        error={errors.email}
-      />
+        } }
+        error={errors.email} label={""}      />
 
       {/* Password Input */}
       <InputField
@@ -149,14 +148,11 @@ const LoginScreen: React.FC = () => {
         onChangeText={(text) => {
           setPassword(text);
           if (errors.password) setErrors((prev) => ({ ...prev, password: "" }));
-        }}
+        } }
         error={errors.password}
-        rightIcon={
-          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-            <Ionicons name={showPassword ? "eye-off" : "eye"} size={22} color={colors.icon} />
-          </TouchableOpacity>
-        }
-      />
+        rightIcon={<TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+          <Ionicons name={showPassword ? "eye-off" : "eye"} size={22} color={colors.icon} />
+        </TouchableOpacity>} label={""}      />
 
       {/* Login Button */}
       <CustomButton title={loading ? "Logging in..." : "Continue with Email"} onPress={handleLogin} disabled={loading} />
