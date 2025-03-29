@@ -4,6 +4,17 @@ import { LogBox } from "react-native";
 // ✅ Ẩn lỗi Axios 400 từ LogBox
 LogBox.ignoreLogs(["AxiosError: Request failed with status code 400"]);
 
+// Thêm interface Provider mới
+export interface IProvider {
+  businessName: string;
+  followersCount: number;
+  followingsCount: number;
+  id: number;
+  isProvider: boolean;
+  joinedDate: string;
+  providerVerified: boolean;
+}
+
 export interface IProduct {
   id: number;
   productName: string;
@@ -19,8 +30,21 @@ export interface IProduct {
   imageUrls: string[];
   reviews: any[];
   
+  // Thêm thuộc tính provider từ API response
+  provider?: IProvider;
+  
+  // Các thuộc tính khác từ API response
+  accountId?: number;
+  basePrice?: number;
+  categoryName?: string;
+  createAt?: string;
+  decorCategoryId?: number;
+  favoriteCount?: number;
+  images?: any[];
+  province?: string;
+  seasons?: any[];
+  style?: string;
 }
-
 
 // ✅ API GET danh sách sản phẩm
 export const getProductsAPI = async (): Promise<IProduct[]> => {
@@ -51,7 +75,6 @@ export const getProductsAPI = async (): Promise<IProduct[]> => {
   }
 };
 
-
 // ✅ API GET chi tiết sản phẩm theo ID
 export const getProductDetailAPI = async (id: number): Promise<IProduct> => {
   const url = `/api/Product/getById/${id}`;
@@ -80,4 +103,3 @@ export const getProductDetailAPI = async (id: number): Promise<IProduct> => {
     return Promise.reject(new Error("Network error, please try again."));
   }
 };
-

@@ -1,6 +1,8 @@
 import { initApiClient } from "@/config/axiosConfig";
+import { IProvider } from "./productAPI";
 
 // Decor service interface
+// Update your IDecor interface to match the actual API response:
 export interface IDecor {
   id: number;
   style: string;
@@ -11,10 +13,13 @@ export interface IDecor {
   accountId: number;
   decorCategoryId: number;
   favoriteCount: number;
-  images: string[];
-  seasons: { id: number; seasonName: string }[] | string[];
+  images: string[]; // Changed to string[] to match your API response
+  seasons: string[] | Array<{id: number; name: string; seasonName?: string;}>;
+  provider?: IProvider;
+  categoryName?: string;
 }
 
+// Then use type guards in your component to handle both possibilities
 // Fetches all decor services (adjusted to match the correct endpoint)
 export const getDecorServicesAPI = async (): Promise<IDecor[]> => {
   const apiClient = await initApiClient();
@@ -91,5 +96,85 @@ export const getDecorServiceByIdAPI = async (id: number): Promise<IDecor> => {
   } catch (error: any) {
     console.error("🔴 Fetch Decor Service by ID Error:", error.response?.data || error.message);
     throw new Error(error.response?.data?.message || "Failed to fetch decor service by ID.");
+  }
+};
+export const getDecorServiceByProviderAPI = async (slug: string): Promise<any> => {
+  try {
+    // Log the slug being used to ensure it's correct
+    console.log("🔍 Fetching Decor Service for Slug:", slug);
+
+    // Validate slug before making API call
+    if (!slug) {
+      console.error("🚨 Invalid slug: Cannot fetch decor service");
+      throw new Error("Invalid provider slug");
+    }
+
+    const apiClient = await initApiClient();
+    console.log("✅ API Client Initialized Successfully");
+
+    // Detailed logging of the full API endpoint
+    const endpoint = `/api/DecorService/getDecorServiceByProvider/${slug}`;
+    console.log("🌐 API Endpoint:", endpoint);
+
+    try {
+      const response = await apiClient.get(endpoint);
+      
+      // More comprehensive response logging
+      console.log("🟢 Full API Response:", response.data);
+
+      // Handle empty arrays or null/undefined response data
+      if (!response.data || (Array.isArray(response.data) && response.data.length === 0)) {
+        // Return empty array instead of throwing an error
+        console.log("ℹ️ No decor services found for this provider");
+        return []; // Return empty array instead of throwing error
+      }
+
+      // Process single object or array of objects
+      const services = Array.isArray(response.data) ? response.data : [response.data];
+      
+      // Process each service
+      return services.map(service => {
+        // Robust image processing
+        const validImages = service.images && service.images.length > 0 
+          ? service.images 
+          : ["https://via.placeholder.com/150"];
+
+        // Robust seasons processing
+        const validSeasons = service.seasons && Array.isArray(service.seasons)
+          ? service.seasons.map((season: any) => {
+              if (typeof season === 'string') return season;
+              return season.seasonName || season.name || "No Season";
+            })
+          : ["No Season"];
+
+        // Return processed service data
+        return {
+          ...service,
+          images: validImages,
+          seasons: validSeasons,
+        };
+      });
+
+    } catch (apiError: any) {
+      // Special handling for 404 (Not Found) responses
+      if (apiError.response?.status === 404) {
+        console.log("ℹ️ No decor services found for this provider (404 response)");
+        return []; // Return empty array for 404 responses
+      }
+      
+      console.error("🔴 API Request Error:", {
+        status: apiError.response?.status,
+        data: apiError.response?.data,
+        message: apiError.message
+      });
+      
+      throw new Error(apiError.response?.data?.message || "Failed to fetch decor services");
+    }
+
+  } catch (error: any) {
+    console.error("🚨 Comprehensive Error in getDecorServiceByProviderAPI:", error);
+    
+    // Re-throw the error
+    throw error;
   }
 };

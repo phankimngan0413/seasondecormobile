@@ -26,6 +26,8 @@ export const Colors = {
     priceColor: "#FF6347",      // Red color for the price
     descriptionColor: "#555555",// Dark gray color for description
     seasonColor: "#1E90FF",     // Blue color for seasons
+    error: "#e01929",
+    textSecondary: '#64748B',
   },
   dark: {
     text: "#ECEDEE",  
@@ -51,5 +53,7 @@ export const Colors = {
     priceColor: "#FF6347",      // Gold color for the price
     descriptionColor: "#FFFFFF",// Light gray color for description
     seasonColor: "#1E90FF", 
+    error: "#e01929",
+    textSecondary: '#94A3B8',
   },
 };
