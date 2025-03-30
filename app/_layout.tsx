@@ -27,7 +27,7 @@ function ThemedStack() {
   const pathname = usePathname();
 
   // Check if current page is login or signup to hide header
-  const hideHeader = ["/login", "/signup"].includes(pathname);
+  const hideHeader = ["/login", "/signup","/chat/[userId]"].includes(pathname);
 
   // Load fonts
   const [loaded] = useFonts({
@@ -85,6 +85,7 @@ function ThemedStack() {
         <Stack.Screen name="cart" options={{ title: "Giỏ hàng" }} />
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="signup" options={{ headerShown: false }} />
+        
         <Stack.Screen name="product/product-detail/[id]" options={{ title: "Chi tiết sản phẩm" }} />
         <Stack.Screen name="provider/[slug]" options={{ title: "Thông tin nhà cung cấp" }} />
         <Stack.Screen name="decor/[id]" options={{ title: "Chi tiết dịch vụ" }} />

@@ -1,5 +1,5 @@
 import { initApiClient } from "@/config/axiosConfig";
-import { getToken, setToken } from "@/services/auth"; // Your utility to get and set the token
+import { getToken } from "@/services/auth"; // Your utility to get and set the token
 import { jwtDecode } from "jwt-decode";
 
 // Get Account Details by User ID
@@ -14,7 +14,7 @@ export const getAccountDetails = async (): Promise<any> => {
     if (!userId) throw new Error("No user ID in the token.");
 
     const apiClient = await initApiClient();
-    const response = await apiClient.get(`/api/AccountManagement/${userId}`);
+    const response = await apiClient.get(`/api/AccountProfile/${userId}`);
     
     // Return the user account data from API
     return response.data;
@@ -24,7 +24,24 @@ export const getAccountDetails = async (): Promise<any> => {
   }
 };
 
-// Update Account Details (Example)
+// Get Account Details by ID (for other users)
+export const getAccountDetailsById = async (userId: string | number): Promise<any> => {
+  try {
+    const token = await getToken();
+    if (!token) throw new Error("No token found!");
+
+    const apiClient = await initApiClient();
+    const response = await apiClient.get(`/api/AccountProfile/${userId}`);
+    
+    // Return the user account data from API
+    return response.data;
+  } catch (error) {
+    console.error(`Error fetching account details for user ${userId}: `, error);
+    throw error;
+  }
+};
+
+// Update Account Details
 export const updateAccountDetails = async (userData: any): Promise<any> => {
   try {
     const token = await getToken();
@@ -46,8 +63,7 @@ export const updateAccountDetails = async (userData: any): Promise<any> => {
   }
 };
 
-// Login API call
-
+// Update Avatar
 export const updateAvatar = async (file: any): Promise<any> => {
   try {
     if (!file) {

@@ -15,7 +15,7 @@ import { useTheme } from "@/constants/ThemeContext"; // Importing the theme cont
 import { Colors } from "@/constants/Colors"; // Import colors for themes
 import { signalRService } from "@/services/SignalRService"; // Assuming SignalRService is already set up
 
-export default function ChatScreen() {
+export default function ChatListScreen() {
   const [searchText, setSearchText] = useState(""); // For search filter
   const [contacts, setContacts] = useState<any[]>([]); // Store contacts data
   const [loading, setLoading] = useState(true); // Loading state
@@ -32,6 +32,8 @@ export default function ChatScreen() {
     message: string;
     avatar: string | null;
     lastMessageTime: string;
+    email?: string; // Thêm trường email nếu có
+    isImage?: boolean; // Flag để đánh dấu tin nhắn có phải hình ảnh không
   }
 
   // Fetching contact data from the API
@@ -41,8 +43,20 @@ export default function ChatScreen() {
       const data = await getContactsAPI();
       console.log("Fetched Contacts:", data);
       if (Array.isArray(data) && data.length > 0) {
+        // Xử lý dữ liệu để đánh dấu tin nhắn là ảnh hoặc văn bản
+        const processedData = data.map(contact => {
+          // Nếu message rỗng và avatar tồn tại, coi như đó là tin nhắn ảnh
+          const isImage = (!contact.message || contact.message.trim() === '') && 
+                         contact.lastMessageTime && contact.lastMessageTime.trim() !== '';
+                         
+          return {
+            ...contact,
+            isImage
+          };
+        });
+        
         // Sort by most recent messages if possible
-        const sortedData = [...data].sort((a, b) => {
+        const sortedData = [...processedData].sort((a, b) => {
           if (!a.lastMessageTime) return 1;
           if (!b.lastMessageTime) return -1;
           return new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime();
@@ -78,6 +92,9 @@ export default function ChatScreen() {
     const handleNewMessage = (newMessage: Message) => {
       console.log("New message received:", newMessage);
       
+      // Kiểm tra nếu tin nhắn là ảnh
+      const isImage = (!newMessage.message || newMessage.message.trim() === '');
+      
       setContacts((prevContacts) => {
         // Check if contact already exists
         const existingContactIndex = prevContacts.findIndex(
@@ -90,7 +107,8 @@ export default function ChatScreen() {
           updatedContacts[existingContactIndex] = {
             ...updatedContacts[existingContactIndex],
             message: newMessage.message,
-            lastMessageTime: newMessage.lastMessageTime
+            lastMessageTime: newMessage.lastMessageTime,
+            isImage
           };
           
           // Remove and add to beginning
@@ -98,7 +116,7 @@ export default function ChatScreen() {
           return [updatedContact, ...updatedContacts];
         } else {
           // Add new contact to beginning
-          return [newMessage, ...prevContacts];
+          return [{...newMessage, isImage}, ...prevContacts];
         }
       });
 
@@ -117,11 +135,15 @@ export default function ChatScreen() {
   }, []);
 
   // Handle navigation to the chat page of a selected contact
-  const handleConversationClick = (contactId: number) => {
-    // Navigate to the chat page with receiverId (contactId) as query parameter
+  const handleConversationClick = (contact: any) => {
+    // Navigate to the chat page with contact information
     router.push({
-      pathname: `/chat/[userId]`, // Use the correct dynamic path
-      params: { userId: contactId.toString() }, // Pass the contactId (receiverId) to the chat page
+      pathname: `/chat/[userId]`,
+      params: { 
+        userId: contact.contactId.toString(),
+        contactName: contact.contactName,
+        contactEmail: contact.email || '' // Truyền email nếu có
+      }
     });
   };
 
@@ -183,7 +205,7 @@ export default function ChatScreen() {
           renderItem={({ item }) => (
             <TouchableOpacity
               style={[styles.contactContainer, { backgroundColor: colors.card }]} // Set card color to the theme background color
-              onPress={() => handleConversationClick(item.contactId)} // Navigate to chat when clicked
+              onPress={() => handleConversationClick(item)} // Truyền toàn bộ item thay vì chỉ contactId
             >
               {/* Contact Avatar */}
               <Image
@@ -193,7 +215,8 @@ export default function ChatScreen() {
               <View style={styles.textContainer}>
                 <Text style={[styles.contactName, { color: colors.text }]}>{item.contactName}</Text>
                 <Text style={[styles.lastMessage, { color: colors.icon }]} numberOfLines={1}>
-                  {item.message || "No messages yet"}
+                  {/* Hiển thị "Sent a photo" nếu tin nhắn cuối cùng là ảnh */}
+                  {item.isImage ? "Sent a photo" : (item.message || "No messages yet")}
                 </Text>
               </View>
               <Text style={[styles.timeText, { color: colors.icon }]}>{item.lastMessageTime || "No time"}</Text>
