@@ -26,22 +26,25 @@ export const createCartAPI = async () => {
     throw new Error(error.response?.data?.message || "Failed to create cart.");
   }
 };
-
 // Add Product to Cart API
-export const addToCartAPI = async (userId: number, productId: number, quantity: number) => {
+export const addToCartAPI = async (accountId: number, productId: number, quantity: number) => {
   const apiClient = await initApiClient();
   const token = await getToken();
-
+  
   if (!token) {
     throw new Error("Unauthorized: Please log in.");
   }
-
+  
   try {
+    console.log(`Adding product ID ${productId} to cart for account ID ${accountId} with quantity ${quantity}`);
     const response = await apiClient.post(
-      `/api/Cart/addToCart/${userId}`, // Use userId for cart operations
-      null,
-      { 
-        params: { productId, quantity }, 
+      `/api/Cart/addToCart/${accountId}`, // accountId from token in the path
+      null, // No request body
+      {
+        params: { 
+          productId: productId, // Product ID from your product data
+          quantity: quantity 
+        },
         headers: { Authorization: `Bearer ${token}` }
       }
     );
@@ -49,10 +52,15 @@ export const addToCartAPI = async (userId: number, productId: number, quantity: 
     console.log("🟢 Product Added to Cart:", response.data);
     return response.data;
   } catch (error: any) {
-    const errorDetails = error.response?.data || error.message;
-    console.error("🔴 Add to Cart API Error:", errorDetails);
-    Alert.alert("❌ Error", errorDetails);
-    throw new Error(errorDetails);
+    console.error("🔴 Add to Cart API Error:", error.response?.data);
+    
+    // More detailed error logging
+    if (error.response) {
+      console.error("Status code:", error.response.status);
+      console.error("Response data:", JSON.stringify(error.response.data, null, 2));
+    }
+    
+    throw new Error("Failed to add product to cart. Please try again.");
   }
 };
 
@@ -75,7 +83,7 @@ export const removeProductFromCartAPI = async (userId: number, productId: number
   const apiClient = await initApiClient();
   const url = `/api/Cart/removeProduct/${userId}?productId=${productId}`;
 
-  try {
+ 
     const response = await apiClient.delete<{
       success: boolean;
       message: string;
@@ -90,19 +98,5 @@ export const removeProductFromCartAPI = async (userId: number, productId: number
     console.log("Removing product with URL:", url);
 
     // Validate the response structure
-    if (response.data && typeof response.data.success !== "undefined") {
-      if (response.data.success) {
-        // Return updated data if success is true
-        return response.data;
-      } else {
-        throw new Error(response.data.message || "Failed to remove product.");
-      }
-    } else {
-      throw new Error("Invalid API response structure.");
-    }
-  } catch (error: any) {
-    // Handle any errors from the API call
-    console.error("🔴 Remove Product API Error:", error);
-    throw new Error("Error removing product from cart.");
-  }
+    
 };

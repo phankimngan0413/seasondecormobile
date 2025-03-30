@@ -1,6 +1,15 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Image } from "react-native";
-import { useRouter } from "expo-router"; // Importing useRouter for navigation
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  FlatList, 
+  TextInput, 
+  TouchableOpacity, 
+  Image,
+  ActivityIndicator
+} from "react-native";
+import { useRouter, useFocusEffect } from "expo-router"; // Added useFocusEffect
 import { getContactsAPI } from "@/utils/contactAPI"; // API to fetch contacts
 import { useTheme } from "@/constants/ThemeContext"; // Importing the theme context
 import { Colors } from "@/constants/Colors"; // Import colors for themes
@@ -9,6 +18,7 @@ import { signalRService } from "@/services/SignalRService"; // Assuming SignalRS
 export default function ChatScreen() {
   const [searchText, setSearchText] = useState(""); // For search filter
   const [contacts, setContacts] = useState<any[]>([]); // Store contacts data
+  const [loading, setLoading] = useState(true); // Loading state
   const router = useRouter(); // Initialize the router for navigation
   const { theme } = useTheme(); // Access current theme
   const validTheme = theme as "light" | "dark"; // Ensure theme is either light or dark
@@ -25,36 +35,85 @@ export default function ChatScreen() {
   }
 
   // Fetching contact data from the API
-  useEffect(() => {
-    const fetchContacts = async () => {
-      try {
-        const data = await getContactsAPI();
-        console.log("Fetched Contacts:", data);
-        if (Array.isArray(data) && data.length > 0) {
-          setContacts(data); // Update state with fetched contacts
-        } else {
-          console.error("Received invalid data", data);
-        }
-      } catch (error) {
-        console.error("Error fetching contacts:", error); // Log any errors
+  const fetchContacts = async () => {
+    setLoading(true);
+    try {
+      const data = await getContactsAPI();
+      console.log("Fetched Contacts:", data);
+      if (Array.isArray(data) && data.length > 0) {
+        // Sort by most recent messages if possible
+        const sortedData = [...data].sort((a, b) => {
+          if (!a.lastMessageTime) return 1;
+          if (!b.lastMessageTime) return -1;
+          return new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime();
+        });
+        setContacts(sortedData); // Update state with fetched contacts
+      } else {
+        console.log("No contacts found or empty data");
+        setContacts([]);
       }
-    };
+    } catch (error) {
+      console.error("Error fetching contacts:", error); // Log any errors
+      setContacts([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchContacts();
-    
+  // Reload data when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log("Chat screen focused - reloading data");
+      fetchContacts();
+      
+      return () => {
+        // Cleanup if needed
+      };
+    }, [])
+  );
+
+  // Initial setup and SignalR listener
+  useEffect(() => {
     // Listen for new messages via SignalR
-    signalRService.onMessageReceived((newMessage: Message) => {
+    const handleNewMessage = (newMessage: Message) => {
       console.log("New message received:", newMessage);
       
-      // Add the new message to the contacts array and ensure it's at the top
-      setContacts((prevContacts) => [newMessage, ...prevContacts]);
+      setContacts((prevContacts) => {
+        // Check if contact already exists
+        const existingContactIndex = prevContacts.findIndex(
+          c => c.contactId === newMessage.contactId
+        );
 
-      // Optionally, scroll the list to the top
+        if (existingContactIndex !== -1) {
+          // Update existing contact and move to top
+          const updatedContacts = [...prevContacts];
+          updatedContacts[existingContactIndex] = {
+            ...updatedContacts[existingContactIndex],
+            message: newMessage.message,
+            lastMessageTime: newMessage.lastMessageTime
+          };
+          
+          // Remove and add to beginning
+          const updatedContact = updatedContacts.splice(existingContactIndex, 1)[0];
+          return [updatedContact, ...updatedContacts];
+        } else {
+          // Add new contact to beginning
+          return [newMessage, ...prevContacts];
+        }
+      });
+
+      // Scroll to top to show the new message
       if (flatListRef.current) {
         flatListRef.current.scrollToOffset({ animated: true, offset: 0 });
       }
-    });
+    };
 
+    signalRService.onMessageReceived(handleNewMessage);
+
+    // Cleanup function
+    return () => {
+      // Remove the SignalR listener if needed
+    };
   }, []);
 
   // Handle navigation to the chat page of a selected contact
@@ -64,6 +123,11 @@ export default function ChatScreen() {
       pathname: `/chat/[userId]`, // Use the correct dynamic path
       params: { userId: contactId.toString() }, // Pass the contactId (receiverId) to the chat page
     });
+  };
+
+  // Navigate to providers screen
+  const navigateToProviders = () => {
+    router.push("/provider");
   };
 
   // Filter contacts based on contactName and search text
@@ -86,9 +150,31 @@ export default function ChatScreen() {
         />
       </View>
 
-      {/* Contacts List */}
-      {filteredContacts.length === 0 && searchText !== "" ? (
-        <Text style={[styles.noDataText, { color: colors.text }]}>No contacts found</Text>
+      {/* Loading Indicator */}
+      {loading ? (
+        <View style={styles.centerContent}>
+          <ActivityIndicator size="large" color="#5fc1f1" />
+          <Text style={[styles.messageText, { color: colors.text }]}>Loading conversations...</Text>
+        </View>
+      ) : filteredContacts.length === 0 && searchText !== "" ? (
+        <View style={styles.centerContent}>
+          <Text style={[styles.messageText, { color: colors.text }]}>No contacts found</Text>
+        </View>
+      ) : filteredContacts.length === 0 ? (
+        <View style={styles.centerContent}>
+          <Text style={[styles.messageText, { color: colors.text }]}>
+            You don't have any conversations yet
+          </Text>
+          <Text style={[styles.subMessageText, { color: colors.textSecondary || "#999" }]}>
+            Start a conversation by finding a provider
+          </Text>
+          <TouchableOpacity 
+            style={[styles.providerButton, { backgroundColor: "#5fc1f1" }]}
+            onPress={navigateToProviders}
+          >
+            <Text style={styles.providerButtonText}>Browse Providers</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
         <FlatList
           ref={flatListRef} // Reference to FlatList for programmatic scrolling
@@ -145,6 +231,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 12,
+    paddingHorizontal: 15,
     borderBottomWidth: 1,
     borderBottomColor: "#ddd",
     justifyContent: "space-between",
@@ -166,17 +253,39 @@ const styles = StyleSheet.create({
   },
   lastMessage: {
     fontSize: 14,
-    color: "#666",
+    marginTop: 3,
   },
   timeText: {
     fontSize: 12,
-    color: "#999",
     paddingLeft: 10,
     alignSelf: "flex-end",
   },
-  noDataText: {
-    fontSize: 18,
-    color: "#ccc",
-    textAlign: "center",
+  centerContent: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
   },
+  messageText: {
+    fontSize: 18,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginVertical: 10,
+  },
+  subMessageText: {
+    fontSize: 16,
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  providerButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+    marginTop: 10,
+  },
+  providerButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  }
 });

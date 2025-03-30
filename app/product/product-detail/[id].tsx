@@ -94,29 +94,25 @@ const ProductDetailScreen = () => {
   
   const handleAddToCart = async () => {
     if (!product) return;
-
-    const cartId = await fetchCartId();
-
-    if (!cartId) {
-      Alert.alert("❌ Error", "Failed to get a valid cart.");
-      console.log("Failed to get a valid cart ID:", cartId);
-      return;
-    }
-
-    const userId = await getUserIdFromToken();
-    if (!userId) {
-      Alert.alert("❌ Error", "Failed to retrieve user information.");
-      console.log("Failed to retrieve user ID:", userId);
-      return;
-    }
-
+  
     try {
+      const userId = await getUserIdFromToken();
+      if (!userId) {
+        Alert.alert("❌ Error", "Please log in to add items to cart.");
+        return;
+      }
+  
+      console.log(`Adding product ID ${product.id} to cart for user ID ${userId} with quantity ${quantity}`);
+      
+      // Call API with correct parameters
       await addToCartAPI(userId, product.id, quantity);
-      console.log("Product added to cart successfully");
+      
+      // Show success message
       Alert.alert("✅ Success", "Product added to cart!");
     } catch (error) {
+      // Error handling
       const errorMessage = error instanceof Error ? error.message : "Failed to add product to cart.";
-      console.log("Error adding to cart:", errorMessage);
+      console.error("Error adding to cart:", errorMessage);
       Alert.alert("❌ Error", errorMessage);
     }
   };
@@ -247,8 +243,7 @@ const ProductDetailScreen = () => {
         </Text>
       </View>
 
-      {/* Purchase Section */}
-{/* Purchase Section */}
+    {/* Purchase Section */}
 <View style={styles.purchaseContainer}>
   <View style={styles.quantityRow}>
     <Text style={styles.quantityLabel}>Quantity:</Text>
@@ -277,7 +272,11 @@ const ProductDetailScreen = () => {
       <Text style={styles.saveButtonText}>Save</Text>
     </TouchableOpacity>
     
-    <TouchableOpacity style={styles.addToCartButton}>
+    {/* Connect the Add to Cart button to handleAddToCart function */}
+    <TouchableOpacity 
+      style={styles.addToCartButton} 
+      onPress={handleAddToCart}
+    >
       <Text style={styles.addToCartButtonText}>Add to Cart</Text>
     </TouchableOpacity>
   </View>
@@ -325,13 +324,15 @@ const ProductDetailScreen = () => {
       </View>
     </View>
     
-    <TouchableOpacity 
-      style={styles.viewProfileButton}
-      onPress={() => product?.provider?.id && router.push(`/provider/${product.provider.id}`)}
-    >
-      <Text style={styles.viewProfileText}>View Profile</Text>
-      <Ionicons name="chevron-forward" size={16} color="#0096b5" />
-    </TouchableOpacity>
+    {product.provider?.slug && (
+  <TouchableOpacity 
+    style={styles.viewProfileButton}
+    onPress={() => router.push(`/provider/${product.provider?.slug}`)}
+  >
+    <Text style={styles.viewProfileText}>View Profile</Text>
+    <Ionicons name="chevron-forward" size={16} color="#0096b5" />
+  </TouchableOpacity>
+)}
   </View>
 </View>
       {/* Additional Info Section - Can be expanded for product specs, shipping details, etc. */}

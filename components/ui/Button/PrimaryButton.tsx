@@ -1,59 +1,35 @@
+// In your Button.tsx file
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
+import { TouchableOpacity, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
 
-
-interface PrimaryButtonProps {
+interface CustomButtonProps {
   title: string;
   onPress: () => void;
-
-  btnStyle?: object; // Optional button style
-  labelStyle?: object; // Optional label style
+  style?: ViewStyle;
+  textStyle?: TextStyle; // Add this line to accept text styling
 }
 
-const PrimaryButton: React.FC<PrimaryButtonProps> = ({
-  title,
-  onPress,
-  btnStyle,
-  labelStyle,
-}) => {
+const CustomButton: React.FC<CustomButtonProps> = ({ title, onPress, style, textStyle }) => {
   return (
-    <TouchableOpacity
-      style={[styles.button, btnStyle]} // Apply passed button styles
-      onPress={onPress}
-    >
-      <View style={styles.buttonContent}>
-        <Text style={[styles.buttonText, labelStyle]}>{title}</Text> {/* Button text */}
-      </View>
+    <TouchableOpacity style={[styles.button, style]} onPress={onPress}>
+      <Text style={[styles.buttonText, textStyle]}>{title}</Text>
     </TouchableOpacity>
   );
 };
 
-// Default styles for the button
 const styles = StyleSheet.create({
   button: {
-    backgroundColor: '#3498db', // Blue background
-    borderRadius: 20, // Rounded corners
-    paddingVertical: 10, // Vertical padding
-    paddingHorizontal: 20, // Horizontal padding
-    alignItems: 'center', // Center content horizontally
-    justifyContent: 'center', // Center content vertically
-    flexDirection: 'row', // Align icon and text horizontally
-    width: 150, // Fixed width (adjustable)
-    height: 40, // Fixed height (adjustable)
-  },
-  buttonContent: {
-    flexDirection: 'row', // Align icon and text in a row
-    alignItems: 'center', // Vertically center content
-  },
-  icon: {
-    marginRight: 8, // Space between icon and text
+    backgroundColor: '#5fc1f1',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   buttonText: {
+    color: 'white',
     fontSize: 16,
-    fontWeight: 'bold', // Bold text
-    color: '#fff', // White text color
-    textTransform: 'uppercase', // Uppercase text
+    fontWeight: 'bold',
   },
 });
 
-export default PrimaryButton;
+export default CustomButton;

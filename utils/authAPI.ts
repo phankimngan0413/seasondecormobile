@@ -128,3 +128,70 @@ export const googleLoginAPI = async (idToken: string): Promise<ILoginResponse> =
     return Promise.reject(new Error("Network error, please try again."));
   }
 };
+export const registerCustomerAPI = async (
+  email: string,
+  password: string,
+  firstName: string,
+  lastName: string,
+  slug: string,
+  dateOfBirth: string,
+  gender: boolean
+): Promise<any> => {
+  const url = "/api/Auth/register-customer";
+
+  const apiClient = await initApiClient();
+  console.log("🟡 API Endpoint:", apiClient.defaults.baseURL + url);
+
+  try {
+    const response: IBackendRes<any> = await apiClient.post(url, {
+      email,
+      password,
+      firstName,
+      lastName,
+      slug,
+      dateOfBirth,
+      gender
+    });
+
+    console.log("🟢 Full API Response:", response);
+
+    // Check if API response is valid
+    if (!response || typeof response.success === "undefined") {
+      console.error("🔴 API Response không hợp lệ:", response);
+      return Promise.reject(new Error("Invalid response from server."));
+    }
+
+    // Check if API returned an error
+    if (!response.success) {
+      console.error("🔴 Registration failed:", response);
+      return Promise.reject(new Error(response.errors?.join(", ") || "Registration failed."));
+    }
+
+    // Return success response
+    return response.data;
+  } catch (error: any) {
+    console.error("🔴 Registration API Error:", error);
+
+    // Network connection error
+    if (error.message.includes("Network Error")) {
+      return Promise.reject(new Error("⚠️ Cannot connect to server. Please check your internet connection."));
+    }
+
+    // Handle specific error codes
+    if (error.response?.status === 400) {
+      // Parse validation errors if available
+      const errorData = error.response?.data;
+      if (errorData?.errors && Array.isArray(errorData.errors)) {
+        return Promise.reject(new Error(errorData.errors.join(", ")));
+      }
+      return Promise.reject(new Error("Invalid registration data."));
+    }
+
+    if (error.response?.status === 409) {
+      return Promise.reject(new Error("Email or username already exists."));
+    }
+
+    // General network or server error
+    return Promise.reject(new Error("Network error, please try again."));
+  }
+};

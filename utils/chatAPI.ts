@@ -45,7 +45,6 @@ export const getChatHistoryAPI = async (userId: number): Promise<IMessage[]> => 
 
       return filteredMessages; // Return the filtered chat messages
     } else {
-      console.error("🔴 API Response is empty or invalid:", response.data);
       return Promise.reject(new Error("No chat history found or invalid response."));
     }
   } catch (error: any) {

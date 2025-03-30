@@ -8,6 +8,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  TouchableOpacity,
+  Dimensions,
+  StatusBar,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -17,7 +20,10 @@ import { useTheme } from "@/constants/ThemeContext";
 import { jwtDecode } from "jwt-decode";
 import { getToken, removeToken } from "@/services/auth";
 import ProfileMenu from "@/components/ProfileMenu";
-import { getAccountDetails } from "@/utils/accountAPI"; // Import getAccountDetails
+import { getAccountDetails } from "@/utils/accountAPI";
+import { Ionicons } from "@expo/vector-icons";
+
+const { width } = Dimensions.get("window");
 
 interface DecodedToken {
   email: string;
@@ -49,11 +55,11 @@ export default function ProfileScreen() {
         const decoded: DecodedToken = jwtDecode(token);
 
         // Fetch account details, including the avatar image
-        const accountData = await getAccountDetails(); // Fetch account data from the API
+        const accountData = await getAccountDetails();
         setProfile({
           email: decoded.email,
           name: decoded.unique_name,
-          avatar: accountData.avatar || null, // Ensure avatar is fetched from account data
+          avatar: accountData.avatar || null,
         });
       } catch (error) {
         setError("Failed to load profile. Please try again.");
@@ -71,71 +77,322 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.primary }]}>Loading profile...</Text>
+        <Text style={[styles.loadingText, { color: colors.text }]}>Loading profile...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.errorContainer, { backgroundColor: colors.background }]}>
+        <Ionicons name="alert-circle-outline" size={48} color={colors.error || "#e74c3c"} />
+        <Text style={[styles.errorText, { color: colors.text }]}>{error}</Text>
+        <CustomButton 
+          title="Try Again" 
+          onPress={() => router.replace("/(tabs)/profile")} 
+          style={{ backgroundColor: colors.primary, marginTop: 20 }} 
+        />
       </View>
     );
   }
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={[styles.scrollContainer, { backgroundColor: colors.background }]}>
-        <LinearGradient
-          colors={[colors.primary, colors.secondary]}
-          style={[styles.header, { backgroundColor: colors.primary }]}
+    <>
+      <StatusBar barStyle={validTheme === "dark" ? "light-content" : "dark-content"} />
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === "ios" ? "padding" : undefined} 
+        style={{ flex: 1, backgroundColor: colors.background }}
+      >
+        <ScrollView 
+          contentContainerStyle={styles.scrollContainer}
+          showsVerticalScrollIndicator={false}
         >
-          <View style={styles.profileInfo}>
-            {profile?.avatar ? (
-              <Image source={{ uri: profile.avatar }} style={styles.avatar} />
-            ) : (
-              <View style={styles.avatarFallback}>
-                <Text style={styles.avatarText}>{profile?.name[0]}</Text>
+          <LinearGradient
+            colors={[colors.primary, colors.secondary || '#2980b9']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.header}
+          >
+            {/* Profile Banner with Avatar */}
+            <View style={styles.profileContainer}>
+              {profile?.avatar ? (
+                <Image 
+                  source={{ uri: profile.avatar }} 
+                  style={styles.avatar}
+                  resizeMode="cover" 
+                />
+              ) : (
+                <View style={styles.avatarFallback}>
+                  <Text style={styles.avatarText}>{profile?.name?.[0]?.toUpperCase()}</Text>
+                </View>
+              )}
+              
+              <View style={styles.profileTextContainer}>
+                <Text style={styles.username} numberOfLines={1} ellipsizeMode="tail">
+                  {profile?.name}
+                </Text>
+                <Text style={styles.email} numberOfLines={1} ellipsizeMode="tail">
+                  {profile?.email}
+                </Text>
               </View>
-            )}
-            <Text style={[styles.username, { color: "#fff" }]}>{profile?.name}</Text>
-            <Text style={[styles.email, { color: "#fff" }]}>{profile?.email}</Text>
+              
+              <TouchableOpacity 
+                style={styles.editButton} 
+                onPress={() => router.push("/screens/Account")}
+              >
+                <Ionicons name="pencil" size={14} color="#fff" />
+                <Text style={styles.editButtonText}>Edit</Text>
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
+
+          {/* Account Stats */}
+          <View style={[styles.statsContainer, { backgroundColor: colors.card }]}>
+            <View style={styles.statItem}>
+              <Text style={[styles.statNumber, { color: colors.text }]}>12</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Orders</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={[styles.statNumber, { color: colors.text }]}>3</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Reviews</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={[styles.statNumber, { color: colors.text }]}>5</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Wishlists</Text>
+            </View>
           </View>
-        </LinearGradient>
 
-        <ProfileMenu />
+          {/* Menu Section */}
+          <View style={[styles.menuContainer, { backgroundColor: colors.card }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Account Settings</Text>
+            <ProfileMenu />
+          </View>
 
-        <View style={styles.content}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Order Tracking</Text>
-          <CustomButton title="Logout" onPress={handleLogout} style={{ backgroundColor: colors.primary }} />
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          {/* Order Tracking Section */}
+          <View style={[styles.orderTrackingContainer, { backgroundColor: colors.card }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Order Tracking</Text>
+            <TouchableOpacity style={styles.trackingItem}>
+              <View style={styles.trackingIconContainer}>
+                <Ionicons name="cube-outline" size={24} color={colors.primary} />
+              </View>
+              <View style={styles.trackingContent}>
+                <Text style={[styles.trackingTitle, { color: colors.text }]}>Recent Order #SC8742</Text>
+                <Text style={[styles.trackingSubtitle, { color: colors.textSecondary }]}>In transit - Arriving Mar 31</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Logout Button */}
+          <View style={styles.logoutContainer}>
+            <CustomButton 
+              title="Logout" 
+              onPress={handleLogout} 
+              style={styles.logoutButton} 
+              textStyle={styles.logoutButtonText}
+            />
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", alignItems: "center" },
-  loadingText: { marginTop: 10, fontSize: 16 },
-  scrollContainer: { flexGrow: 1, paddingBottom: 20 },
-  header: { padding: 40, paddingTop: 70, alignItems: "center" },
-  profileInfo: { alignItems: "center", marginTop: 20 },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginBottom: 10,
-  },
-  avatarFallback: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: "#ccc",
+  loadingContainer: {
+    flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 10,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  errorText: {
+    marginTop: 12,
+    fontSize: 16,
+    textAlign: "center",
+    lineHeight: 24,
+  },
+  scrollContainer: {
+    flexGrow: 1,
+  },
+  header: {
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: 20,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  profileContainer: {
+    width: '100%',
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
+  },
+  avatarFallback: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
   },
   avatarText: {
-    fontSize: 30,
+    fontSize: 28,
+    fontWeight: 'bold',
     color: "#fff",
   },
-  username: { fontSize: 22, fontWeight: "bold" },
-  email: { fontSize: 16 },
-  content: { padding: 20, alignItems: "center" },
-  sectionTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 10 },
+  profileTextContainer: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  username: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#fff",
+    marginBottom: 4,
+  },
+  email: {
+    fontSize: 14,
+    color: "rgba(255, 255, 255, 0.8)",
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+  },
+  editButtonText: {
+    color: '#fff',
+    marginLeft: 4,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  
+  // Stats Container
+  statsContainer: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginTop: -20,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+  },
+  statDivider: {
+    width: 1,
+    height: '70%',
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    marginHorizontal: 10,
+  },
+  
+  // Menu Container
+  menuContainer: {
+    marginHorizontal: 16,
+    marginTop: 20,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 16,
+  },
+  
+  // Order Tracking
+  orderTrackingContainer: {
+    marginHorizontal: 16,
+    marginTop: 20,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  trackingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  trackingIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 150, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  trackingContent: {
+    flex: 1,
+  },
+  trackingTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  trackingSubtitle: {
+    fontSize: 14,
+  },
+  
+  // Logout
+  logoutContainer: {
+    marginHorizontal: 16,
+    marginTop: 30,
+    marginBottom: 30,
+  },
+  logoutButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#e74c3c',
+    borderRadius: 12,
+  },
+  logoutButtonText: {
+    color: '#e74c3c',
+    fontWeight: '600',
+  },
 });

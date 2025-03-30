@@ -1,9 +1,9 @@
-import { ThemeProvider } from "@/constants/ThemeContext"; // ✅ Import ThemeProvider
+import { ThemeProvider } from "@/constants/ThemeContext";
 import { Stack } from "expo-router/stack";
-import { useTheme } from "@/constants/ThemeContext"; // ✅ Import useTheme
+import { useTheme } from "@/constants/ThemeContext";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
-import { TouchableOpacity, View, TextInput } from "react-native";
+import { TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
@@ -23,10 +23,10 @@ export default function RootLayout() {
 
 function ThemedStack() {
   const router = useRouter();
-  const { theme, toggleTheme } = useTheme(); // ✅ Lấy theme từ Context
-  const pathname = usePathname(); // ✅ Lấy đường dẫn hiện tại
+  const { theme, toggleTheme } = useTheme();
+  const pathname = usePathname();
 
-  // **🔍 Kiểm tra nếu trang hiện tại là `/login` hoặc `/signup`, thì ẩn header**
+  // Check if current page is login or signup to hide header
   const hideHeader = ["/login", "/signup"].includes(pathname);
 
   // Load fonts
@@ -49,58 +49,45 @@ function ThemedStack() {
       <StatusBar hidden={false} style={theme === "dark" ? "light" : "dark"} />
       <Stack
         screenOptions={{
-          headerShown: !hideHeader, // ✅ Ẩn header nếu đang ở trang login hoặc signup
-          headerStyle: { backgroundColor: theme === "dark" ? "#151718" : "#ffffff" },
+          headerShown: !hideHeader,
+          headerStyle: { 
+            backgroundColor: theme === "dark" ? "#151718" : "#ffffff" 
+          },
           headerTintColor: theme === "dark" ? "#ffffff" : "#000000",
-          headerTitle: () =>
-            !hideHeader ? ( // ✅ Chỉ hiện header nếu không ở login/signup
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  backgroundColor: theme === "dark" ? "#222" : "#f0f0f0",
-                  borderRadius: 10,
-                  paddingHorizontal: 10,
-                  flex: 1,
-                  height: 40,
-                }}
-              >
-                <Ionicons name="search" size={20} color={theme === "dark" ? "white" : "gray"} />
-                <TextInput
-                  placeholder="Tìm kiếm..."
-                  placeholderTextColor={theme === "dark" ? "#aaa" : "#555"}
-                  style={{
-                    flex: 1,
-                    marginLeft: 8,
-                    fontSize: 16,
-                    color: theme === "dark" ? "white" : "black",
-                  }}
-                />
-              </View>
-            ) : null, // ✅ Ẩn tiêu đề header trên login/signup
-          headerLeft: () => null, // ✅ Không có icon bên trái
+          headerTitle: "Seasonal Home Decor", // Simple text title instead of search bar
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+          headerLeft: () => null,
           headerRight: () =>
-            !hideHeader ? ( // ✅ Chỉ hiển thị khi không ở trang login/signup
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 15 }}>
+            !hideHeader ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 15, marginRight: 10 }}>
                 <TouchableOpacity onPress={toggleTheme}>
                   <Ionicons
                     name={theme === "dark" ? "sunny-outline" : "moon-outline"}
-                    size={30}
+                    size={26}
                     color={theme === "dark" ? "white" : "black"}
                   />
                 </TouchableOpacity>
-
+                
                 <TouchableOpacity onPress={() => router.push("/cart")}>
-                  <Ionicons name="cart-outline" size={30} color={theme === "dark" ? "white" : "black"} />
+                  <Ionicons 
+                    name="cart-outline" 
+                    size={26} 
+                    color={theme === "dark" ? "white" : "black"} 
+                  />
                 </TouchableOpacity>
               </View>
-            ) : null, // ✅ Ẩn icon khi ở trang login/signup
+            ) : null,
         }}
       >
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="cart" options={{ title: "Giỏ hàng" }} />
-
-    
+        <Stack.Screen name="login" options={{ headerShown: false }} />
+        <Stack.Screen name="signup" options={{ headerShown: false }} />
+        <Stack.Screen name="product/product-detail/[id]" options={{ title: "Chi tiết sản phẩm" }} />
+        <Stack.Screen name="provider/[slug]" options={{ title: "Thông tin nhà cung cấp" }} />
+        <Stack.Screen name="decor/[id]" options={{ title: "Chi tiết dịch vụ" }} />
       </Stack>
     </View>
   );

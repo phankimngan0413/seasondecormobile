@@ -13,6 +13,7 @@ export interface IProvider {
   isProvider: boolean;
   joinedDate: string;
   providerVerified: boolean;
+  slug?: string;
 }
 
 export interface IProduct {
@@ -44,6 +45,7 @@ export interface IProduct {
   province?: string;
   seasons?: any[];
   style?: string;
+  slug?: string;
 }
 
 // ✅ API GET danh sách sản phẩm

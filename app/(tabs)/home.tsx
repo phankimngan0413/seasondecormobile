@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Image, FlatList, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  FlatList,
+  ActivityIndicator,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/constants/ThemeContext";
 import { tabsConfig, PRIMARY_COLOR } from "@/config/tabsConfig"; // Import tabsConfig
@@ -7,7 +15,6 @@ import { getProductsAPI } from "@/utils/productAPI"; // Assuming this is the fun
 import ProductCard from "../product/ProductCard"; // Assuming this is your ProductCard component
 import CustomButton from "@/components/ui/Button/Button";
 import { router } from "expo-router";
-
 
 interface IProduct {
   id: number;
@@ -22,7 +29,9 @@ export default function HomeScreen() {
   const { theme } = useTheme(); // Get theme from context
   const isDark = theme === "dark"; // Check if theme is dark
   const [selectedTab, setSelectedTab] = useState(0); // Store selected tab index
-  const [nestedSelectedTab, setNestedSelectedTab] = useState<{ [key: number]: number }>({});
+  const [nestedSelectedTab, setNestedSelectedTab] = useState<{
+    [key: number]: number;
+  }>({});
   const [products, setProducts] = useState<IProduct[]>([]); // State to store fetched products
   const [loading, setLoading] = useState(true); // Loading state for products
   const [error, setError] = useState(""); // Error handling state
@@ -70,7 +79,13 @@ export default function HomeScreen() {
 
   return (
     <FlatList
-      data={[{ key: "hero" }, { key: "tabs" }, { key: "nestedTabs" }, { key: "services" }, { key: "products" }]}
+      data={[
+        { key: "hero" },
+        { key: "tabs" },
+        { key: "nestedTabs" },
+        { key: "services" },
+        { key: "products" },
+      ]}
       keyExtractor={(item) => item.key}
       renderItem={({ item }) => {
         switch (item.key) {
@@ -83,13 +98,32 @@ export default function HomeScreen() {
                   }}
                   style={styles.heroImage}
                 />
-                <Text style={[styles.heroTitle, { color: isDark ? "#fff" : "#333" }]}>
+                <Text
+                  style={[
+                    styles.heroTitle,
+                    { color: isDark ? "#fff" : "#333" },
+                  ]}
+                >
                   Transform Your Home with Expert Design
                 </Text>
-                <Text style={[styles.heroSubtitle, { color: isDark ? "#bbb" : "#777" }]}>
-                  Our platform connects you with talented decorators to make your dream home a reality.
+                <Text
+                  style={[
+                    styles.heroSubtitle,
+                    { color: isDark ? "#bbb" : "#777" },
+                  ]}
+                >
+                  Our platform connects you with talented decorators to make
+                  your dream home a reality.
                 </Text>
-                <TouchableOpacity style={styles.heroButton}>
+                <TouchableOpacity
+                  style={styles.heroButton}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/decor",
+                      params: { source: "hero" }, // Optional parameters if needed
+                    })
+                  }
+                >
                   <Text style={styles.heroButtonText}>Get Started</Text>
                 </TouchableOpacity>
               </View>
@@ -101,10 +135,17 @@ export default function HomeScreen() {
                 {tabsConfig.map((tab, index) => (
                   <TouchableOpacity
                     key={index}
-                    style={[styles.tab, selectedTab === index && styles.activeTab]}
+                    style={[
+                      styles.tab,
+                      selectedTab === index && styles.activeTab,
+                    ]}
                     onPress={() => handleTabChange(index)}
                   >
-                    <Ionicons name={tab.icon} size={30} color={selectedTab === index ? PRIMARY_COLOR : "#888"} />
+                    <Ionicons
+                      name={tab.icon}
+                      size={30}
+                      color={selectedTab === index ? PRIMARY_COLOR : "#888"}
+                    />
                   </TouchableOpacity>
                 ))}
               </View>
@@ -115,19 +156,37 @@ export default function HomeScreen() {
               <View style={styles.imageComparisonContainer}>
                 <View style={styles.imageRow}>
                   <View style={styles.imageWrapper}>
-                    <Text style={[styles.imageLabel, { color: isDark ? "#fff" : "#333" }]}>Before</Text>
+                    <Text
+                      style={[
+                        styles.imageLabel,
+                        { color: isDark ? "#fff" : "#333" },
+                      ]}
+                    >
+                      Before
+                    </Text>
                     <Image
                       source={{
-                        uri: tabsConfig[selectedTab]?.nestedTabs[nestedSelectedTab[selectedTab]]?.beforeImage,
+                        uri: tabsConfig[selectedTab]?.nestedTabs[
+                          nestedSelectedTab[selectedTab]
+                        ]?.beforeImage,
                       }}
                       style={styles.image}
                     />
                   </View>
                   <View style={styles.imageWrapper}>
-                    <Text style={[styles.imageLabel, { color: isDark ? "#fff" : "#333" }]}>After</Text>
+                    <Text
+                      style={[
+                        styles.imageLabel,
+                        { color: isDark ? "#fff" : "#333" },
+                      ]}
+                    >
+                      After
+                    </Text>
                     <Image
                       source={{
-                        uri: tabsConfig[selectedTab]?.nestedTabs[nestedSelectedTab[selectedTab]]?.afterImage,
+                        uri: tabsConfig[selectedTab]?.nestedTabs[
+                          nestedSelectedTab[selectedTab]
+                        ]?.afterImage,
                       }}
                       style={styles.image}
                     />
@@ -136,53 +195,80 @@ export default function HomeScreen() {
               </View>
             );
 
-            case "services":
-              return (
-                <View style={styles.decorServiceSection}>
-                  <Text style={styles.decorServiceTitle}>Our Decor Services</Text>
-                  <Text style={[styles.decorServiceSubtitle, { color: isDark ? "#fff" : "#333" }]}>
-                    Transform your space with our professional decor services tailored just for you.
-                  </Text>
-                  <FlatList
-                    data={[
-                      {
-                        label: "Living Room Design",
-                        imageUrl: "https://static.asianpaints.com/content/dam/asianpaintsbeautifulhomes/gallery/living-room/contemporary-living-room-with-brick-wall-and-modern-decor/modern-living-room-with-brick-wall.jpg.transform/bh-image-gallery/image.webp",
-                        description: "Bring a fresh, modern look to your living room.",
-                      },
-                      {
-                        label: "Bedroom Styling",
-                        imageUrl: "https://www.nichepursuits.com/wp-content/uploads/2023/06/2-11-1024x581.png",
-                        description: "Turn your bedroom into a relaxing sanctuary.",
-                      },
-                  
-                    ]}
-                    keyExtractor={(item, index) => item.label + index}
-                    renderItem={({ item }) => (
-                      <View style={styles.decorServiceItem}>
-                        <Image source={{ uri: item.imageUrl }} style={styles.decorServiceImage} />
-                        <Text style={[styles.decorServiceText, { color: isDark ? "#fff" : "#333" }]}>{item.label}</Text>
-                        <Text style={[styles.decorServiceDescription, { color: isDark ? "#bbb" : "#555" }]}>
-                          {item.description}
-                        </Text>
-                      </View>
-                    )}
-                    horizontal
-                    contentContainerStyle={styles.decorServiceList}
-                  />
-        
-                </View>
-                
-              );
-            
-            
+          case "services":
+            return (
+              <View style={styles.decorServiceSection}>
+                <Text style={styles.decorServiceTitle}>Our Decor Services</Text>
+                <Text
+                  style={[
+                    styles.decorServiceSubtitle,
+                    { color: isDark ? "#fff" : "#333" },
+                  ]}
+                >
+                  Transform your space with our professional decor services
+                  tailored just for you.
+                </Text>
+                <FlatList
+                  data={[
+                    {
+                      label: "Living Room Design",
+                      imageUrl:
+                        "https://static.asianpaints.com/content/dam/asianpaintsbeautifulhomes/gallery/living-room/contemporary-living-room-with-brick-wall-and-modern-decor/modern-living-room-with-brick-wall.jpg.transform/bh-image-gallery/image.webp",
+                      description:
+                        "Bring a fresh, modern look to your living room.",
+                    },
+                    {
+                      label: "Bedroom Styling",
+                      imageUrl:
+                        "https://www.nichepursuits.com/wp-content/uploads/2023/06/2-11-1024x581.png",
+                      description:
+                        "Turn your bedroom into a relaxing sanctuary.",
+                    },
+                  ]}
+                  keyExtractor={(item, index) => item.label + index}
+                  renderItem={({ item }) => (
+                    <View style={styles.decorServiceItem}>
+                      <Image
+                        source={{ uri: item.imageUrl }}
+                        style={styles.decorServiceImage}
+                      />
+                      <Text
+                        style={[
+                          styles.decorServiceText,
+                          { color: isDark ? "#fff" : "#333" },
+                        ]}
+                      >
+                        {item.label}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.decorServiceDescription,
+                          { color: isDark ? "#bbb" : "#555" },
+                        ]}
+                      >
+                        {item.description}
+                      </Text>
+                    </View>
+                  )}
+                  horizontal
+                  contentContainerStyle={styles.decorServiceList}
+                />
+              </View>
+            );
 
           case "products":
             return (
               <View style={styles.productSection}>
-                <Text style={[styles.screenTitle, { color: isDark ? "#fff" : "#333" }]}>Featured Products</Text>
+                <Text
+                  style={[
+                    styles.screenTitle,
+                    { color: isDark ? "#fff" : "#333" },
+                  ]}
+                >
+                  Featured Products
+                </Text>
                 <FlatList
-                  data={products.slice(0, 6)} // Display the first 6 products
+                  data={products.slice(0, 10)} // Display the first 6 products
                   keyExtractor={(item) => item.id.toString()}
                   renderItem={({ item }) => (
                     <TouchableOpacity
@@ -194,9 +280,12 @@ export default function HomeScreen() {
                       }
                       style={styles.productWrapper}
                     >
-                      <ProductCard product={item} onAddToCart={function (product: any): void {
-                        throw new Error("Function not implemented.");
-                      } } />
+                      <ProductCard
+                        product={item}
+                        onAddToCart={function (product: any): void {
+                          throw new Error("Function not implemented.");
+                        }}
+                      />
                     </TouchableOpacity>
                   )}
                   numColumns={2} // Display products in a grid layout
@@ -314,15 +403,15 @@ const styles = StyleSheet.create({
   productList: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "center",  // This will center the items horizontally
+    justifyContent: "center", // This will center the items horizontally
     alignItems: "center", // This will center the items vertically (if needed)
   },
   productWrapper: {
-    width: "50%",  // This will allow two products per row, adjust as needed
+    width: "50%", // This will allow two products per row, adjust as needed
     marginBottom: 20,
     alignItems: "center", // Center content inside the wrapper (like text)
   },
-  
+
   viewMoreButton: {
     marginTop: 20,
     backgroundColor: "#3498db",
@@ -396,6 +485,7 @@ const styles = StyleSheet.create({
   },
 
   decorServiceSection: {
+    width: "100%",
     marginTop: 20,
   },
   decorServiceTitle: {
@@ -435,5 +525,4 @@ const styles = StyleSheet.create({
     marginTop: 5,
     color: "#777",
   },
-
 });

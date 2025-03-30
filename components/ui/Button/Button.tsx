@@ -10,21 +10,30 @@ interface CustomButtonProps {
   labelStyle?: StyleProp<TextStyle>;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
-
+  textStyle?: StyleProp<TextStyle>; // Added textStyle prop
 }
 
-const PRIMARY_COLOR = "#5fc1f1"; // Màu chủ đạo mới
+const PRIMARY_COLOR = "#5fc1f1";
 
-const CustomButton: React.FC<CustomButtonProps> = ({ title, onPress, icon, btnStyle, labelStyle, disabled }) => {
+const CustomButton: React.FC<CustomButtonProps> = ({ 
+  title, 
+  onPress, 
+  icon, 
+  btnStyle, 
+  labelStyle, 
+  disabled,
+  style,
+  textStyle 
+}) => {
   return (
     <TouchableOpacity
       onPress={onPress}
       disabled={disabled}
-      style={[styles.button, { backgroundColor: disabled ? "#aaa" : PRIMARY_COLOR }, btnStyle]} // Nền button với màu chủ đạo
+      style={[styles.button, { backgroundColor: disabled ? "#aaa" : PRIMARY_COLOR }, btnStyle, style]}
     >
       <View style={styles.buttonWrapper}>
         {icon && <View style={styles.icon}>{icon}</View>}
-        <Text style={[styles.buttonText, labelStyle]}>{title}</Text>
+        <Text style={[styles.buttonText, labelStyle, textStyle]}>{title}</Text>
       </View>
     </TouchableOpacity>
   );

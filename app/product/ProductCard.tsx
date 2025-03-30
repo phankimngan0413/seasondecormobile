@@ -1,13 +1,14 @@
-import React from "react";
-import { View, Text, Image, StyleSheet, Dimensions } from "react-native";
+import React, { useState } from "react";
+import { View, Text, Image, StyleSheet, Dimensions, TouchableOpacity, Alert } from "react-native";
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
-import CustomButton from "@/components/ui/Button/Button";
 import { Ionicons } from "@expo/vector-icons";
+import { addToCartAPI } from "@/utils/cartAPI";
+import { getUserIdFromToken } from "@/services/auth";
 
 const { width } = Dimensions.get("window");
 
-const PRIMARY_COLOR = "#5fc1f1"; // 🔹 Màu chủ đạo
+const PRIMARY_COLOR = "#5fc1f1";
 
 interface ProductProps {
   product: {
@@ -18,13 +19,46 @@ interface ProductProps {
     totalSold: number;
     imageUrls: string[];
   };
-  onAddToCart: (product: any) => void;
+  onAddToCart?: (product: any) => void; // Make this optional
 }
 
 const ProductCard: React.FC<ProductProps> = ({ product, onAddToCart }) => {
   const { theme } = useTheme();
   const validTheme = theme as "light" | "dark";
   const colors = Colors[validTheme];
+  const [isAddingToCart, setIsAddingToCart] = useState(false);
+
+  // Format price with comma for thousands
+  const formattedPrice = product.productPrice.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+
+  const handleAddToCart = async () => {
+    try {
+      setIsAddingToCart(true);
+      
+      // Get account ID from token
+      const accountId = await getUserIdFromToken();
+      
+      if (!accountId) {
+        Alert.alert("Error", "Please log in to add items to cart");
+        return;
+      }
+      
+      console.log(`Adding product ${product.id} to cart for account ${accountId}`);
+      
+      // Call the API with correct parameters
+      await addToCartAPI(accountId, product.id, 1);
+      
+      Alert.alert("Success", `${product.productName} added to your cart!`);
+    } catch (error) {
+      console.error("Failed to add to cart:", error);
+      Alert.alert("Error", "Failed to add item to cart. Please try again.");
+    } finally {
+      setIsAddingToCart(false);
+    }
+  };
 
   return (
     <View
@@ -32,108 +66,166 @@ const ProductCard: React.FC<ProductProps> = ({ product, onAddToCart }) => {
         styles.productCard,
         {
           backgroundColor: colors.card,
-          borderColor: colors.border, // Add border color based on theme
+          borderColor: colors.border,
         },
       ]}
     >
-      {/* 🔹 Hiển thị ảnh sản phẩm hoặc placeholder */}
-      {product.imageUrls.length > 0 ? (
-        <Image
-          source={{ uri: product.imageUrls[0] + "?time=" + new Date().getTime() }}
-          style={styles.productImage}
-          onError={(e) => console.log("Image Load Error: ", e.nativeEvent.error)}
-        />
-      ) : (
-        <View style={styles.noImageContainer}>
-          <Ionicons name="image-outline" size={50} color="#ccc" />
-          <Text style={styles.noImageText}>No Image</Text>
+      {/* Image Section with Badge */}
+      <View style={styles.imageContainer}>
+        {product.imageUrls && product.imageUrls.length > 0 ? (
+          <Image
+            source={{ uri: product.imageUrls[0] + "?time=" + new Date().getTime() }}
+            style={styles.productImage}
+            onError={(e) => console.log("Image Load Error: ", e.nativeEvent.error)}
+          />
+        ) : (
+          <View style={styles.noImageContainer}>
+            <Ionicons name="image-outline" size={40} color="#ccc" />
+          </View>
+        )}
+        
+        {/* Rating Badge */}
+        <View style={styles.ratingBadge}>
+          <Ionicons name="star" size={12} color="#FFC107" />
+          <Text style={styles.ratingText}>{product.rate.toFixed(1)}</Text>
         </View>
-      )}
+      </View>
 
-      {/* 🔹 Hiển thị thông tin sản phẩm */}
-      <Text style={[styles.productTitle, { color: colors.text }]} numberOfLines={2}>
-        {product.productName}
-      </Text>
+      {/* Product Info Section */}
+      <View style={styles.infoContainer}>
+        <Text 
+          style={[styles.productTitle, { color: colors.text }]} 
+          numberOfLines={2}
+          ellipsizeMode="tail"
+        >
+          {product.productName}
+        </Text>
 
-      <Text style={[styles.productPrice, { color: colors.primary }]}>
-        ${product.productPrice.toFixed(2)}
-      </Text>
+        <View style={styles.priceRow}>
+          <Text style={[styles.productPrice, { color: colors.primary }]}>
+            ${formattedPrice}
+          </Text>
+          <Text style={styles.soldText}>
+            {product.totalSold} sold
+          </Text>
+        </View>
 
-      <Text style={[styles.rateText, { color: colors.icon }]}>
-        ⭐ {product.rate} | 📦 Sold: {product.totalSold}
-      </Text>
+        {/* Add to Cart Button */}
+        <TouchableOpacity 
+          style={[
+            styles.addToCartButton,
+            isAddingToCart && styles.disabledButton
+          ]}
+          onPress={handleAddToCart}
+          disabled={isAddingToCart}
+          activeOpacity={0.7}
+        >
+          {isAddingToCart ? (
+            <Ionicons name="hourglass-outline" size={16} color="#fff" />
+          ) : (
+            <Ionicons name="cart-outline" size={16} color="#fff" />
+          )}
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
 
+
 const styles = StyleSheet.create({
-  productCard: {
-    width: width * 0.45, // ✅ Giảm kích thước để phù hợp 2 cột
-    padding: 12,
-    borderRadius: 8,
+  addToCartButton: {
+    position: 'absolute',
+    right: 10,
+    bottom: 10,
+    backgroundColor: PRIMARY_COLOR,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  disabledButton: {
+    backgroundColor: '#a0d0e8',
+    opacity: 0.8,
+  },
+  productCard: {
+    width: width * 0.45,
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
     shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-    marginHorizontal: 5, // ✅ Căn giữa giữa 2 card
-    borderWidth: 1, // Adding border width
-    borderColor: "#ddd", // Light border color for both themes
+    elevation: 3,
+    marginBottom: 14,
+    marginHorizontal: 5,
+    borderWidth: 1,
+    borderColor: "#efefef",
+  },
+  imageContainer: {
+    position: 'relative',
+    width: '100%',
+    height: 140,
+    backgroundColor: '#f8f8f8',
   },
   productImage: {
-    width: "100%",
-    height: 120, // ✅ Giảm chiều cao ảnh để phù hợp
-    borderRadius: 6,
-    marginBottom: 8,
+    width: '100%',
+    height: '100%',
     resizeMode: "cover",
   },
   noImageContainer: {
-    width: "100%",
-    height: 150, // Giảm chiều cao của container
-    borderRadius: 6,
-    backgroundColor: "#f0f0f0",
+    width: '100%',
+    height: '100%',
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 8,
+    backgroundColor: "#f5f5f5",
   },
-  noImageText: {
-    fontSize: 10, // Giảm kích thước font chữ cho thông báo "No Image"
-    color: "#888",
-    marginTop: 5,
+  ratingBadge: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  ratingText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '600',
+    marginLeft: 3,
+  },
+  infoContainer: {
+    padding: 12,
+    position: 'relative',
   },
   productTitle: {
-    fontSize: 16, // Giảm kích thước chữ cho tên sản phẩm
-    fontWeight: "600",
-    marginBottom: 5,
-    textAlign: "center",
+    fontSize: 14,
+    fontWeight: "500",
+    marginBottom: 8,
+    lineHeight: 20,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   productPrice: {
-    fontSize: 14, // Giảm kích thước font chữ cho giá
-    fontWeight: "bold",
-    marginBottom: 5,
-    textAlign: "center",
+    fontSize: 16,
+    fontWeight: "700",
   },
-  rateText: {
-    fontSize: 10, // Giảm kích thước font chữ cho đánh giá và số lượng đã bán
-    marginBottom: 6,
-    textAlign: "center",
+  soldText: {
+    fontSize: 11,
+    color: '#999',
   },
-  // Smaller button and text styles
-  smallButton: {
-    backgroundColor: PRIMARY_COLOR,
-    borderRadius: 20,
-    paddingVertical: 8, // Smaller padding
-    paddingHorizontal: 18, // Smaller horizontal padding
-    width: "100%", // Full width for button
-  },
-  smallButtonText: {
-    color: "#fff",
-    fontSize: 14, // Smaller font size for button text
-    fontWeight: "bold",
-    textAlign: "center",
-  },
+
 });
 
 export default ProductCard;

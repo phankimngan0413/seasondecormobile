@@ -4,15 +4,57 @@ import { LogBox } from "react-native";
 // Ignoring Axios 400 Errors for cleaner logs
 LogBox.ignoreLogs(["AxiosError: Request failed with status code 400"]);
 
-// Interface for contact data
-export interface IContact {
-  id: number;
-  name: string;
-  email: string;
-  phone: string;
-  avatar: string; // Avatar of the contact
+
+interface IAddContactResponse {
+  success: boolean;
+  message?: string;
+  alreadyExists?: boolean;
+  [key: string]: any; // Allows any additional properties
 }
 
+// types.ts - Create this file to centralize your type definitions
+
+// Interface for Contact in the contact list
+export interface IContact {
+  contactId: number;
+  contactName: string;
+  message?: string;
+  avatar?: string | null;
+  lastMessageTime?: string;
+  unreadCount?: number;
+  isOnline?: boolean;
+}
+
+// Interface for a message received from SignalR
+export interface IMessage {
+  senderId: number;
+  senderName: string;
+  receiverId: number;
+  receiverName: string;
+  content: string;
+  timestamp: string;
+  files?: IMessageFile[];
+  isRead?: boolean;
+}
+
+// Interface for message file attachments
+export interface IMessageFile {
+  fileName: string;
+  contentType: string;
+  base64Content?: string;
+  fileUrl?: string;
+}
+
+// Interface for SignalR service
+export interface ISignalRService {
+  startConnection(token?: string): Promise<void>;
+  stopConnection(): Promise<void>;
+  sendMessage(receiverId: number, message: string, files?: any[], onProgress?: (progress: number) => void): Promise<void>;
+  onMessageReceived(callback: (message: IMessage) => void): void;
+  offMessageReceived(callback: Function): void;
+  onMessagesRead?(callback: (receiverId: number) => void): void;
+  onContactsUpdated?(callback: (contacts: IContact[]) => void): void;
+}
 // API to fetch all contacts
 export const getContactsAPI = async (): Promise<IContact[]> => {
   const url = "/api/contact/contacts"; // Your API endpoint to get contacts
@@ -42,34 +84,32 @@ export const getContactsAPI = async (): Promise<IContact[]> => {
     return Promise.reject(new Error("Failed to fetch contacts from the server."));
   }
 };
-// Defining the correct response interface
+// First, update the interface to match the actual API responses
 interface IAddContactResponse {
   success: boolean;
   message?: string;
+  errors?: string[];
 }
 
+// Improved addContactAPI that handles both successful and "already exists" cases
 export const addContactAPI = async (receiverId: number): Promise<IAddContactResponse> => {
-  const url = `/api/contact/add/${receiverId}`; // API endpoint to add a new contact
-
+  const url = `/api/contact/add/${receiverId}`;
+  
   const apiClient = await initApiClient();
   try {
     // Make POST request to the API
-    const response = await apiClient.post(url); // Send POST request to add a contact
-    if (response.data && response.data.success !== undefined) {
-      return response.data; // Returning the response that contains success and message
-    } else {
-      throw new Error("Invalid response format from server.");
-    }
+    const response = await apiClient.post(url);
+    
+    // Just return the response data directly
+    return response.data;
   } catch (error: any) {
-    console.error("🔴 Add Contact API Error:", error);
-
-    if (error.response) {
-      console.error("Error Response Data:", error.response.data);
-    } else {
-      console.error("Error Message:", error.message);
-    }
-
-    // Return a user-friendly error message
-    throw new Error("Failed to add contact. Please try again.");
+    console.log("Error in contact addition:", error.message);
+    // Return a generic response instead of throwing
+    return {
+      success: false,
+      message: "Failed to add contact"
+    };
   }
 };
+
+// Clean navigateToChat implementation that doesn't show errors
