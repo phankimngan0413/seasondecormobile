@@ -1,401 +1,296 @@
 import * as signalR from "@microsoft/signalr";
 import { getToken, getUserIdFromToken } from "./auth";
 import { BASE_URL } from "@/config/apiConfig";
+import { Platform, AppState, AppStateStatus } from 'react-native';
+
+// Message interface for better type safety
+interface Message {
+  id: number | string;
+  senderId: number;
+  receiverId: number;
+  message: string;
+  sentTime: string;
+  files?: Array<{fileUrl?: string}>;
+  isRead?: boolean;
+}
 
 class SignalRService {
-  public connection: signalR.HubConnection | null = null;
+  private _connection: signalR.HubConnection | null = null;
   private callbacks: Map<string, Function[]> = new Map();
-  private connectionStateCallbacks: Function[] = [];
-  private lastPingTime: number = Date.now();
+  private reconnectTimer: NodeJS.Timeout | null = null;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+  private isReconnecting = false;
+  
+  constructor() {
+    // Initialize callback collections
+    this.callbacks.set("messageReceived", []);
+    this.callbacks.set("messageSent", []);
+    
+    // Listen for app state changes to manage connection
+    this.setupAppStateListener();
+    
+    console.log("SignalR service initialized");
+  }
+
+  private setupAppStateListener() {
+    AppState.addEventListener('change', this.handleAppStateChange);
+  }
+
+  private handleAppStateChange = async (nextAppState: AppStateStatus) => {
+    if (nextAppState === 'active') {
+      console.log('App has come to the foreground, checking SignalR connection');
+      if (!this.isConnected()) {
+        console.log('App is active. Reconnecting to SignalR...');
+        try {
+          const token = await getToken();
+          if (token) {
+            await this.startConnection(token);
+          }
+        } catch (error) {
+          console.error('Failed to reconnect to SignalR:', error);
+        }
+      }
+    } else if (nextAppState === 'background') {
+      console.log('App moved to background');
+    }
+  }
+
+  public isConnected(): boolean {
+    return this._connection !== null && 
+           this._connection.state === signalR.HubConnectionState.Connected;
+  }
+
+  // Safe getter for connection
+  private get connection(): signalR.HubConnection {
+    if (!this._connection) {
+      throw new Error("SignalR connection not initialized");
+    }
+    return this._connection;
+  }
 
   // Initialize SignalR connection
   public async startConnection(token: string): Promise<void> {
-    // Prevent connecting if already connected
-    if (this.connection && this.connection.state === signalR.HubConnectionState.Connected) {
-      console.log("Already connected to SignalR");
-      return;
-    }
-
     try {
+      // Prevent duplicate connections
+      if (this._connection && this._connection.state === signalR.HubConnectionState.Connected) {
+        console.log("Already connected to SignalR");
+        return;
+      }
+
+      // Clear any existing reconnect timer
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+
+      console.log("Initializing SignalR connection");
+      
       // Configure SignalR connection
-      this.connection = new signalR.HubConnectionBuilder()
-        .withUrl(`${BASE_URL}/chatHub`, {
-          skipNegotiation: true,
-          transport: signalR.HttpTransportType.WebSockets,
-          accessTokenFactory: () => token,
-        })
-        .withAutomaticReconnect([0, 2000, 5000, 10000, 15000, 30000]) // Exponential backoff
-        .configureLogging(signalR.LogLevel.Information)
-        .build();
+// Trên client
+this._connection = new signalR.HubConnectionBuilder()
+  .withUrl(`${BASE_URL}/chatHub`, {
+    skipNegotiation: Platform.OS === 'android',
+    transport: Platform.OS === 'android' 
+      ? signalR.HttpTransportType.WebSockets 
+      : undefined,
+    accessTokenFactory: () => {
+      console.log("Getting token for SignalR: ", token); // Log token
+      return token;
+    },
+  })
+  .configureLogging(signalR.LogLevel.Debug) // Tăng mức độ log
+  .build();
 
-      // Setup connection state change handlers
-      this.connection.onreconnecting((error) => {
-        console.log("SignalR reconnecting:", error);
-        this.notifyConnectionStateChange("Reconnecting");
-      });
-
-      this.connection.onreconnected((connectionId) => {
-        console.log("SignalR reconnected with ID:", connectionId);
-        this.notifyConnectionStateChange("Connected");
-        this.lastPingTime = Date.now();
-      });
-
-      // Handle message receipt
-      this.connection.on("ReceiveMessage", (message) => {
-        console.log("Message received:", message);
+      // Handle received messages
+      this._connection.on("ReceiveMessage", (message: Message) => {
+        console.log("SignalR message received:", message.id);
         const callbacks = this.callbacks.get("messageReceived") || [];
         callbacks.forEach((callback) => callback(message));
-        this.lastPingTime = Date.now();
       });
 
-      // Handle message sent confirmation
-      this.connection.on("MessageSent", (message) => {
-        console.log("Message sent confirmation:", message);
+      // Handle message sent confirmations
+      this._connection.on("MessageSent", (message: Message) => {
+        console.log("SignalR message sent confirmation:", message.id);
         const callbacks = this.callbacks.get("messageSent") || [];
         callbacks.forEach((callback) => callback(message));
-        this.lastPingTime = Date.now();
       });
 
-      // Handle typing indicators
-      this.connection.on("UserTyping", (data) => {
-        console.log("Typing indicator received:", data);
-        const callbacks = this.callbacks.get("typingIndicator") || [];
-        callbacks.forEach((callback) => callback(data));
-        this.lastPingTime = Date.now();
+      // Handle reconnecting
+      this._connection.onreconnecting((error) => {
+        console.log("SignalR reconnecting:", error);
+        this.isReconnecting = true;
       });
 
-      // Handle user presence updates
-      this.connection.on("UserPresenceChanged", (data) => {
-        console.log("User presence update:", data);
-        const callbacks = this.callbacks.get("userPresence") || [];
-        callbacks.forEach((callback) => callback(data));
-        this.lastPingTime = Date.now();
+      // Handle reconnected
+      this._connection.onreconnected((connectionId) => {
+        console.log("SignalR reconnected successfully with connectionId:", connectionId);
+        this.isReconnecting = false;
+        this.reconnectAttempts = 0;
       });
 
-      // Handle messages read notifications
-      this.connection.on("MessagesRead", (data) => {
-        console.log("Messages read notification:", data);
-        const callbacks = this.callbacks.get("messagesRead") || [];
-        callbacks.forEach((callback) => callback(data));
-        this.lastPingTime = Date.now();
-      });
-
-      // Handle connection close
-      this.connection.onclose((error) => {
+      // Handle connection closure
+      this._connection.onclose((error) => {
         console.log("SignalR connection closed:", error);
-        this.notifyConnectionStateChange("Disconnected");
-        this.connection = null;
+        this._connection = null;
+        
+        if (!this.isReconnecting && error) {
+          this.scheduleReconnect(token);
+        }
       });
 
       // Start connection
-      await this.connection.start();
-      console.log("SignalR connected successfully.");
-      this.notifyConnectionStateChange("Connected");
-      this.lastPingTime = Date.now();
+      await this._connection.start();
+      console.log("SignalR connected successfully");
+      this.reconnectAttempts = 0;
+
     } catch (error) {
-      console.error("Error starting SignalR connection:", error);
-      this.connection = null;
-      this.notifyConnectionStateChange("Error");
+      console.error("SignalR connection error:", error);
+      this._connection = null;
+      this.scheduleReconnect(token);
       throw error;
+    }
+  }
+
+  private scheduleReconnect(token: string) {
+    // Only schedule reconnect if we haven't exceeded max attempts
+    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.reconnectAttempts++;
+      const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
+      
+      console.log(`Scheduling reconnect attempt ${this.reconnectAttempts} in ${delay}ms`);
+      
+      this.reconnectTimer = setTimeout(async () => {
+        try {
+          await this.startConnection(token);
+        } catch (error) {
+          console.error("Scheduled reconnect failed:", error);
+        }
+      }, delay);
+    } else {
+      console.log("Maximum reconnect attempts reached. Will try on next app foreground.");
+      this.reconnectAttempts = 0;
     }
   }
 
   // Stop SignalR connection
   public async stopConnection(): Promise<void> {
-    if (this.connection) {
-      try {
-        await this.connection.stop();
-        console.log("SignalR connection stopped.");
-        this.connection = null;
-        this.notifyConnectionStateChange("Disconnected");
-      } catch (error) {
-        console.error("Error stopping SignalR connection:", error);
+    try {
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
       }
-    }
-  }
-
-  // Join a specific chat room
-  public async joinChat(receiverId: number): Promise<void> {
-    if (!this.connection || this.connection.state !== signalR.HubConnectionState.Connected) {
-      throw new Error("SignalR not connected");
-    }
-
-    try {
-      await this.connection.invoke("JoinChat", receiverId);
-      console.log(`Joined chat room for user ${receiverId}`);
+      
+      if (this._connection) {
+        await this._connection.stop();
+        console.log("SignalR connection stopped");
+        this._connection = null;
+      }
     } catch (error) {
-      console.error("Error joining chat room:", error);
-      throw error;
+      console.error("Error stopping SignalR connection:", error);
     }
   }
 
-  // Leave a specific chat room
-  public async leaveChat(receiverId: number): Promise<void> {
-    if (!this.connection || this.connection.state !== signalR.HubConnectionState.Connected) {
-      return; // Silently fail if not connected
-    }
-
-    try {
-      await this.connection.invoke("LeaveChat", receiverId);
-      console.log(`Left chat room for user ${receiverId}`);
-    } catch (error) {
-      console.error("Error leaving chat room:", error);
-    }
-  }
-
-  // Send typing indicator
-  public async sendTypingIndicator(receiverId: number, isTyping: boolean): Promise<void> {
-    if (!this.connection || this.connection.state !== signalR.HubConnectionState.Connected) {
-      return; // Silently fail if not connected
-    }
-
-    try {
-      await this.connection.invoke("SendTypingIndicator", receiverId, isTyping);
-    } catch (error) {
-      console.error("Error sending typing indicator:", error);
-    }
-  }
-
-  // Request user presence information
-  public async requestUserPresence(userId: number): Promise<void> {
-    if (!this.connection || this.connection.state !== signalR.HubConnectionState.Connected) {
-      return; // Silently fail if not connected
-    }
-
-    try {
-      await this.connection.invoke("GetUserPresence", userId);
-    } catch (error) {
-      console.error("Error requesting user presence:", error);
-    }
-  }
-
-  // Mark messages as read
-  public async markMessagesAsRead(senderId: number): Promise<void> {
-    if (!this.connection || this.connection.state !== signalR.HubConnectionState.Connected) {
-      throw new Error("SignalR not connected");
-    }
-
-    try {
-      await this.connection.invoke("MarkMessagesAsRead", senderId);
-      console.log(`Marked messages from user ${senderId} as read`);
-    } catch (error) {
-      console.error("Error marking messages as read:", error);
-      throw error;
-    }
-  }
-
-  // Send a message with improved file handling and progress reporting
+  // Send a message
   public async sendMessage(
-    receiverId: number,
-    message: string,
-    files: any[] = [],
+    receiverId: number, 
+    message: string, 
+    files: any[] = [], 
     onProgress?: (progress: number) => void
   ): Promise<string> {
-    console.log("Attempting to send message...");
-  
-    const senderId = await getUserIdFromToken();
-    console.log(`Sending message to SignalR: Sender ID = ${senderId}, Receiver ID = ${receiverId}`);
-  
-    if (senderId === receiverId) {
-      throw new Error("You cannot send a message to yourself.");
-    }
-  
-    // Check SignalR connection
-    if (!this.connection || this.connection.state !== signalR.HubConnectionState.Connected) {
-      try {
-        const token = await getToken();
-        if (token) {
-          await this.startConnection(token);
-          console.log("SignalR connected successfully.");
-        } else {
-          throw new Error("Failed to retrieve token.");
-        }
-      } catch (error) {
-        console.error("Error reconnecting to SignalR:", error);
-        throw error;
-      }
-    }
-  
-    // Format file data to match backend expectations
-    const fileData = files.map((file) => {
-      return {
-        FileName: file.FileName || file.fileName || file.name || `image_${Date.now()}.jpg`,
-        ContentType: file.ContentType || file.contentType || file.type || 'image/jpeg',
-        Base64Content: file.Base64Content || file.base64Content || file.base64 || ''
-      };
-    });
-    
-    // Always send a non-null message string
-    const messageText = message || "";
-    console.log("Message content:", messageText);
-  
     try {
-      // Report initial progress
-      if (onProgress) {
-        onProgress(10);
-      }
-      
-      let messageId;
-      
-      if (this.connection && this.connection.state === signalR.HubConnectionState.Connected) {
-        // If we have large files, report incremental progress
-        if (fileData.length > 0 && onProgress) {
-          onProgress(30); // Starting file upload
+      const senderId = await getUserIdFromToken();
+      console.log(`Preparing to send message from ${senderId} to ${receiverId}`);
+
+      // Check connection
+      if (!this._connection || this._connection.state !== signalR.HubConnectionState.Connected) {
+        console.log("Connection not established. Getting token and connecting...");
+        const token = await getToken();
+        if (!token) {
+          throw new Error("Authentication token not found");
         }
-        
-        messageId = await this.connection.invoke("SendMessage", receiverId, messageText, fileData);
-        console.log("Message sent successfully with ID:", messageId);
-        
-        this.lastPingTime = Date.now();
-      } else {
-        throw new Error("SignalR connection is not established.");
+        await this.startConnection(token);
       }
-  
-      if (onProgress) {
-        onProgress(100);
+
+      // Validate data
+      if (senderId === receiverId) {
+        throw new Error("Cannot send message to yourself");
       }
-      
+
+      // Prepare files
+      const fileData = files.map(file => ({
+        FileName: file.FileName || file.fileName || `image_${Date.now()}.jpg`,
+        ContentType: file.ContentType || file.contentType || 'image/jpeg',
+        Base64Content: file.Base64Content || file.base64Content || ''
+      }));
+
+      // Check message content
+      const messageText = (message || '').trim();
+      if (!messageText && !fileData.length) {
+        throw new Error("Cannot send empty message");
+      }
+
+      // Progress notification
+      onProgress && onProgress(10);
+      console.log(`Sending message to ${receiverId}: ${messageText.substring(0, 30)}${messageText.length > 30 ? '...' : ''}`);
+
+      // Send the message
+      onProgress && onProgress(50);
+      const messageId = await this.connection.invoke<string>(
+        "SendMessage", 
+        receiverId, 
+        messageText, 
+        fileData
+      );
+
+      // Complete
+      onProgress && onProgress(100);
+      console.log(`Message sent successfully with ID: ${messageId}`);
       return messageId;
+
     } catch (error) {
-      console.error("Error sending message:", error);
+      console.error("Message sending error:", error);
       throw error;
     }
   }
 
-  // Connection health check via ping
-  public async ping(): Promise<boolean> {
-    if (!this.connection || this.connection.state !== signalR.HubConnectionState.Connected) {
-      return false;
-    }
-
-    try {
-      await this.connection.invoke("Ping");
-      this.lastPingTime = Date.now();
-      return true;
-    } catch (error) {
-      console.error("Ping failed:", error);
-      return false;
-    }
-  }
-
-  // Get last activity timestamp
-  public getLastActivityTime(): number {
-    return this.lastPingTime;
-  }
-
-  // Register for connection state changes
-  public onConnectionStateChange(callback: Function): void {
-    this.connectionStateCallbacks.push(callback);
-  }
-
-  // Unregister from connection state changes
-  public offConnectionStateChange(callback: Function): void {
-    const index = this.connectionStateCallbacks.indexOf(callback);
-    if (index !== -1) {
-      this.connectionStateCallbacks.splice(index, 1);
-    }
-  }
-
-  // Notify all connection state listeners
-  private notifyConnectionStateChange(state: string): void {
-    this.connectionStateCallbacks.forEach(callback => callback(state));
-  }
-
-  // Register for message received events
+  // Callback registration methods
   public onMessageReceived(callback: Function): void {
     const callbacks = this.callbacks.get("messageReceived") || [];
-    this.callbacks.set("messageReceived", [...callbacks, callback]);
+    if (!callbacks.includes(callback)) {
+      this.callbacks.set("messageReceived", [...callbacks, callback]);
+      console.log(`Message received handler registered. Total handlers: ${callbacks.length + 1}`);
+    }
   }
 
-  // Unregister from message received events
   public offMessageReceived(callback: Function): void {
     const callbacks = this.callbacks.get("messageReceived") || [];
     const index = callbacks.indexOf(callback);
     if (index !== -1) {
       callbacks.splice(index, 1);
       this.callbacks.set("messageReceived", callbacks);
+      console.log(`Message received handler removed. Remaining handlers: ${callbacks.length}`);
     }
   }
-  
-  // Register for message sent events
+
   public onMessageSent(callback: Function): void {
     const callbacks = this.callbacks.get("messageSent") || [];
-    this.callbacks.set("messageSent", [...callbacks, callback]);
+    if (!callbacks.includes(callback)) {
+      this.callbacks.set("messageSent", [...callbacks, callback]);
+      console.log(`Message sent handler registered. Total handlers: ${callbacks.length + 1}`);
+    }
   }
-  
-  // Unregister from message sent events
+
   public offMessageSent(callback: Function): void {
     const callbacks = this.callbacks.get("messageSent") || [];
     const index = callbacks.indexOf(callback);
     if (index !== -1) {
       callbacks.splice(index, 1);
       this.callbacks.set("messageSent", callbacks);
+      console.log(`Message sent handler removed. Remaining handlers: ${callbacks.length}`);
     }
   }
-  
-  // Register for messages read events
-  public onMessagesRead(callback: Function): void {
-    const callbacks = this.callbacks.get("messagesRead") || [];
-    this.callbacks.set("messagesRead", [...callbacks, callback]);
-  }
-
-  // Unregister from messages read events
-  public offMessagesRead(callback: Function): void {
-    const callbacks = this.callbacks.get("messagesRead") || [];
-    const index = callbacks.indexOf(callback);
-    if (index !== -1) {
-      callbacks.splice(index, 1);
-      this.callbacks.set("messagesRead", callbacks);
-    }
-  }
-
-  // Register for typing indicator events
-  public onTypingIndicator(callback: Function): void {
-    const callbacks = this.callbacks.get("typingIndicator") || [];
-    this.callbacks.set("typingIndicator", [...callbacks, callback]);
-  }
-
-  // Unregister from typing indicator events
-  public offTypingIndicator(callback: Function): void {
-    const callbacks = this.callbacks.get("typingIndicator") || [];
-    const index = callbacks.indexOf(callback);
-    if (index !== -1) {
-      callbacks.splice(index, 1);
-      this.callbacks.set("typingIndicator", callbacks);
-    }
-  }
-
-  // Register for user presence events
-  public onUserPresence(callback: Function): void {
-    const callbacks = this.callbacks.get("userPresence") || [];
-    this.callbacks.set("userPresence", [...callbacks, callback]);
-  }
-
-  // Unregister from user presence events
-  public offUserPresence(callback: Function): void {
-    const callbacks = this.callbacks.get("userPresence") || [];
-    const index = callbacks.indexOf(callback);
-    if (index !== -1) {
-      callbacks.splice(index, 1);
-      this.callbacks.set("userPresence", callbacks);
-    }
-  }
-
-  // Listen for contact updates
-  public onContactsUpdated(callback: (contacts: any[]) => void): void {
-    const callbacks = this.callbacks.get("contactsUpdated") || [];
-    this.callbacks.set("contactsUpdated", [...callbacks, callback]);
-  }
-
-  // Unregister from contact updates
-  public offContactsUpdated(callback: Function): void {
-    const callbacks = this.callbacks.get("contactsUpdated") || [];
-    const index = callbacks.indexOf(callback);
-    if (index !== -1) {
-      callbacks.splice(index, 1);
-      this.callbacks.set("contactsUpdated", callbacks);
-    }
-  }
+ 
 }
 
 export const signalRService = new SignalRService();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { 
   View, 
   Text, 
@@ -9,32 +9,49 @@ import {
   Image,
   ActivityIndicator
 } from "react-native";
-import { useRouter, useFocusEffect } from "expo-router"; // Added useFocusEffect
-import { getContactsAPI } from "@/utils/contactAPI"; // API to fetch contacts
-import { useTheme } from "@/constants/ThemeContext"; // Importing the theme context
-import { Colors } from "@/constants/Colors"; // Import colors for themes
-import { signalRService } from "@/services/SignalRService"; // Assuming SignalRService is already set up
+import { useRouter, useFocusEffect } from "expo-router";
+import { getContactsAPI } from "@/utils/contactAPI";
+import { useTheme } from "@/constants/ThemeContext";
+import { Colors } from "@/constants/Colors";
+import { signalRService } from "@/services/SignalRService";
+
+// Define proper interface for consistency
+interface Contact {
+  contactId: number;
+  contactName: string;
+  message?: string;
+  avatar?: string | null;
+  lastMessageTime?: string;
+  email?: string;
+  isImage?: boolean; // Explicitly defined as boolean
+}
+
+interface Message {
+  id?: number | string;
+  contactId: number;
+  contactName: string;
+  message?: string;
+  avatar?: string | null;
+  lastMessageTime?: string;
+  email?: string;
+  isImage?: boolean;
+  senderId?: number;
+  receiverId?: number;
+  sentTime?: string;
+  files?: Array<{fileUrl?: string}>;
+  isRead?: boolean;
+}
 
 export default function ChatListScreen() {
-  const [searchText, setSearchText] = useState(""); // For search filter
-  const [contacts, setContacts] = useState<any[]>([]); // Store contacts data
-  const [loading, setLoading] = useState(true); // Loading state
-  const router = useRouter(); // Initialize the router for navigation
-  const { theme } = useTheme(); // Access current theme
-  const validTheme = theme as "light" | "dark"; // Ensure theme is either light or dark
-  const colors = Colors[validTheme]; // Use colors based on the current theme
+  const [searchText, setSearchText] = useState("");
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const { theme } = useTheme();
+  const validTheme = theme as "light" | "dark";
+  const colors = Colors[validTheme];
 
-  const flatListRef = useRef<FlatList>(null); // Reference to FlatList for scrolling
-
-  interface Message {
-    contactId: number;
-    contactName: string;
-    message: string;
-    avatar: string | null;
-    lastMessageTime: string;
-    email?: string; // Thêm trường email nếu có
-    isImage?: boolean; // Flag để đánh dấu tin nhắn có phải hình ảnh không
-  }
+  const flatListRef = useRef<FlatList>(null);
 
   // Fetching contact data from the API
   const fetchContacts = async () => {
@@ -43,31 +60,40 @@ export default function ChatListScreen() {
       const data = await getContactsAPI();
       console.log("Fetched Contacts:", data);
       if (Array.isArray(data) && data.length > 0) {
-        // Xử lý dữ liệu để đánh dấu tin nhắn là ảnh hoặc văn bản
+        // Process data to mark messages as images or text
         const processedData = data.map(contact => {
-          // Nếu message rỗng và avatar tồn tại, coi như đó là tin nhắn ảnh
-          const isImage = (!contact.message || contact.message.trim() === '') && 
-                         contact.lastMessageTime && contact.lastMessageTime.trim() !== '';
+          // Consider it an image message if message is empty but timestamp exists
+          const isImage = Boolean(
+            (!contact.message || contact.message.trim() === '') && 
+            contact.lastMessageTime && contact.lastMessageTime.trim() !== ''
+          );
                          
           return {
             ...contact,
-            isImage
+            isImage,
+            // Ensure contactId is valid
+            contactId: contact.contactId || 0
           };
         });
         
+        // Filter out contacts with invalid IDs
+        const validContacts = processedData.filter(contact => 
+          contact.contactId !== undefined && contact.contactId !== null
+        );
+        
         // Sort by most recent messages if possible
-        const sortedData = [...processedData].sort((a, b) => {
+        const sortedData = [...validContacts].sort((a, b) => {
           if (!a.lastMessageTime) return 1;
           if (!b.lastMessageTime) return -1;
           return new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime();
         });
-        setContacts(sortedData); // Update state with fetched contacts
+        setContacts(sortedData);
       } else {
         console.log("No contacts found or empty data");
         setContacts([]);
       }
     } catch (error) {
-      console.error("Error fetching contacts:", error); // Log any errors
+      console.error("Error fetching contacts:", error);
       setContacts([]);
     } finally {
       setLoading(false);
@@ -92,8 +118,17 @@ export default function ChatListScreen() {
     const handleNewMessage = (newMessage: Message) => {
       console.log("New message received:", newMessage);
       
-      // Kiểm tra nếu tin nhắn là ảnh
-      const isImage = (!newMessage.message || newMessage.message.trim() === '');
+      // Validate incoming message
+      if (!newMessage || !newMessage.contactId) {
+        console.warn("Received invalid message:", newMessage);
+        return;
+      }
+      
+      // Check if message is an image
+      const isImage = Boolean(
+        (!newMessage.message || newMessage.message.trim() === '') && 
+        (newMessage.lastMessageTime || newMessage.sentTime)
+      );
       
       setContacts((prevContacts) => {
         // Check if contact already exists
@@ -106,8 +141,8 @@ export default function ChatListScreen() {
           const updatedContacts = [...prevContacts];
           updatedContacts[existingContactIndex] = {
             ...updatedContacts[existingContactIndex],
-            message: newMessage.message,
-            lastMessageTime: newMessage.lastMessageTime,
+            message: newMessage.message || '',
+            lastMessageTime: newMessage.lastMessageTime || newMessage.sentTime || new Date().toISOString(),
             isImage
           };
           
@@ -115,8 +150,16 @@ export default function ChatListScreen() {
           const updatedContact = updatedContacts.splice(existingContactIndex, 1)[0];
           return [updatedContact, ...updatedContacts];
         } else {
-          // Add new contact to beginning
-          return [{...newMessage, isImage}, ...prevContacts];
+          // Add new contact to beginning with safe defaults
+          return [{
+            contactId: newMessage.contactId,
+            contactName: newMessage.contactName || `Contact ${newMessage.contactId}`,
+            message: newMessage.message || '',
+            lastMessageTime: newMessage.lastMessageTime || newMessage.sentTime || new Date().toISOString(),
+            avatar: newMessage.avatar || null,
+            email: newMessage.email || '',
+            isImage
+          }, ...prevContacts];
         }
       });
 
@@ -130,41 +173,98 @@ export default function ChatListScreen() {
 
     // Cleanup function
     return () => {
-      // Remove the SignalR listener if needed
+      signalRService.offMessageReceived(handleNewMessage);
     };
   }, []);
 
   // Handle navigation to the chat page of a selected contact
-  const handleConversationClick = (contact: any) => {
+  const handleConversationClick = useCallback((contact: Contact) => {
+    if (!contact || contact.contactId === undefined || contact.contactId === null) {
+      console.warn("Attempted to navigate to invalid contact:", contact);
+      return;
+    }
+    
     // Navigate to the chat page with contact information
     router.push({
       pathname: `/chat/[userId]`,
       params: { 
-        userId: contact.contactId.toString(),
-        contactName: contact.contactName,
-        contactEmail: contact.email || '' // Truyền email nếu có
+        userId: String(contact.contactId),
+        contactName: contact.contactName || `Contact ${contact.contactId}`,
+        contactEmail: contact.email || ''
       }
     });
-  };
+  }, [router]);
 
   // Navigate to providers screen
-  const navigateToProviders = () => {
+  const navigateToProviders = useCallback(() => {
     router.push("/provider");
-  };
+  }, [router]);
 
   // Filter contacts based on contactName and search text
-  const filteredContacts = searchText
-    ? contacts.filter((contact) =>
-        contact.contactName && contact.contactName.toLowerCase().includes(searchText.toLowerCase())
-      )
-    : contacts; // If no search text, return all contacts
+  const filteredContacts = useMemo(() => {
+    if (!searchText) return contacts;
+    
+    return contacts.filter((contact) =>
+      contact.contactName && 
+      contact.contactName.toLowerCase().includes(searchText.toLowerCase())
+    );
+  }, [contacts, searchText]);
+
+  // Enhanced key extractor that won't fail
+  const keyExtractor = useCallback((item: Contact, index: number) => {
+    if (!item) return `contact-${index}-${Date.now()}`;
+    if (item.contactId === undefined || item.contactId === null) return `contact-${index}-${Date.now()}`;
+    try {
+      return String(item.contactId);
+    } catch (error) {
+      console.error("Error in keyExtractor:", error);
+      return `contact-${index}-${Date.now()}`;
+    }
+  }, []);
+
+  // Safe render function with validation
+  const renderContactItem = useCallback(({ item, index }: { item: Contact, index: number }) => {
+    if (!item) {
+      console.warn("Null contact item at index", index);
+      return null;
+    }
+    
+    if (item.contactId === undefined || item.contactId === null) {
+      console.warn("Invalid contact ID at index", index, item);
+      return null;
+    }
+    
+    return (
+      <TouchableOpacity
+        style={[styles.contactContainer, { backgroundColor: colors.card }]}
+        onPress={() => handleConversationClick(item)}
+      >
+        {/* Contact Avatar */}
+        <Image
+          source={item.avatar ? { uri: item.avatar } : require("@/assets/images/default-avatar.png")}
+          style={styles.avatar}
+        />
+        <View style={styles.textContainer}>
+          <Text style={[styles.contactName, { color: colors.text }]}>
+            {item.contactName || `Contact ${item.contactId}`}
+          </Text>
+          <Text style={[styles.lastMessage, { color: colors.icon }]} numberOfLines={1}>
+            {item.isImage ? "Sent a photo" : (item.message || "No messages yet")}
+          </Text>
+        </View>
+        <Text style={[styles.timeText, { color: colors.icon }]}>
+          {item.lastMessageTime || "No time"}
+        </Text>
+      </TouchableOpacity>
+    );
+  }, [colors, handleConversationClick]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <TextInput
-          style={[styles.searchInput, { backgroundColor: colors.card, color: colors.text }]} // Set text color based on theme
+          style={[styles.searchInput, { backgroundColor: colors.card, color: colors.text }]}
           placeholder="Search by Receiver Name"
           placeholderTextColor={colors.inputPlaceholder}
           value={searchText}
@@ -199,30 +299,17 @@ export default function ChatListScreen() {
         </View>
       ) : (
         <FlatList
-          ref={flatListRef} // Reference to FlatList for programmatic scrolling
+          ref={flatListRef}
           data={filteredContacts}
-          keyExtractor={(item) => item.contactId.toString()}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[styles.contactContainer, { backgroundColor: colors.card }]} // Set card color to the theme background color
-              onPress={() => handleConversationClick(item)} // Truyền toàn bộ item thay vì chỉ contactId
-            >
-              {/* Contact Avatar */}
-              <Image
-                source={item.avatar ? { uri: item.avatar } : require("@/assets/images/default-avatar.png")}
-                style={styles.avatar}
-              />
-              <View style={styles.textContainer}>
-                <Text style={[styles.contactName, { color: colors.text }]}>{item.contactName}</Text>
-                <Text style={[styles.lastMessage, { color: colors.icon }]} numberOfLines={1}>
-                  {/* Hiển thị "Sent a photo" nếu tin nhắn cuối cùng là ảnh */}
-                  {item.isImage ? "Sent a photo" : (item.message || "No messages yet")}
-                </Text>
-              </View>
-              <Text style={[styles.timeText, { color: colors.icon }]}>{item.lastMessageTime || "No time"}</Text>
-            </TouchableOpacity>
-          )}
+          keyExtractor={keyExtractor}
+          renderItem={renderContactItem}
           style={styles.contactsList}
+          // Handle empty data gracefully
+          ListEmptyComponent={
+            <View style={styles.centerContent}>
+              <Text style={[styles.messageText, { color: colors.text }]}>No conversations found</Text>
+            </View>
+          }
         />
       )}
     </View>
@@ -264,7 +351,7 @@ const styles = StyleSheet.create({
   avatar: {
     width: 50,
     height: 50,
-    borderRadius: 25, // Make the avatar circular
+    borderRadius: 25,
     marginRight: 15,
   },
   textContainer: {

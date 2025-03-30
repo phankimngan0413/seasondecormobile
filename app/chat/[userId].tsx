@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { 
   View, 
   Text, 
@@ -11,78 +11,330 @@ import {
   Platform,
   KeyboardAvoidingView,
   SafeAreaView,
-  Keyboard,
-  Dimensions,
-  StatusBar
+  AppState,
+  AppStateStatus
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { signalRService } from "@/services/SignalRService";
 import { Colors } from "@/constants/Colors";
 import { useTheme } from "@/constants/ThemeContext";
 import { useRouter } from "expo-router";
-import { useSearchParams } from "expo-router/build/hooks";
+import { useLocalSearchParams } from "expo-router";
 import { launchImageLibrary } from 'react-native-image-picker';
 import { Ionicons } from "@expo/vector-icons";
 import { getChatHistoryAPI } from "@/utils/chatAPI";
+import { getUserIdFromToken, getToken } from "@/services/auth";
+
+// Improved Message interface
+interface Message {
+  id: number | string;
+  senderId: number;
+  receiverId: number;
+  message: string;
+  sentTime: string;
+  files?: Array<{fileUrl?: string}>;
+  isRead?: boolean;
+}
 
 export default function ChatScreen() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [chatHistory, setChatHistory] = useState<any[]>([]);
+  const searchParams = useLocalSearchParams();
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const { theme, toggleTheme } = useTheme();
+  const { theme } = useTheme();
   const validTheme = theme as "light" | "dark";
   const colors = Colors[validTheme];
   const [selectedImage, setSelectedImage] = useState<any>(null);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [loading, setLoading] = useState(true);
-  const flatListRef = useRef<FlatList>(null);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const { height: screenHeight } = Dimensions.get("window");
-  const statusBarHeight = StatusBar.currentHeight || 0;
+  const flatListRef = useRef<FlatList<Message>>(null);
   const mainInputRef = useRef<TextInput>(null);
+  const [chatHistory, setChatHistory] = useState<Message[]>([]);
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected'>('disconnected');
 
   // Get receiverId and name from params
-  const receiverId = searchParams.get("userId");
-  const [receiverName, setReceiverName] = useState<string>(searchParams.get("contactName") || `User ${receiverId}`);
-  const [receiverEmail, setReceiverEmail] = useState<string>(searchParams.get("contactEmail") || "");
+  const receiverId = parseInt(String(searchParams.userId || '0'), 10);
+  const [receiverName, setReceiverName] = useState<string>(String(searchParams.contactName || `User ${receiverId}`));
+  const [receiverEmail, setReceiverEmail] = useState<string>(String(searchParams.contactEmail || ""));
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
 
-  // Keyboard listeners with height tracking
+  // Setup SignalR connection management
   useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      'keyboardDidShow',
-      (e) => {
-        // Lưu chiều cao bàn phím
-        setKeyboardHeight(e.endCoordinates.height);
-        setKeyboardVisible(true);
-        // Scroll to bottom when keyboard appears
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
+    let isMounted = true;
+    
+    // Setup SignalR connection
+    const setupSignalR = async () => {
+      try {
+        if (isMounted) setConnectionStatus('connecting');
+        const token = await getToken();
+        if (!token) {
+          console.error('No token available for SignalR connection');
+          if (isMounted) setConnectionStatus('disconnected');
+          return;
+        }
+        
+        await signalRService.startConnection(token);
+        if (isMounted) setConnectionStatus('connected');
+        console.log("SignalR connection established");
+      } catch (error) {
+        console.error("Failed to connect to SignalR hub:", error);
+        if (isMounted) setConnectionStatus('disconnected');
+        // Try to reconnect after a delay
+        setTimeout(setupSignalR, 5000);
       }
-    );
-    const keyboardDidHideListener = Keyboard.addListener(
-      'keyboardDidHide',
-      () => {
-        setKeyboardHeight(0);
-        setKeyboardVisible(false);
+    };
+
+    // Handle app state changes to reconnect when app comes to foreground
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        console.log('App has come to the foreground, checking SignalR connection');
+        if (!signalRService.isConnected()) {
+          console.log('Reconnecting to SignalR...');
+          setupSignalR();
+        } else {
+          console.log('SignalR connection is active');
+          if (isMounted) setConnectionStatus('connected');
+        }
       }
-    );
+    };
+
+    // Initial setup
+    setupSignalR();
+    
+    // Subscribe to app state changes
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    
+    // Set up periodic connection checking
+    const connectionChecker = setInterval(() => {
+      if (!signalRService.isConnected()) {
+        console.log('Connection check failed, reconnecting...');
+        setupSignalR();
+      } else {
+        console.log('SignalR connection is active');
+        if (isMounted) setConnectionStatus('connected');
+      }
+    }, 30000); // Check every 30 seconds
 
     return () => {
-      keyboardDidShowListener.remove();
-      keyboardDidHideListener.remove();
+      // Clean up
+      isMounted = false;
+      subscription.remove();
+      clearInterval(connectionChecker);
+      signalRService.stopConnection();
     };
   }, []);
 
-  // Image to Base64 conversion
+  // Fetch user ID on component mount
+  useEffect(() => {
+    const fetchUserId = async () => {
+      try {
+        const userId = await getUserIdFromToken();
+        console.log("Current user ID:", userId);
+        setCurrentUserId(userId);
+      } catch (error) {
+        console.error("Error fetching user ID:", error);
+      }
+    };
+    fetchUserId();
+  }, []);
+
+  // Handle message reception
+  useEffect(() => {
+    const messageReceivedHandler = (message: Message) => {
+      console.log('Message received via SignalR:', message);
+      
+      if (!message || message.id === undefined || message.id === null) {
+        console.warn('Invalid message received', message);
+        return;
+      }
+
+      // Add the message to chat history if it doesn't exist
+      setChatHistory(prev => {
+        // Check if message already exists to avoid duplicates
+        const isMessageExists = prev.some(msg => msg.id === message.id);
+        
+        if (isMessageExists) {
+          console.log('Message already exists in chat history, skipping...');
+          return prev;
+        }
+        
+        console.log('Adding new message to chat history');
+        return [...prev, message];
+      });
+    };
+
+    // Register message handler
+    signalRService.onMessageReceived(messageReceivedHandler);
+    
+    // Register message sent handler to update UI
+    const messageSentHandler = (sentMessage: Message) => {
+      console.log('Message sent confirmation received:', sentMessage);
+      
+      if (!sentMessage || sentMessage.id === undefined || sentMessage.id === null) {
+        console.warn('Invalid sent message received', sentMessage);
+        return;
+      }
+      
+      // Update chat with confirmed message (replacing temp if needed)
+      setChatHistory(prev => {
+        // Remove any temporary version of this message
+        const filtered = prev.filter(msg => 
+          !(typeof msg.id === 'string' && msg.id.startsWith('temp_') && 
+            msg.message === sentMessage.message)
+        );
+        
+        // Check if message already exists
+        const exists = filtered.some(msg => msg.id === sentMessage.id);
+        
+        if (exists) {
+          return filtered;
+        } else {
+          return [...filtered, sentMessage];
+        }
+      });
+    };
+    
+    signalRService.onMessageSent(messageSentHandler);
+
+    // Clean up the handlers when component unmounts
+    return () => {
+      signalRService.offMessageReceived(messageReceivedHandler);
+      signalRService.offMessageSent(messageSentHandler);
+    };
+  }, []);
+
+  // Initialize chat
+  useEffect(() => {
+    const initializeChat = async () => {
+      try {
+        await fetchChatHistory();
+      } catch (error) {
+        console.error("Error in initializing chat:", error);
+      }
+    };
+
+    initializeChat();
+  }, [receiverId]);
+
+  // Scroll to latest message when chat history updates
+  useEffect(() => {
+    if (chatHistory.length > 0) {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }
+  }, [chatHistory]);
+
+  const fetchChatHistory = useCallback(async () => {
+    setLoading(true);
+    try {
+      const history = await getChatHistoryAPI(receiverId);
+      console.log(`Fetched ${history?.length || 0} messages from chat history`);
+
+      if (history && history.length > 0) {
+        // Filter out any messages with undefined/null ids
+        const validHistory = history.filter(msg => msg && msg.id !== undefined && msg.id !== null);
+        setChatHistory(validHistory);
+        setError(null);
+      } else {
+        setChatHistory([]);
+        setError("Start a conversation with this contact!");
+      }
+    } catch (error) {
+      console.error("Error in chat history logic:", error);
+      setChatHistory([]);
+      setError("Send a message to start the conversation!");
+    } finally {
+      setLoading(false);
+    }
+  }, [receiverId]);
+
+  const handleSendMessage = async () => {
+    if (message.trim() === "" && !selectedImage) {
+      console.log('No message or image to send');
+      return;
+    }
+
+    setSendingMessage(true);
+
+    try {
+      // Ensure we have a user ID
+      let userId = currentUserId;
+      if (!userId) {
+        userId = await getUserIdFromToken();
+        setCurrentUserId(userId);
+        console.log('Retrieved user ID:', userId);
+      }
+      
+      // Ensure connection is active
+      if (!signalRService.isConnected()) {
+        setConnectionStatus('connecting');
+        const token = await getToken();
+        if (!token) {
+          throw new Error('No authentication token available');
+        }
+        await signalRService.startConnection(token);
+        setConnectionStatus('connected');
+      }
+
+      // Create temp message with a prefix to identify it
+      const tempMessageId = `temp_${Date.now()}`;
+      const tempMessage: Message = {
+        id: tempMessageId,
+        senderId: userId || 0,
+        receiverId: receiverId,
+        message: message.trim(),
+        sentTime: new Date().toISOString(),
+        files: selectedImage ? [{ fileUrl: selectedImage.uri }] : []
+      };
+
+      console.log('Preparing to send message:', tempMessage);
+
+      let fileData: any[] = [];
+      if (selectedImage && selectedImage.uri) {
+        try {
+          const base64Content = await getBase64FromUri(selectedImage.uri);
+
+          fileData.push({
+            FileName: selectedImage.fileName || `image_${tempMessageId}.jpg`,
+            Base64Content: base64Content,
+            ContentType: selectedImage.type || 'image/jpeg',
+          });
+        } catch (imageError) {
+          console.error("Error processing image:", imageError);
+        }
+      }
+
+      // Add message to UI immediately
+      setChatHistory(prev => [...prev, tempMessage]);
+      console.log('Added temporary message to chat history');
+
+      // Send message via SignalR
+      const messageId = await signalRService.sendMessage(
+        receiverId,
+        message.trim(),
+        fileData,
+        (progress: number) => {
+          console.log(`Message send progress: ${progress}%`);
+        }
+      );
+      
+      console.log('Message sent successfully with ID:', messageId);
+
+      // Reset UI
+      setMessage("");
+      setSelectedImage(null);
+    } catch (error) {
+      console.error("Error sending message:", error);
+      // Show error to user
+      setConnectionStatus('disconnected');
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
   const getBase64FromUri = async (uri: string) => {
     try {
       const response = await fetch(uri);
       const blob = await response.blob();
-      
+
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -98,109 +350,13 @@ export default function ChatScreen() {
     }
   };
 
-  // Fetch Chat History
-  const fetchChatHistory = async (userId: number) => {
-    setLoading(true);
-    try {
-      const history = await getChatHistoryAPI(userId);
-      
-      if (history && history.length > 0) {
-        setChatHistory(history);
-        setError(null);
-        // Scroll to bottom after loading
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: false });
-        }, 100);
-      } else {
-        setChatHistory([]);
-        // Thông báo thân thiện khi không có tin nhắn
-        setError("Start a conversation with this contact!");
-      }
-    } catch (error) {
-      console.error("Error in chat history logic:", error);
-      setChatHistory([]);
-      // Thông báo thân thiện khi gặp lỗi
-      setError("Send a message to start the conversation!");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Send Message Handler
-  const handleSendMessage = async () => {
-    if (message.trim() === "" && !selectedImage) {
-      return;
-    }
-
-    setSendingMessage(true);
-    
-    try {
-      // Prepare file data if image is selected
-      let fileData: any[] = [];
-      if (selectedImage && selectedImage.uri) {
-        try {
-          const base64Content = await getBase64FromUri(selectedImage.uri);
-          
-          fileData.push({
-            FileName: selectedImage.fileName || `image_${Date.now()}.jpg`,
-            Base64Content: base64Content,
-            ContentType: selectedImage.type || 'image/jpeg',
-          });
-        } catch (imageError) {
-          console.error("Error processing image:", imageError);
-        }
-      }
-
-      // Create a temporary message to show immediately
-      const tempMessage = {
-        id: Date.now().toString(),
-        senderId: 0, // Assume 0 is not the receiverId to mark as current user
-        receiverId: Number(receiverId),
-        message: message.trim(),
-        sentTime: new Date().toISOString(),
-        files: selectedImage ? [{
-          fileUrl: selectedImage.uri,
-          fileName: selectedImage.fileName || `image_${Date.now()}.jpg`,
-        }] : []
-      };
-      
-      // Add temporary message to chat history
-      setChatHistory(prev => [...prev, tempMessage]);
-      
-      // Clear input and selected image before sending
-      setMessage("");
-      setSelectedImage(null);
-      
-      // Scroll to bottom immediately after adding message
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 50);
-
-      // Send message via SignalR
-      await signalRService.sendMessage(
-        Number(receiverId),
-        tempMessage.message,
-        fileData,
-        (progress: number) => {
-          console.log(`Message send progress: ${progress}%`);
-        }
-      );
-
-    } catch (error) {
-      console.error("Error sending message:", error);
-    } finally {
-      setSendingMessage(false);
-    }
-  };
-
   // Image Picker
   const pickImage = async () => {
     try {
-      // Blur input focus to fix keyboard issues
       if (mainInputRef.current) {
         mainInputRef.current.blur();
       }
-      
+
       const result = await launchImageLibrary({
         mediaType: 'photo',
         selectionLimit: 1,
@@ -208,7 +364,7 @@ export default function ChatScreen() {
         maxWidth: 1200,
         quality: 0.8,
       });
-      
+
       if (result.didCancel) {
         console.log("User cancelled image picker");
       } else if (result.errorCode) {
@@ -222,198 +378,92 @@ export default function ChatScreen() {
     }
   };
 
-  // Handle Remove Selected Image
   const handleRemoveImage = () => {
     setSelectedImage(null);
   };
 
-  // Scroll to bottom after receiving new message or when chat history changes
-  useEffect(() => {
-    // Auto scroll to bottom when chat history changes or loading completes
-    if (chatHistory.length > 0 && !loading && flatListRef.current) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    }
-  }, [chatHistory, loading]);
-  
-  // Force scroll to bottom when new messages are added
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (chatHistory.length > 0 && flatListRef.current) {
-        flatListRef.current.scrollToEnd({ animated: false });
-      }
-    }, 300);
-    
-    return () => clearTimeout(timer);
-  }, [chatHistory.length]);
-
-  // Listen for "MessageSent" confirmations from SignalR
-  useEffect(() => {
-    // Setup message sent confirmation handler
-    const handleMessageSent = (message: any) => {
-      console.log("Message sent confirmation received:", message);
-      
-      // Replace temporary message with the actual message from server
-      setChatHistory(prev => {
-        // Find any temp message that might match this one and replace it
-        const updatedHistory = prev.filter(msg => 
-          // Keep all messages that are not temporary or don't match the sent message
-          !(msg.id.toString().includes(Date.now().toString().substring(0, 5)) && 
-            msg.message === message.message)
-        );
-        
-        // Add the confirmed message
-        return [...updatedHistory, message];
-      });
-    };
-    
-    // Đăng ký với service (nếu service có hỗ trợ phương thức này)
-    if (typeof signalRService.onMessageSent === 'function') {
-      signalRService.onMessageSent(handleMessageSent);
-      
-      // Cleanup
-      return () => {
-        if (typeof signalRService.offMessageSent === 'function') {
-          signalRService.offMessageSent(handleMessageSent);
-        }
-      };
+  const keyExtractor = useCallback((item: Message, index: number) => {
+    // Enhanced key extractor that won't fail on any input
+    if (!item) return `item-${index}-${Math.random().toString(36)}`;
+    if (item.id === undefined || item.id === null) return `item-${index}-${Math.random().toString(36)}`;
+    try {
+      return String(item.id);
+    } catch (error) {
+      console.error("Error in keyExtractor:", error);
+      return `item-${index}-${Math.random().toString(36)}`;
     }
   }, []);
 
-  // Initial Setup
-  useEffect(() => {
-    const initializeChat = async () => {
-      try {
-        const token = await AsyncStorage.getItem("user_token");
-        if (!token) {
-          router.push("/login");
-          return;
-        }
-        
-        if (receiverId) {
-          await fetchChatHistory(Number(receiverId));
-        }
-      } catch (error) {
-        console.error("Initialization error:", error);
-      }
-    };
-
-    initializeChat();
+  const renderMessageItem = useCallback(({ item, index }: { item: Message, index: number }) => {
+    if (!item) {
+      console.warn('Null item at index', index);
+      return null;
+    }
     
-    // Setup message listener for new messages using the actual SignalR service implementation
-    const handleMessageReceived = (message: any) => {
-      // Check if the message is from the current chat
-      if (message && (message.senderId === Number(receiverId) || message.receiverId === Number(receiverId))) {
-        // Update chat history with the new message
-        setChatHistory(prev => [...prev, message]);
-        
-        // Scroll to bottom after receiving a message
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-      }
-    };
+    if (item.id === undefined || item.id === null || !item.senderId || !item.receiverId) {
+      console.warn('Invalid message item at index', index, item);
+      return null;
+    }
     
-    // Register the message received handler
-    signalRService.onMessageReceived(handleMessageReceived);
-    
-    // Cleanup when component unmounts
-    return () => {
-      // Remove message handler
-      signalRService.offMessageReceived(handleMessageReceived);
-    };
-  }, [receiverId]);
-
-  // Render Message Item
-  const renderMessageItem = ({ item }: { item: any }) => {
-    const isCurrentUser = item.senderId !== Number(receiverId);
-    
-    // Định dạng thời gian ngắn gọn hơn
-    const messageDate = new Date(item.sentTime);
-    
-    // Format thời gian theo định dạng HH:MM
+    // This is the correct logic for determining if a message is from the current user
+    const isFromMe = currentUserId !== null && item.senderId === currentUserId;
+  
+    const messageDate = item.sentTime ? new Date(item.sentTime) : new Date();
     const messageTime = messageDate.toLocaleTimeString([], { 
       hour: '2-digit', 
       minute: '2-digit'
     });
-
+  
     return (
-      <View style={[
-        styles.messageContainer,
-        isCurrentUser ? styles.messageSender : styles.messageReceiver
-      ]}>
-        {/* Message Content */}
+      <View style={[styles.messageContainer, isFromMe ? styles.messageReceiver : styles.messageSender]}>
         <View 
-          style={[
-            styles.messageContent,
-            {
-              backgroundColor: isCurrentUser ? colors.primary || '#5b92e5' : '#f0f0f0',
-              borderBottomRightRadius: isCurrentUser ? 4 : 16,
-              borderBottomLeftRadius: isCurrentUser ? 16 : 4
-            }
-          ]}
-        >
-          {/* Text Message */}
+          style={[styles.messageContent, {
+            backgroundColor: isFromMe ? colors.primary || '#5b92e5' : '#f0f0f0',
+            borderBottomRightRadius: isFromMe ? 4 : 16,
+            borderBottomLeftRadius: isFromMe ? 16 : 4
+          }]}>
           {item.message && (
-            <Text 
-              style={[
-                styles.messageText, 
-                { color: isCurrentUser ? "#FFFFFF" : colors.text || "#000000" }
-              ]}
-            >
+            <Text style={[styles.messageText, { color: isFromMe ? "#FFFFFF" : colors.text || "#000000" }]}>
               {item.message}
             </Text>
           )}
-
-          {/* Image Message */}
-          {item.files && item.files.length > 0 && (
-            <Image
-              source={{ uri: item.files[0].fileUrl }}
-              style={styles.messageImage}
-              resizeMode="cover"
-            />
+          {item.files && item.files.length > 0 && item.files[0]?.fileUrl && (
+            <Image source={{ uri: item.files[0].fileUrl }} style={styles.messageImage} resizeMode="cover" />
           )}
         </View>
-        
-        {/* Message Time - Nằm bên ngoài tin nhắn */}
-        <Text 
-          style={[
-            styles.messageTime,
-            { 
-              color: colors.textSecondary || "#999",
-              alignSelf: isCurrentUser ? 'flex-end' : 'flex-start'
-            }
-          ]}
-        >
+        <Text style={[styles.messageTime, { color: colors.textSecondary || "#999", alignSelf: isFromMe ? 'flex-end' : 'flex-start' }]}>
           {messageTime}
         </Text>
       </View>
     );
-  };
+  }, [currentUserId, colors]);
 
-  // Hiệu chỉnh khoảng cách bottom cho content dựa vào thiết bị là Android hay iOS
-  const getBottomPadding = () => {
-    if (Platform.OS === 'android') {
-      return keyboardVisible ? 0 : 0; // Không cần padding dưới trên Android khi dùng adjustResize
-    } else {
-      return keyboardVisible ? keyboardHeight - 120 : 0;
-    }
-  };
+  // Filter out any invalid messages before rendering
+  const validChatHistory = chatHistory.filter(msg => 
+    msg && msg.id !== undefined && msg.id !== null && msg.senderId && msg.receiverId
+  );
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header hiển thị tên người nhận và email */}
       <View style={[styles.minimalHeader, { backgroundColor: colors.background }]}>
         <View style={styles.receiverInfo}>
           <Text style={[styles.receiverName, { color: colors.text }]}>
             {receiverName}
           </Text>
-          {receiverEmail ? (
+          {receiverEmail && (
             <Text style={[styles.receiverEmail, { color: colors.textSecondary || '#666' }]}>
               {receiverEmail}
             </Text>
-          ) : null}
+          )}
+          {connectionStatus !== 'connected' && (
+            <View style={styles.connectionStatusContainer}>
+              <Text style={[styles.connectionStatus, { 
+                color: connectionStatus === 'connecting' ? '#FFA500' : '#FF3B30' 
+              }]}>
+                {connectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -421,13 +471,8 @@ export default function ChatScreen() {
         style={styles.keyboardAvoidView} 
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 110 : undefined}
-        // Android sẽ tự động điều chỉnh với windowSoftInputMode="adjustResize"
       >
-        <View style={[
-          styles.contentContainer,
-          { paddingBottom: getBottomPadding() }
-        ]}>
-          {/* Chat Messages */}
+        <View style={styles.contentContainer}>
           {loading ? (
             <View style={styles.centerContent}>
               <ActivityIndicator size="large" color={colors.primary || '#5b92e5'} />
@@ -435,7 +480,7 @@ export default function ChatScreen() {
                 Loading messages...
               </Text>
             </View>
-          ) : error && chatHistory.length === 0 ? (
+          ) : error ? (
             <View style={styles.centerContent}>
               <Ionicons 
                 name="chatbubble-ellipses-outline" 
@@ -446,97 +491,77 @@ export default function ChatScreen() {
                 {error}
               </Text>
               <Text style={[styles.subMessageText, { color: colors.textSecondary || '#666' }]}>
-                Send a message to {receiverName}!
+                Unable to load messages
+              </Text>
+            </View>
+          ) : validChatHistory.length === 0 ? (
+            <View style={styles.centerContent}>
+              <Ionicons 
+                name="chatbubble-ellipses-outline" 
+                size={60} 
+                color={colors.textSecondary || '#999'} 
+              />
+              <Text style={[styles.errorText, { color: colors.text }]}>
+                Start a conversation with {receiverName}
               </Text>
             </View>
           ) : (
             <FlatList
               ref={flatListRef}
-              data={chatHistory}
+              data={validChatHistory}
               renderItem={renderMessageItem}
-              keyExtractor={(item) => item.id.toString()}
-              contentContainerStyle={[
-                styles.chatListContent,
-                // Thêm padding để đảm bảo không bị che khuất bởi input
-                { paddingBottom: 80 + (selectedImage ? 120 : 0) }
-              ]}
+              keyExtractor={keyExtractor}
+              extraData={validChatHistory.length + (currentUserId || 0)}
+              contentContainerStyle={[styles.chatListContent, { paddingBottom: 80 + (selectedImage ? 120 : 0) }]}
               showsVerticalScrollIndicator={false}
               onContentSizeChange={() => {
-                if (chatHistory.length > 0) {
+                if (validChatHistory.length > 0) {
                   flatListRef.current?.scrollToEnd({ animated: false });
                 }
               }}
             />
           )}
 
-          {/* Input Area - Fixed position at bottom */}
-          <View 
-            style={[
-              styles.inputContainer, 
-              { 
-                backgroundColor: colors.card || '#fff',
-                borderTopColor: colors.border || '#eee',
-              }
-            ]}
-          >
-            {/* Selected Image Preview - Above input */}
+          {/* Input Area */}
+          <View style={[styles.inputContainer, { backgroundColor: colors.card || '#fff', borderTopColor: colors.border || '#eee' }]}>
             {selectedImage && (
               <View style={[styles.selectedImageContainer, { backgroundColor: colors.card || '#fff' }]}>
                 <Image source={{ uri: selectedImage.uri }} style={styles.selectedImage} />
-                <TouchableOpacity 
-                  style={styles.removeImageButton} 
-                  onPress={handleRemoveImage}
-                >
+                <TouchableOpacity style={styles.removeImageButton} onPress={handleRemoveImage}>
                   <Ionicons name="close-circle-sharp" size={26} color="#FF3B30" />
                 </TouchableOpacity>
               </View>
             )}
-            
+
             <View style={styles.inputRow}>
-              <TouchableOpacity 
-                onPress={pickImage} 
-                style={styles.iconButton} 
-                disabled={sendingMessage}
-              >
-                <Ionicons 
-                  name="image" 
-                  size={24} 
-                  color={sendingMessage ? colors.border || '#ccc' : colors.primary || '#5b92e5'} 
-                />
+              <TouchableOpacity onPress={pickImage} style={styles.iconButton} disabled={sendingMessage || connectionStatus !== 'connected'}>
+                <Ionicons name="image" size={24} color={(sendingMessage || connectionStatus !== 'connected') ? colors.border || '#ccc' : colors.primary || '#5b92e5'} />
               </TouchableOpacity>
 
               <TextInput
                 ref={mainInputRef}
-                style={[
-                  styles.input, 
-                  { 
-                    backgroundColor: colors.inputBackground || '#f5f5f5', 
-                    color: colors.text,
-                    borderColor: colors.border || '#eee'
-                  }
-                ]}
-                placeholder="Type a message..."
+                style={[styles.input, { backgroundColor: colors.inputBackground || '#f5f5f5', color: colors.text, borderColor: colors.border || '#eee' }]}
+                placeholder={connectionStatus === 'connected' ? "Type a message..." : "Connecting..."}
                 placeholderTextColor={colors.textSecondary || '#999'}
                 value={message}
                 onChangeText={setMessage}
-                editable={!sendingMessage}
+                editable={!sendingMessage && connectionStatus === 'connected'}
                 multiline
               />
 
               <TouchableOpacity 
                 onPress={handleSendMessage} 
                 style={[
-                  styles.sendButton,
-                  { backgroundColor: colors.primary || '#5b92e5' },
-                  sendingMessage && styles.disabledButton
-                ]}
-                disabled={sendingMessage}
+                  styles.sendButton, 
+                  { backgroundColor: colors.primary || '#5b92e5' }, 
+                  (sendingMessage || connectionStatus !== 'connected') && styles.disabledButton
+                ]} 
+                disabled={sendingMessage || connectionStatus !== 'connected'}
               >
-                {sendingMessage ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
+                {sendingMessage ? 
+                  <ActivityIndicator size="small" color="#fff" /> : 
                   <Ionicons name="paper-plane" size={20} color="#fff" />
-                )}
+                }
               </TouchableOpacity>
             </View>
           </View>
@@ -579,6 +604,17 @@ const styles = StyleSheet.create({
     marginTop: 2,
     textAlign: 'center',
   },
+  connectionStatusContainer: {
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  connectionStatus: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
   centerContent: {
     flex: 1,
     justifyContent: 'center',
@@ -609,15 +645,16 @@ const styles = StyleSheet.create({
     maxWidth: '80%',
   },
   messageSender: {
-    alignSelf: 'flex-end',
+    alignSelf: 'flex-start', // Messages from others on the left
   },
   messageReceiver: {
-    alignSelf: 'flex-start',
+    alignSelf: 'flex-end', // Your messages on the right
   },
   messageContent: {
     borderRadius: 16,
     padding: 12,
     minWidth: 80,
+    maxWidth: '100%',
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
