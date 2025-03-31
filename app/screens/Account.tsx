@@ -273,12 +273,7 @@ const AccountScreen = () => {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton} 
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
+          
           <Text style={[styles.title, {color: colors.text}]}>Edit Profile</Text>
           <View style={styles.backButton} />
         </View>
