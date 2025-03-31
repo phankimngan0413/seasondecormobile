@@ -88,10 +88,10 @@ export default function ProfileScreen() {
     return (
       <View style={[styles.errorContainer, { backgroundColor: colors.background }]}>
         <Ionicons name="alert-circle-outline" size={48} color={colors.error || "#e74c3c"} />
-        <Text style={[styles.errorText, { color: colors.text }]}>{error}</Text>
+        <Text style={[styles.errorText, { color: colors.text }]}>Account error, please log in again</Text>
         <CustomButton 
-          title="Try Again" 
-          onPress={() => router.replace("/(tabs)/profile")} 
+          title="Logout" 
+          onPress={handleLogout} 
           style={{ backgroundColor: colors.primary, marginTop: 20 }} 
         />
       </View>
@@ -386,10 +386,16 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   logoutButton: {
-    backgroundColor: 'transparent',
+    backgroundColor: '#f8f8f8',  // Light gray background
     borderWidth: 1,
-    borderColor: '#e74c3c',
-    borderRadius: 12,
+    borderColor: '#e74c3c',      // Red border
+    borderRadius: 8,             // Slightly less rounded corners
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.5,
+    elevation: 2,                // Add slight elevation for the shadow effect
+    marginVertical: 10,
   },
   logoutButtonText: {
     color: '#e74c3c',

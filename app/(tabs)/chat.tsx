@@ -23,7 +23,8 @@ interface Contact {
   avatar?: string | null;
   lastMessageTime?: string;
   email?: string;
-  isImage?: boolean; // Explicitly defined as boolean
+  isImage?: boolean;
+  unreadCount?: number;
 }
 
 interface Message {
@@ -38,7 +39,7 @@ interface Message {
   senderId?: number;
   receiverId?: number;
   sentTime?: string;
-  files?: Array<{fileUrl?: string}>;
+  files?: Array<{fileId?: number, fileName?: string, fileUrl?: string}>;
   isRead?: boolean;
 }
 
@@ -53,6 +54,43 @@ export default function ChatListScreen() {
 
   const flatListRef = useRef<FlatList>(null);
 
+  // Helper function to check if a message has files
+  const hasFiles = (message: any): boolean => {
+    return message && message.files && Array.isArray(message.files) && message.files.length > 0;
+  };
+
+  // Helper function to determine if a message is an image
+  const isImageMessage = (message: any): boolean => {
+    const isEmpty = !message.message || message.message.trim() === '';
+    return Boolean(
+      message.isImage || 
+      (isEmpty && hasFiles(message)) ||
+      (isEmpty && message.lastMessageTime && message.lastMessageTime.trim() !== '')
+    );
+  };
+
+  // Helper function to sort contacts (unread first, then by time)
+  const sortContacts = (contactsToSort: Contact[]): Contact[] => {
+    return [...contactsToSort].sort((a, b) => {
+      // First priority: Unread messages on top
+      const aUnread = a.unreadCount || 0;
+      const bUnread = b.unreadCount || 0;
+      
+      if (aUnread > 0 && bUnread === 0) return -1;
+      if (aUnread === 0 && bUnread > 0) return 1;
+      
+      // Second priority: If both have unread messages, sort by count
+      if (aUnread > 0 && bUnread > 0) {
+        return bUnread - aUnread; // Higher count first
+      }
+      
+      // Last priority: Sort by message time
+      if (!a.lastMessageTime) return 1;
+      if (!b.lastMessageTime) return -1;
+      return new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime();
+    });
+  };
+
   // Fetching contact data from the API
   const fetchContacts = async () => {
     setLoading(true);
@@ -62,17 +100,16 @@ export default function ChatListScreen() {
       if (Array.isArray(data) && data.length > 0) {
         // Process data to mark messages as images or text
         const processedData = data.map(contact => {
-          // Consider it an image message if message is empty but timestamp exists
-          const isImage = Boolean(
-            (!contact.message || contact.message.trim() === '') && 
-            contact.lastMessageTime && contact.lastMessageTime.trim() !== ''
-          );
-                         
+          // Process image flag
+          const isImage = isImageMessage(contact);
+          
           return {
             ...contact,
             isImage,
             // Ensure contactId is valid
-            contactId: contact.contactId || 0
+            contactId: contact.contactId || 0,
+            // Initialize unread count from API data or default to 0
+            unreadCount: contact.unreadCount || 0
           };
         });
         
@@ -81,12 +118,8 @@ export default function ChatListScreen() {
           contact.contactId !== undefined && contact.contactId !== null
         );
         
-        // Sort by most recent messages if possible
-        const sortedData = [...validContacts].sort((a, b) => {
-          if (!a.lastMessageTime) return 1;
-          if (!b.lastMessageTime) return -1;
-          return new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime();
-        });
+        // Sort contacts (unread first, then by time)
+        const sortedData = sortContacts(validContacts);
         setContacts(sortedData);
       } else {
         console.log("No contacts found or empty data");
@@ -116,7 +149,7 @@ export default function ChatListScreen() {
   useEffect(() => {
     // Listen for new messages via SignalR
     const handleNewMessage = (newMessage: Message) => {
-      console.log("New message received:", newMessage);
+      console.log("New message received via SignalR:", newMessage);
       
       // Validate incoming message
       if (!newMessage || !newMessage.contactId) {
@@ -125,10 +158,10 @@ export default function ChatListScreen() {
       }
       
       // Check if message is an image
-      const isImage = Boolean(
-        (!newMessage.message || newMessage.message.trim() === '') && 
-        (newMessage.lastMessageTime || newMessage.sentTime)
-      );
+      const isImage = isImageMessage(newMessage);
+      
+      // Check if the message is unread (affects sorting)
+      const isUnread = newMessage.isRead === false;
       
       setContacts((prevContacts) => {
         // Check if contact already exists
@@ -137,29 +170,45 @@ export default function ChatListScreen() {
         );
 
         if (existingContactIndex !== -1) {
-          // Update existing contact and move to top
+          // Update existing contact
           const updatedContacts = [...prevContacts];
-          updatedContacts[existingContactIndex] = {
-            ...updatedContacts[existingContactIndex],
+          const existingContact = updatedContacts[existingContactIndex];
+          
+          const updatedContact: Contact = {
+            ...existingContact,
             message: newMessage.message || '',
             lastMessageTime: newMessage.lastMessageTime || newMessage.sentTime || new Date().toISOString(),
-            isImage
+            isImage,
+            // Increment unread count for new unread messages
+            unreadCount: isUnread 
+              ? (existingContact.unreadCount || 0) + 1 
+              : existingContact.unreadCount || 0
           };
           
-          // Remove and add to beginning
-          const updatedContact = updatedContacts.splice(existingContactIndex, 1)[0];
-          return [updatedContact, ...updatedContacts];
+          // Remove the contact from its current position
+          updatedContacts.splice(existingContactIndex, 1);
+          
+          // Add the updated contact back to the array
+          const newContacts = [updatedContact, ...updatedContacts];
+          
+          // Re-sort to ensure unread messages are at the top
+          return sortContacts(newContacts);
         } else {
-          // Add new contact to beginning with safe defaults
-          return [{
+          // Add new contact to contacts list
+          const newContact: Contact = {
             contactId: newMessage.contactId,
             contactName: newMessage.contactName || `Contact ${newMessage.contactId}`,
             message: newMessage.message || '',
             lastMessageTime: newMessage.lastMessageTime || newMessage.sentTime || new Date().toISOString(),
             avatar: newMessage.avatar || null,
             email: newMessage.email || '',
-            isImage
-          }, ...prevContacts];
+            isImage,
+            // Set initial unread count for new contact
+            unreadCount: isUnread ? 1 : 0
+          };
+          
+          // Add the new contact and sort
+          return sortContacts([newContact, ...prevContacts]);
         }
       });
 
@@ -169,6 +218,7 @@ export default function ChatListScreen() {
       }
     };
 
+    // Register message handler with SignalR
     signalRService.onMessageReceived(handleNewMessage);
 
     // Cleanup function
@@ -183,6 +233,16 @@ export default function ChatListScreen() {
       console.warn("Attempted to navigate to invalid contact:", contact);
       return;
     }
+    
+    // Reset unread count when navigating to the conversation
+    setContacts(prevContacts => {
+      return prevContacts.map(c => {
+        if (c.contactId === contact.contactId) {
+          return { ...c, unreadCount: 0 };
+        }
+        return c;
+      });
+    });
     
     // Navigate to the chat page with contact information
     router.push({
@@ -222,7 +282,7 @@ export default function ChatListScreen() {
     }
   }, []);
 
-  // Safe render function with validation
+  // Safe render function with validation and unread indicators
   const renderContactItem = useCallback(({ item, index }: { item: Contact, index: number }) => {
     if (!item) {
       console.warn("Null contact item at index", index);
@@ -234,25 +294,58 @@ export default function ChatListScreen() {
       return null;
     }
     
+    // Check if this contact has unread messages
+    const hasUnread = item.unreadCount && item.unreadCount > 0;
+    
     return (
       <TouchableOpacity
-        style={[styles.contactContainer, { backgroundColor: colors.card }]}
+        style={[
+          styles.contactContainer, 
+          { backgroundColor: colors.card },
+          // Highlight background for unread messages
+          hasUnread ? styles.unreadContainer : null
+        ]}
         onPress={() => handleConversationClick(item)}
       >
-        {/* Contact Avatar */}
-        <Image
-          source={item.avatar ? { uri: item.avatar } : require("@/assets/images/default-avatar.png")}
-          style={styles.avatar}
-        />
+        {/* Contact Avatar with Unread Badge */}
+        <View style={styles.avatarContainer}>
+          <Image
+            source={item.avatar ? { uri: item.avatar } : require("@/assets/images/default-avatar.png")}
+            style={styles.avatar}
+          />
+          {/* Show unread badge with count if there are unread messages */}
+          {hasUnread && (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadBadgeText}>{item.unreadCount}</Text>
+            </View>
+          )}
+        </View>
+        
+        {/* Message Content */}
         <View style={styles.textContainer}>
-          <Text style={[styles.contactName, { color: colors.text }]}>
+          <Text style={[
+            styles.contactName, 
+            { color: colors.text },
+            // Make text bold for unread messages
+            hasUnread ? styles.unreadText : null
+          ]}>
             {item.contactName || `Contact ${item.contactId}`}
           </Text>
-          <Text style={[styles.lastMessage, { color: colors.icon }]} numberOfLines={1}>
+          <Text style={[
+            styles.lastMessage, 
+            { color: colors.icon },
+            hasUnread ? styles.unreadText : null
+          ]} numberOfLines={1}>
             {item.isImage ? "Sent a photo" : (item.message || "No messages yet")}
           </Text>
         </View>
-        <Text style={[styles.timeText, { color: colors.icon }]}>
+        
+        {/* Timestamp */}
+        <Text style={[
+          styles.timeText, 
+          { color: colors.icon },
+          hasUnread ? styles.unreadText : null
+        ]}>
           {item.lastMessageTime || "No time"}
         </Text>
       </TouchableOpacity>
@@ -348,18 +441,47 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderRadius: 12,
   },
+  unreadContainer: {
+    backgroundColor: 'rgba(95, 193, 241, 0.1)', // Light blue highlight for unread
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginRight: 15,
+  },
   avatar: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    marginRight: 15,
+  },
+  unreadBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: '#FF3B30', // Red badge for unread
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1,
+    borderColor: 'white',
+  },
+  unreadBadgeText: {
+    color: 'white',
+    fontSize: 11,
+    fontWeight: 'bold',
   },
   textContainer: {
     flex: 1,
   },
   contactName: {
     fontSize: 16,
+    fontWeight: "600",
+  },
+  unreadText: {
     fontWeight: "bold",
+    color: "#000000", // Darker color for unread messages
   },
   lastMessage: {
     fontSize: 14,

@@ -131,6 +131,7 @@ const CalendarPicker = ({
     const newDate = new Date(currentYear, currentMonth, day);
     setCurrentDate(newDate);
     onSelectDate(newDate);
+    onClose(); // Close the calendar after selection
   };
 
   const handleYearSelection = (year: number) => {
@@ -141,21 +142,29 @@ const CalendarPicker = ({
     const daysInMonth = getDaysInMonth(currentMonth, currentYear);
     const firstDayOfMonth = getFirstDayOfMonth(currentMonth, currentYear);
     
-    const days = [];
+    // Create header row (S M T W T F S)
     const dayNames = ["S", "M", "T", "W", "T", "F", "S"];
+    const headerRow = (
+      <View style={styles.calendarRow} key="header-row">
+        {dayNames.map((name, index) => (
+          <View key={`day-name-${index}`} style={styles.calendarHeaderCell}>
+            <Text style={[styles.calendarDayName, { color: colors.text }]}>{name}</Text>
+          </View>
+        ))}
+      </View>
+    );
     
-    // Render day names (S M T W T F S)
-    dayNames.forEach((name, index) => {
-      days.push(
-        <View key={`day-name-${index}`} style={styles.calendarHeaderCell}>
-          <Text style={[styles.calendarDayName, { color: colors.text }]}>{name}</Text>
-        </View>
-      );
-    });
+    // Create array for calendar rows
+    const rows = [headerRow];
+    
+    // Calculate how many days to include in each week/row
+    let days = [];
     
     // Add empty cells for days before the first day of the month
     for (let i = 0; i < firstDayOfMonth; i++) {
-      days.push(<View key={`empty-${i}`} style={styles.calendarCell} />);
+      days.push(
+        <View key={`empty-${i}`} style={styles.calendarCell} />
+      );
     }
     
     // Add cells for each day of the month
@@ -184,9 +193,30 @@ const CalendarPicker = ({
           </Text>
         </TouchableOpacity>
       );
+      
+      // When we reach the end of a week, create a new row
+      if ((firstDayOfMonth + day) % 7 === 0 || day === daysInMonth) {
+        // If this is the last day of the month and doesn't end on Saturday
+        // add empty cells to fill the row
+        if (day === daysInMonth && (firstDayOfMonth + day) % 7 !== 0) {
+          const remainingCells = 7 - ((firstDayOfMonth + day) % 7);
+          for (let i = 0; i < remainingCells; i++) {
+            days.push(
+              <View key={`empty-end-${i}`} style={styles.calendarCell} />
+            );
+          }
+        }
+        
+        rows.push(
+          <View style={styles.calendarRow} key={`row-${rows.length}`}>
+            {days}
+          </View>
+        );
+        days = [];
+      }
     }
     
-    return days;
+    return rows;
   };
 
   return (
@@ -198,7 +228,7 @@ const CalendarPicker = ({
     >
       <TouchableWithoutFeedback onPress={onClose}>
         <View style={styles.modalOverlay}>
-          <TouchableWithoutFeedback onPress={() => {}}>
+          <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalContent}>
               {showYearSelector ? (
                 <YearSelector
@@ -228,7 +258,7 @@ const CalendarPicker = ({
                     </View>
                   </View>
                   
-                  <View style={styles.calendarGrid}>
+                  <View style={styles.calendarGridContainer}>
                     {renderCalendarDays()}
                   </View>
                   
@@ -285,25 +315,30 @@ const styles = StyleSheet.create({
   calendarNavButton: {
     padding: 5
   },
-  calendarGrid: {
+  calendarGridContainer: {
+    width: '100%'
+  },
+  calendarRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between'
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 2,
   },
   calendarHeaderCell: {
     width: '14.28%',
-    padding: 10,
-    alignItems: 'center'
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   calendarDayName: {
-    fontWeight: '500'
+    fontWeight: '500',
+    fontSize: 14
   },
   calendarCell: {
     width: '14.28%',
     height: 40,
     justifyContent: 'center',
-    alignItems: 'center',
-    margin: 2
+    alignItems: 'center'
   },
   selectedCalendarCell: {
     borderRadius: 20

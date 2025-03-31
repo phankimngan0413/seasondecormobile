@@ -28,6 +28,7 @@ export const Colors = {
     seasonColor: "#1E90FF",     // Blue color for seasons
     error: "#e01929",
     textSecondary: '#64748B',
+    disabled: '#E0E0E0',
   },
   dark: {
     text: "#ECEDEE",  
@@ -55,5 +56,6 @@ export const Colors = {
     seasonColor: "#1E90FF", 
     error: "#e01929",
     textSecondary: '#94A3B8',
+    disabled: '#424242',
   },
 };

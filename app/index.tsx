@@ -10,7 +10,8 @@ LogBox.ignoreLogs([
   "Decor service not found for this provider",
   "API Request Error:", // Add this to ignore API Request Error messages
   "{}" ,// Include this if the empty object is appearing as a separate message
-  "Received invalid data []"
+  "Received invalid data []",
+  "❌ API Error [400]: []",
 ]);
 
 export default function Index() {

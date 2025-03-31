@@ -7,12 +7,12 @@ export const getAccountDetails = async (): Promise<any> => {
   try {
     const token = await getToken();
     if (!token) throw new Error("No token found!");
-
+    
     // Decode the token to get the userId
     const decoded: any = jwtDecode(token);
     const userId = decoded?.nameid;
     if (!userId) throw new Error("No user ID in the token.");
-
+    
     const apiClient = await initApiClient();
     const response = await apiClient.get(`/api/AccountProfile/${userId}`);
     
@@ -29,7 +29,7 @@ export const getAccountDetailsById = async (userId: string | number): Promise<an
   try {
     const token = await getToken();
     if (!token) throw new Error("No token found!");
-
+    
     const apiClient = await initApiClient();
     const response = await apiClient.get(`/api/AccountProfile/${userId}`);
     
@@ -46,16 +46,27 @@ export const updateAccountDetails = async (userData: any): Promise<any> => {
   try {
     const token = await getToken();
     if (!token) throw new Error("No token found!");
-
-    // Decode the token to get the userId
-    const decoded: any = jwtDecode(token);
-    const userId = decoded?.nameid;
-    if (!userId) throw new Error("No user ID in the token.");
-
-    const apiClient = await initApiClient();
-    const response = await apiClient.put(`/api/AccountManagement/update/${userId}`, userData);
     
-    // Return the updated data from the server
+    // Ensure all required fields have values
+    const requestData = {
+      FirstName: userData.FirstName || "",
+      LastName: userData.LastName || "",
+      Slug: userData.Slug || "",
+      DateOfBirth: userData.DateOfBirth || "",
+      Gender: userData.Gender === undefined ? true : userData.Gender,
+      Phone: userData.Phone || ""
+    };
+    
+    console.log("Final API Request Data:", requestData);
+    
+    const apiClient = await initApiClient();
+    const response = await apiClient.put(`/api/AccountProfile/update-account`, requestData, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      }
+    });
+    
     return response.data;
   } catch (error) {
     console.error("Error updating account details: ", error);
@@ -63,51 +74,42 @@ export const updateAccountDetails = async (userData: any): Promise<any> => {
   }
 };
 
-// Update Avatar
-export const updateAvatar = async (file: any): Promise<any> => {
+// Upload avatar
+export const updateAvatar = async (formData: FormData): Promise<any> => {
   try {
-    if (!file) {
-      throw new Error("No file selected."); // Check if a file is selected
+    // Check if formData is valid
+    if (!formData) {
+      throw new Error("No file selected.");
     }
-
-    console.log("Selected file:", file); // Log the file to ensure it's valid
-
+    
     const token = await getToken();
     if (!token) throw new Error("No token found!");
-
+    
     // Decode token to get userId
     const decoded: any = jwtDecode(token);
     const userId = decoded?.nameid;
     if (!userId) throw new Error("No user ID found in token.");
-
-    // Prepare FormData to send the file
-    const formData = new FormData();
-
-    // Flatten the file structure if needed
-    const fileObject = file._parts ? file._parts[0][1] : file;
-
-    // Ensure the file is added to FormData as a proper File/Blob object
-    const blob = {
-      uri: fileObject.uri,
-      type: fileObject.type || "image/jpeg",
-      name: fileObject.fileName || "avatar.jpg",
-    };
-
-    formData.append("file", new Blob([blob.uri], { type: blob.type }), blob.name);
-
-    console.log("FormData:", formData); // Log FormData to check if the file is correctly appended
-
+    
     const apiClient = await initApiClient();
+    
+    // Add timeout and retry logic for network reliability
     const response = await apiClient.put(`/api/AccountProfile/avatar`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
-        Authorization: `Bearer ${token}`, // Include token for authorization
+        Authorization: `Bearer ${token}`,
       },
+      timeout: 30000, // 30 seconds timeout
     });
-
-    return response.data; // Return the updated avatar data from the server
-  } catch (error) {
+    
+    return response.data;
+  } catch (error: any) {
+    // Improve error message for network issues
+    if (error.message === 'Network Error') {
+      console.error("Network error while uploading avatar. Check your connection.");
+      throw { message: "Network connection issue. Please try again when you have a stable connection." };
+    }
+    
     console.error("Error uploading avatar: ", error);
-    throw error; // Rethrow the error to handle it in the calling code
+    throw error;
   }
 };

@@ -1,115 +1,82 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, StyleProp, ViewStyle, TextStyle } from "react-native";
-import { Calendar } from "react-native-calendars";
-import { useTheme } from "@/constants/ThemeContext"; // ✅ Import theme
-
-// 🎯 Định nghĩa kiểu DayObject
-interface DayObject {
-  dateString: string;
-}
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import CalendarPicker from "@/components/CalendarPicker"; 
+import { useTheme } from "@/constants/ThemeContext";
+import { Colors } from "@/constants/Colors";
 
 interface BirthdayDatePickerProps {
-  label: string;
-  selectedDate?: Date;
+  label?: string;
+  selectedDate: Date;
   onChange: (date: Date) => void;
-  required?: boolean;
-  style?: StyleProp<ViewStyle>;
-  textStyle?: StyleProp<TextStyle>; // ✅ Thêm textStyle để hỗ trợ màu chữ theo theme
 }
 
-const PRIMARY_COLOR = "#5fc1f1"; // Màu chủ đạo
-
-const BirthdayDatePicker: React.FC<BirthdayDatePickerProps> = ({
-  label,
-  selectedDate,
-  onChange,
-  required = false,
-  textStyle, // ✅ Nhận textStyle từ props
-}) => {
-  const { theme } = useTheme(); // ✅ Lấy theme từ Context
-  const [date, setDate] = useState<Date>(selectedDate || new Date());
-  const [isPickerVisible, setPickerVisible] = useState(false);
-
-  const handleDateChange = (day: DayObject) => {
-    const selectedDate = new Date(day.dateString);
-    setDate(selectedDate);
-    onChange(selectedDate);
-    setPickerVisible(false);
+const BirthdayDatePicker = ({ label, selectedDate, onChange }: BirthdayDatePickerProps) => {
+  const { theme } = useTheme();
+  const validTheme = theme as "light" | "dark";
+  const colors = Colors[validTheme];
+  
+  const [showCalendar, setShowCalendar] = useState(false);
+  
+  // Format date for display
+  const formatDate = (date: Date) => {
+    if (!date || isNaN(date.getTime())) return "Select date";
+    
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    
+    return `${day}/${month}/${year}`;
   };
-
+  
   return (
     <View style={styles.container}>
-      <Text style={[styles.label, textStyle, { color: theme === "dark" ? "#ffffff" : "#333" }]}>
-        {label} {required && <Text style={styles.required}>*</Text>}
-      </Text>
-      <TouchableOpacity
-        style={[
-          styles.datePicker,
-          {
-            backgroundColor: theme === "dark" ? "#222" : "#ffffff",
-            borderColor: theme === "dark" ? "#555" : "#ddd",
-          },
-        ]}
-        onPress={() => setPickerVisible(!isPickerVisible)}
-      >
-        <Text style={[styles.dateText, textStyle, { color: theme === "dark" ? "#ffffff" : "#333" }]}>
-          {date.toLocaleDateString()}
-        </Text>
-      </TouchableOpacity>
-
-      {isPickerVisible && (
-        <Calendar
-          theme={{
-            backgroundColor: theme === "dark" ? "#222" : "#fff",
-            calendarBackground: theme === "dark" ? "#222" : "#fff",
-            textSectionTitleColor: theme === "dark" ? "#bbb" : "#000",
-            selectedDayBackgroundColor: PRIMARY_COLOR,
-            selectedDayTextColor: "#fff",
-            todayTextColor: PRIMARY_COLOR,
-            dayTextColor: theme === "dark" ? "#fff" : "#000",
-            textDisabledColor: theme === "dark" ? "#555" : "#ccc",
-            dotColor: PRIMARY_COLOR,
-            arrowColor: PRIMARY_COLOR,
-            monthTextColor: theme === "dark" ? "#fff" : "#000",
-          }}
-          markedDates={{
-            [date.toISOString().split("T")[0]]: { selected: true, selectedColor: PRIMARY_COLOR },
-          }}
-          onDayPress={(day: any) => handleDateChange(day as DayObject)}
-        />
+      {label && (
+        <Text style={[styles.label, { color: colors.textSecondary }]}>{label}</Text>
       )}
+      
+      <TouchableOpacity
+        style={[styles.dateButton, { backgroundColor: colors.background }]}
+        onPress={() => setShowCalendar(true)}
+      >
+        <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} style={styles.icon} />
+        <Text style={[styles.dateText, { color: colors.text }]}>
+          {formatDate(selectedDate)}
+        </Text>
+        <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
+      </TouchableOpacity>
+      
+      <CalendarPicker
+        selectedDate={selectedDate instanceof Date && !isNaN(selectedDate.getTime()) ? selectedDate : new Date()}
+        onSelectDate={onChange}
+        isVisible={showCalendar}
+        onClose={() => setShowCalendar(false)}
+      />
     </View>
   );
 };
 
-// ✅ Cải thiện giao diện với Dark Mode & UI mềm mại hơn
 const styles = StyleSheet.create({
   container: {
-    width: "100%",
-    marginBottom: 20,
+    marginBottom: 4,
   },
   label: {
-    fontSize: 16,
-    marginBottom: 10,
+    fontSize: 14,
+    fontWeight: "500",
+    marginBottom: 8,
   },
-  required: {
-    color: "#ff4444",
-  },
-  datePicker: {
+  dateButton: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderWidth: 1.5,
+    justifyContent: "space-between",
+    padding: 12,
     borderRadius: 8,
-    marginBottom: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+  },
+  icon: {
+    marginRight: 10,
   },
   dateText: {
+    flex: 1,
     fontSize: 16,
   },
 });
