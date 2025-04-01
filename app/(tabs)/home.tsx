@@ -213,7 +213,7 @@ export default function HomeScreen() {
                     {
                       label: "Living Room Design",
                       imageUrl:
-                        "https://static.asianpaints.com/content/dam/asianpaintsbeautifulhomes/gallery/living-room/contemporary-living-room-with-brick-wall-and-modern-decor/modern-living-room-with-brick-wall.jpg.transform/bh-image-gallery/image.webp",
+                        "https://housedesign.vn/wp-content/uploads/2019/12/cac-phong-cach-decor-noi-that-tieu-bieu-nhat.jpeg",
                       description:
                         "Bring a fresh, modern look to your living room.",
                     },

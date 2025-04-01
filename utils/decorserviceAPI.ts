@@ -17,6 +17,7 @@ export interface IDecor {
   seasons: string[] | Array<{id: number; name: string; seasonName?: string;}>;
   provider?: IProvider;
   categoryName?: string;
+  sublocation?: string;
 }
 
 // Then use type guards in your component to handle both possibilities

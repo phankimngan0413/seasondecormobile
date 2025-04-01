@@ -37,6 +37,18 @@ const getSeasonName = (season: any): string => {
   return 'Unknown Season';
 };
 
+// Helper function to format currency in VND
+const formatCurrency = (price: number | undefined): string => {
+  if (price === undefined || price === null) return '0 ₫';
+  
+  return new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(price);
+};
+
 const DecorListScreen = () => {
   const [decorServices, setDecorServices] = useState<IDecor[]>([]);
   const [filteredServices, setFilteredServices] = useState<IDecor[]>([]);
@@ -101,9 +113,10 @@ const DecorListScreen = () => {
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       results = results.filter(decor => 
-        decor.style.toLowerCase().includes(query) || 
-        decor.description.toLowerCase().includes(query) ||
-        decor.province.toLowerCase().includes(query)
+        decor.style?.toLowerCase().includes(query) || 
+        decor.description?.toLowerCase().includes(query) ||
+        decor.sublocation?.toLowerCase().includes(query) ||
+        decor.province?.toLowerCase().includes(query)
       );
     }
     
@@ -111,6 +124,9 @@ const DecorListScreen = () => {
   };
 
   const renderDecorCard = ({ item }: { item: IDecor }) => {
+    // Extract province or sublocation
+    const location = item.province || item.sublocation || 'Unknown Location';
+    
     return (
       <TouchableOpacity 
         style={[styles.decorCard, { backgroundColor: colors.card }]}
@@ -132,9 +148,9 @@ const DecorListScreen = () => {
             resizeMode="cover"
           />
           
-          {/* Price Badge */}
+          {/* Price Badge - Fixed to use dummy price since we don't have real price in API */}
           <View style={styles.priceBadge}>
-            <Text style={styles.priceText}>${item.basePrice.toLocaleString()}</Text>
+            <Text style={styles.priceText}>{formatCurrency(2500000)}</Text>
           </View>
         </View>
         
@@ -144,7 +160,7 @@ const DecorListScreen = () => {
             style={[styles.cardTitle, { color: colors.text }]}
             numberOfLines={1}
           >
-            {item.style}
+            {item.style || 'Unnamed Style'}
           </Text>
           
           <View style={styles.locationRow}>
@@ -153,7 +169,7 @@ const DecorListScreen = () => {
               style={[styles.locationText, { color: colors.textSecondary || '#666' }]}
               numberOfLines={1}
             >
-              {item.province}
+              {location}
             </Text>
           </View>
           

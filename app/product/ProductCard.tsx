@@ -29,11 +29,13 @@ const ProductCard: React.FC<ProductProps> = ({ product, onAddToCart }) => {
   const [isAddingToCart, setIsAddingToCart] = useState(false);
 
   // Format price with comma for thousands
-  const formattedPrice = product.productPrice.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
-
+  const formattedPrice = new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(product.productPrice);
+  
   const handleAddToCart = async () => {
     try {
       setIsAddingToCart(true);
@@ -95,7 +97,7 @@ const ProductCard: React.FC<ProductProps> = ({ product, onAddToCart }) => {
       <View style={styles.infoContainer}>
         <Text 
           style={[styles.productTitle, { color: colors.text }]} 
-          numberOfLines={2}
+          
           ellipsizeMode="tail"
         >
           {product.productName}
@@ -103,7 +105,7 @@ const ProductCard: React.FC<ProductProps> = ({ product, onAddToCart }) => {
 
         <View style={styles.priceRow}>
           <Text style={[styles.productPrice, { color: colors.primary }]}>
-            ${formattedPrice}
+           {formattedPrice}
           </Text>
           <Text style={styles.soldText}>
             {product.totalSold} sold

@@ -26,7 +26,7 @@ import { getUserIdFromToken, getToken } from "@/services/auth";
 
 // Improved Message interface
 interface Message {
-  id: number | string;
+  id: number | string | null;  // Updated to explicitly allow null
   senderId: number;
   receiverId: number;
   message: string;
@@ -137,31 +137,46 @@ export default function ChatScreen() {
     fetchUserId();
   }, []);
 
-  // Handle message reception
   useEffect(() => {
     const messageReceivedHandler = (message: Message) => {
       console.log('Message received via SignalR:', message);
       
-      if (!message || message.id === undefined || message.id === null) {
+      if (!message) {
         console.warn('Invalid message received', message);
         return;
       }
-
+  
       // Add the message to chat history if it doesn't exist
-      setChatHistory(prev => {
-        // Check if message already exists to avoid duplicates
-        const isMessageExists = prev.some(msg => msg.id === message.id);
+      setChatHistory(prevHistory => {
+        // Check if message already exists by content and approximate time
+        const isMessageExists = prevHistory.some(msg => {
+          // If IDs match
+          if (message.id && msg.id === message.id) return true;
+          
+          // Or if content and time are close (within 5 seconds)
+          if (msg.message === message.message && 
+              Math.abs(new Date(msg.sentTime).getTime() - new Date(message.sentTime).getTime()) < 5000) {
+            return true;
+          }
+          
+          return false;
+        });
         
         if (isMessageExists) {
           console.log('Message already exists in chat history, skipping...');
-          return prev;
+          return prevHistory;
         }
         
         console.log('Adding new message to chat history');
-        return [...prev, message];
+        return [...prevHistory, message];
       });
+      
+      // Force scroll to end
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 50);
     };
-
+  
     // Register message handler
     signalRService.onMessageReceived(messageReceivedHandler);
     
@@ -169,32 +184,64 @@ export default function ChatScreen() {
     const messageSentHandler = (sentMessage: Message) => {
       console.log('Message sent confirmation received:', sentMessage);
       
-      if (!sentMessage || sentMessage.id === undefined || sentMessage.id === null) {
+      if (!sentMessage) {
         console.warn('Invalid sent message received', sentMessage);
         return;
       }
       
       // Update chat with confirmed message (replacing temp if needed)
-      setChatHistory(prev => {
-        // Remove any temporary version of this message
-        const filtered = prev.filter(msg => 
-          !(typeof msg.id === 'string' && msg.id.startsWith('temp_') && 
-            msg.message === sentMessage.message)
+      setChatHistory(prevHistory => {
+        // Find any temporary version of this message
+        const tempIndex = prevHistory.findIndex(msg => 
+          typeof msg.id === 'string' && 
+          msg.id.startsWith('temp_') && 
+          msg.message === sentMessage.message
         );
         
-        // Check if message already exists
-        const exists = filtered.some(msg => msg.id === sentMessage.id);
-        
-        if (exists) {
-          return filtered;
-        } else {
-          return [...filtered, sentMessage];
+        // If we found a temporary version and have a valid ID, replace it
+        if (tempIndex !== -1 && sentMessage.id) {
+          console.log('Replacing temporary message with confirmed one');
+          const newHistory = [...prevHistory];
+          newHistory[tempIndex] = sentMessage;
+          return newHistory;
         }
+        
+        // If we have a confirmed message with ID, check if it already exists
+        if (sentMessage.id) {
+          const msgExists = prevHistory.some(msg => msg.id === sentMessage.id);
+          if (msgExists) {
+            console.log('Message already exists in history');
+            return prevHistory;
+          }
+        }
+        
+        // For messages with null ID, first check if we have a temp version
+        if (sentMessage.id === null) {
+          const hasTempVersion = prevHistory.some(msg => 
+            typeof msg.id === 'string' && 
+            msg.id.startsWith('temp_') && 
+            msg.message === sentMessage.message
+          );
+          
+          if (hasTempVersion) {
+            console.log('Keeping temporary message for null ID confirmation');
+            return prevHistory;
+          }
+        }
+        
+        // If we got here, add the message
+        console.log('Adding confirmed message to history');
+        return [...prevHistory, sentMessage];
       });
+      
+      // Force scroll to end
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 50);
     };
     
     signalRService.onMessageSent(messageSentHandler);
-
+  
     // Clean up the handlers when component unmounts
     return () => {
       signalRService.offMessageReceived(messageReceivedHandler);
@@ -211,7 +258,7 @@ export default function ChatScreen() {
         console.error("Error in initializing chat:", error);
       }
     };
-
+  
     initializeChat();
   }, [receiverId]);
 
@@ -246,90 +293,204 @@ export default function ChatScreen() {
     }
   }, [receiverId]);
 
-  const handleSendMessage = async () => {
-    if (message.trim() === "" && !selectedImage) {
-      console.log('No message or image to send');
+  // Modify the handleSendMessage function to properly handle the first message
+ // Fix for first message display issue
+
+// 1. Update the handleSendMessage function to handle the first message better
+const handleSendMessage = async () => {
+  if (message.trim() === "" && !selectedImage) {
+    console.log('No message or image to send');
+    return;
+  }
+
+  setSendingMessage(true);
+
+  try {
+    // Ensure we have a user ID
+    let userId = currentUserId;
+    if (!userId) {
+      userId = await getUserIdFromToken();
+      setCurrentUserId(userId);
+      console.log('Retrieved user ID:', userId);
+    }
+    
+    // Ensure connection is active
+    if (!signalRService.isConnected()) {
+      setConnectionStatus('connecting');
+      const token = await getToken();
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+      await signalRService.startConnection(token);
+      setConnectionStatus('connected');
+    }
+
+    // Create temp message with a prefix to identify it
+    const tempMessageId = `temp_${Date.now()}`;
+    const tempMessage = {
+      id: tempMessageId,
+      senderId: userId || 0,
+      receiverId: receiverId,
+      message: message.trim(),
+      sentTime: new Date().toISOString(),
+      files: selectedImage ? [{ fileUrl: selectedImage.uri }] : []
+    };
+
+    console.log('Preparing to send message:', tempMessage);
+
+    let fileData = [];
+    if (selectedImage && selectedImage.uri) {
+      try {
+        const base64Content = await getBase64FromUri(selectedImage.uri);
+
+        fileData.push({
+          FileName: selectedImage.fileName || `image_${tempMessageId}.jpg`,
+          Base64Content: base64Content,
+          ContentType: selectedImage.type || 'image/jpeg',
+        });
+      } catch (imageError) {
+        console.error("Error processing image:", imageError);
+      }
+    }
+
+    // For first message with empty chat, update UI and error state
+    if (chatHistory.length === 0) {
+      setError(null); // Clear any "Start conversation" error message
+    }
+
+    // Add message to UI immediately
+    setChatHistory(prev => [...prev, tempMessage]);
+    console.log('Added temporary message to chat history');
+    
+    // Force immediate UI update
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 50);
+
+    // Send message via SignalR
+    const messageId = await signalRService.sendMessage(
+      receiverId,
+      message.trim(),
+      fileData,
+      (progress) => {
+        console.log(`Message send progress: ${progress}%`);
+      }
+    );
+    
+    console.log('Message sent successfully with ID:', messageId);
+
+    // For first message specifically, if ID is null, force render again
+    if (messageId === null && chatHistory.length === 0) {
+      console.log('Special handling for first message with null ID');
+      setTimeout(() => {
+        // Force a re-render by creating a new reference
+        setChatHistory(prev => [...prev]);
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+
+    // Reset UI
+    setMessage("");
+    setSelectedImage(null);
+  } catch (error) {
+    console.error("Error sending message:", error);
+    setConnectionStatus('disconnected');
+  } finally {
+    setSendingMessage(false);
+  }
+};
+
+// Also update the messageSentHandler in the useEffect to better handle null IDs
+useEffect(() => {
+  const messageReceivedHandler = (message: Message) => {
+    console.log('Message received via SignalR:', message);
+    
+    if (!message) {
+      console.warn('Invalid message received', message);
       return;
     }
 
-    setSendingMessage(true);
-
-    try {
-      // Ensure we have a user ID
-      let userId = currentUserId;
-      if (!userId) {
-        userId = await getUserIdFromToken();
-        setCurrentUserId(userId);
-        console.log('Retrieved user ID:', userId);
-      }
-      
-      // Ensure connection is active
-      if (!signalRService.isConnected()) {
-        setConnectionStatus('connecting');
-        const token = await getToken();
-        if (!token) {
-          throw new Error('No authentication token available');
-        }
-        await signalRService.startConnection(token);
-        setConnectionStatus('connected');
-      }
-
-      // Create temp message with a prefix to identify it
-      const tempMessageId = `temp_${Date.now()}`;
-      const tempMessage: Message = {
-        id: tempMessageId,
-        senderId: userId || 0,
-        receiverId: receiverId,
-        message: message.trim(),
-        sentTime: new Date().toISOString(),
-        files: selectedImage ? [{ fileUrl: selectedImage.uri }] : []
-      };
-
-      console.log('Preparing to send message:', tempMessage);
-
-      let fileData: any[] = [];
-      if (selectedImage && selectedImage.uri) {
-        try {
-          const base64Content = await getBase64FromUri(selectedImage.uri);
-
-          fileData.push({
-            FileName: selectedImage.fileName || `image_${tempMessageId}.jpg`,
-            Base64Content: base64Content,
-            ContentType: selectedImage.type || 'image/jpeg',
-          });
-        } catch (imageError) {
-          console.error("Error processing image:", imageError);
-        }
-      }
-
-      // Add message to UI immediately
-      setChatHistory(prev => [...prev, tempMessage]);
-      console.log('Added temporary message to chat history');
-
-      // Send message via SignalR
-      const messageId = await signalRService.sendMessage(
-        receiverId,
-        message.trim(),
-        fileData,
-        (progress: number) => {
-          console.log(`Message send progress: ${progress}%`);
-        }
+    // Add the message to chat history if it doesn't exist
+    setChatHistory(prev => {
+      // Check if message already exists to avoid duplicates
+      // For messages with null or undefined ID, check content and time
+      const isMessageExists = prev.some(msg => 
+        (msg.id !== undefined && msg.id === message.id) || 
+        (msg.message === message.message && 
+         Math.abs(new Date(msg.sentTime).getTime() - new Date(message.sentTime).getTime()) < 5000)
       );
       
-      console.log('Message sent successfully with ID:', messageId);
-
-      // Reset UI
-      setMessage("");
-      setSelectedImage(null);
-    } catch (error) {
-      console.error("Error sending message:", error);
-      // Show error to user
-      setConnectionStatus('disconnected');
-    } finally {
-      setSendingMessage(false);
-    }
+      if (isMessageExists) {
+        console.log('Message already exists in chat history, skipping...');
+        return prev;
+      }
+      
+      console.log('Adding new message to chat history');
+      return [...prev, message];
+    });
   };
 
+  // Register message handler
+  signalRService.onMessageReceived(messageReceivedHandler);
+  
+  // Register message sent handler to update UI
+  const messageSentHandler = (sentMessage: Message) => {
+    console.log('Message sent confirmation received:', sentMessage);
+    
+    if (!sentMessage) {
+      console.warn('Invalid sent message received', sentMessage);
+      return;
+    }
+    
+    // Update chat with confirmed message (replacing temp if needed)
+    setChatHistory(prev => {
+      // Check if this message content already exists as a temporary message
+      const hasTempVersion = prev.some(msg => 
+        typeof msg.id === 'string' && 
+        msg.id.startsWith('temp_') && 
+        msg.message === sentMessage.message
+      );
+      
+      if (hasTempVersion) {
+        // Replace temp message with confirmed one if ID exists
+        if (sentMessage.id !== undefined && sentMessage.id !== null) {
+          const filtered = prev.filter(msg => 
+            !(typeof msg.id === 'string' && 
+              msg.id.startsWith('temp_') && 
+              msg.message === sentMessage.message)
+          );
+          return [...filtered, sentMessage];
+        }
+        // If server returned null ID, keep the temp message as is
+        return prev;
+      }
+      
+      // Check if message with this ID already exists
+      const hasExactId = sentMessage.id !== undefined && 
+                         sentMessage.id !== null && 
+                         prev.some(msg => msg.id === sentMessage.id);
+      
+      if (hasExactId) {
+        return prev;
+      } else {
+        return [...prev, sentMessage];
+      }
+    });
+    
+    // Force a scroll update after receiving confirmation
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  };
+  
+  signalRService.onMessageSent(messageSentHandler);
+
+  // Clean up the handlers when component unmounts
+  return () => {
+    signalRService.offMessageReceived(messageReceivedHandler);
+    signalRService.offMessageSent(messageSentHandler);
+  };
+}, []);
   const getBase64FromUri = async (uri: string) => {
     try {
       const response = await fetch(uri);
@@ -393,14 +554,14 @@ export default function ChatScreen() {
       return `item-${index}-${Math.random().toString(36)}`;
     }
   }, []);
-
   const renderMessageItem = useCallback(({ item, index }: { item: Message, index: number }) => {
     if (!item) {
       console.warn('Null item at index', index);
       return null;
     }
     
-    if (item.id === undefined || item.id === null || !item.senderId || !item.receiverId) {
+    // Less strict check for item validity
+    if (!item.senderId || !item.receiverId) {
       console.warn('Invalid message item at index', index, item);
       return null;
     }
@@ -414,16 +575,23 @@ export default function ChatScreen() {
       minute: '2-digit'
     });
   
+    // Determine appropriate text color based on message type and theme
+    const messageTextColor = isFromMe 
+      ? "#FFFFFF" // White text for my messages (on primary color background)
+      : validTheme === "dark" 
+        ? "#F0F0F0" // Light text for other's messages in dark mode
+        : "#000000"; // Dark text for other's messages in light mode
+  
     return (
       <View style={[styles.messageContainer, isFromMe ? styles.messageReceiver : styles.messageSender]}>
         <View 
           style={[styles.messageContent, {
-            backgroundColor: isFromMe ? colors.primary || '#5b92e5' : '#f0f0f0',
+            backgroundColor: isFromMe ? colors.primary || '#5b92e5' : validTheme === "dark" ? '#2A2A2A' : '#f0f0f0',
             borderBottomRightRadius: isFromMe ? 4 : 16,
             borderBottomLeftRadius: isFromMe ? 16 : 4
           }]}>
           {item.message && (
-            <Text style={[styles.messageText, { color: isFromMe ? "#FFFFFF" : colors.text || "#000000" }]}>
+            <Text style={[styles.messageText, { color: messageTextColor }]}>
               {item.message}
             </Text>
           )}
@@ -436,13 +604,11 @@ export default function ChatScreen() {
         </Text>
       </View>
     );
-  }, [currentUserId, colors]);
+  }, [currentUserId, colors, validTheme]);
 
-  // Filter out any invalid messages before rendering
   const validChatHistory = chatHistory.filter(msg => 
-    msg && msg.id !== undefined && msg.id !== null && msg.senderId && msg.receiverId
+    msg && msg.senderId && msg.receiverId && msg.message
   );
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.minimalHeader, { backgroundColor: colors.background }]}>
@@ -473,54 +639,55 @@ export default function ChatScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 110 : undefined}
       >
         <View style={styles.contentContainer}>
-          {loading ? (
-            <View style={styles.centerContent}>
-              <ActivityIndicator size="large" color={colors.primary || '#5b92e5'} />
-              <Text style={[styles.loadingText, { color: colors.text }]}>
-                Loading messages...
-              </Text>
-            </View>
-          ) : error ? (
-            <View style={styles.centerContent}>
-              <Ionicons 
-                name="chatbubble-ellipses-outline" 
-                size={60} 
-                color={colors.textSecondary || '#999'} 
-              />
-              <Text style={[styles.errorText, { color: colors.text }]}>
-                {error}
-              </Text>
-              <Text style={[styles.subMessageText, { color: colors.textSecondary || '#666' }]}>
-                Unable to load messages
-              </Text>
-            </View>
-          ) : validChatHistory.length === 0 ? (
-            <View style={styles.centerContent}>
-              <Ionicons 
-                name="chatbubble-ellipses-outline" 
-                size={60} 
-                color={colors.textSecondary || '#999'} 
-              />
-              <Text style={[styles.errorText, { color: colors.text }]}>
-                Start a conversation with {receiverName}
-              </Text>
-            </View>
-          ) : (
-            <FlatList
-              ref={flatListRef}
-              data={validChatHistory}
-              renderItem={renderMessageItem}
-              keyExtractor={keyExtractor}
-              extraData={validChatHistory.length + (currentUserId || 0)}
-              contentContainerStyle={[styles.chatListContent, { paddingBottom: 80 + (selectedImage ? 120 : 0) }]}
-              showsVerticalScrollIndicator={false}
-              onContentSizeChange={() => {
-                if (validChatHistory.length > 0) {
-                  flatListRef.current?.scrollToEnd({ animated: false });
-                }
-              }}
-            />
-          )}
+        {loading ? (
+  <View style={styles.centerContent}>
+    <ActivityIndicator size="large" color={colors.primary || '#5b92e5'} />
+    <Text style={[styles.loadingText, { color: colors.text }]}>
+      Loading messages...
+    </Text>
+  </View>
+) : error && validChatHistory.length === 0 ? ( // Only show error if no valid messages
+  <View style={styles.centerContent}>
+    <Ionicons 
+      name="chatbubble-ellipses-outline" 
+      size={60} 
+      color={colors.textSecondary || '#999'} 
+    />
+    <Text style={[styles.errorText, { color: colors.text }]}>
+      {error}
+    </Text>
+    <Text style={[styles.subMessageText, { color: colors.textSecondary || '#666' }]}>
+      Start a new conversation
+    </Text>
+  </View>
+) : validChatHistory.length === 0 ? (
+  <View style={styles.centerContent}>
+    <Ionicons 
+      name="chatbubble-ellipses-outline" 
+      size={60} 
+      color={colors.textSecondary || '#999'} 
+    />
+    <Text style={[styles.errorText, { color: colors.text }]}>
+      Start a conversation with {receiverName}
+    </Text>
+  </View>
+) : (
+  <FlatList
+    ref={flatListRef}
+    data={validChatHistory}
+    renderItem={renderMessageItem}
+    keyExtractor={keyExtractor}
+    extraData={validChatHistory.length + (currentUserId || 0)} // Added length to force re-render
+    contentContainerStyle={[styles.chatListContent, { paddingBottom: 80 + (selectedImage ? 120 : 0) }]}
+    showsVerticalScrollIndicator={false}
+    onContentSizeChange={() => {
+      if (validChatHistory.length > 0) {
+        flatListRef.current?.scrollToEnd({ animated: false });
+      }
+    }}
+  />
+)}
+       
 
           {/* Input Area */}
           <View style={[styles.inputContainer, { backgroundColor: colors.card || '#fff', borderTopColor: colors.border || '#eee' }]}>

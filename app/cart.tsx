@@ -168,7 +168,7 @@ const CartScreen = () => {
     
     // Navigate to checkout screen
     Alert.alert("Proceeding to Checkout", "This will navigate to the checkout screen");
-    // router.push("/checkout");
+    router.push("/checkout");
   };
   
   const navigateToProductDetails = (productId: number) => {
