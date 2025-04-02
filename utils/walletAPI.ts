@@ -8,7 +8,10 @@ export interface IWalletBalance {
   lastUpdated: string;
   message?: string;
 }
-
+interface WalletData {
+  walletId: number;
+  balance: number;
+}
 export interface ITransaction {
   transactionId: string;
   amount: number;

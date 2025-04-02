@@ -8,6 +8,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  Alert,
   SafeAreaView
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -84,7 +85,8 @@ const DecorDetailScreen = () => {
     }
   };
 
-  const handlePrev = () => {
+  const handlePrev = (e: any) => {
+    e.stopPropagation(); // Prevent triggering parent's onPress
     if (!decorDetail?.images?.length) return;
     
     if (currentIndex > 0) {
@@ -94,7 +96,8 @@ const DecorDetailScreen = () => {
     }
   };
 
-  const handleNext = () => {
+  const handleNext = (e: any) => {
+    e.stopPropagation(); // Prevent triggering parent's onPress
     if (!decorDetail?.images?.length) return;
     
     if (currentIndex < decorDetail.images.length - 1) {
@@ -105,8 +108,23 @@ const DecorDetailScreen = () => {
   };
 
   const handleBooking = () => {
-    if (decorDetail?.id) {
-      router.push(`/booking/${decorDetail.id}`);
+    if (decorDetail) {
+      try {
+        console.log("Booking decor service:", decorDetail.id);
+        
+        // Sử dụng chuỗi đường dẫn đơn giản thay vì object params
+        const serviceId = String(decorDetail.id);
+        const style = encodeURIComponent(decorDetail.style || "");
+        const price = encodeURIComponent(String(decorDetail.basePrice || 0));
+        
+        // Navigate with query parameters
+        router.push(`/booking/${serviceId}?style=${style}&price=${price}`);
+      } catch (err) {
+        console.error("Navigation error:", err);
+        Alert.alert("Error", "Unable to navigate to booking page. Please try again.");
+      }
+    } else {
+      Alert.alert("Error", "Service details are not available.");
     }
   };
 
@@ -162,11 +180,18 @@ const DecorDetailScreen = () => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView style={{ backgroundColor: colors.background }}>
-        {/* Image Gallery */}
-        <View style={styles.imageContainer}>
+        {/* Image Gallery - Touchable */}
+        <TouchableOpacity 
+          activeOpacity={0.9} 
+          onPress={handleBooking}
+          style={styles.imageContainer}
+        >
           {decorDetail.images && decorDetail.images.length > 0 ? (
             <>
-              <TouchableOpacity onPress={handlePrev} style={[styles.arrowButton, styles.leftArrow]}>
+              <TouchableOpacity 
+                onPress={handlePrev} 
+                style={[styles.arrowButton, styles.leftArrow]}
+              >
                 <Ionicons name="chevron-back" size={30} color="#FFFFFF" />
               </TouchableOpacity>
 
@@ -177,7 +202,10 @@ const DecorDetailScreen = () => {
                 onError={() => console.warn(`Failed to load image: ${decorDetail.images[currentIndex]}`)}
               />
 
-              <TouchableOpacity onPress={handleNext} style={[styles.arrowButton, styles.rightArrow]}>
+              <TouchableOpacity 
+                onPress={handleNext} 
+                style={[styles.arrowButton, styles.rightArrow]}
+              >
                 <Ionicons name="chevron-forward" size={30} color="#FFFFFF" />
               </TouchableOpacity>
 
@@ -193,6 +221,11 @@ const DecorDetailScreen = () => {
                   />
                 ))}
               </View>
+              
+              {/* Booking hint overlay */}
+              <View style={styles.bookingHintOverlay}>
+                <Text style={styles.bookingHintText}>Tap to book</Text>
+              </View>
             </>
           ) : (
             <View style={[styles.noImageContainer, { backgroundColor: colors.border }]}>
@@ -200,14 +233,22 @@ const DecorDetailScreen = () => {
               <Text style={[styles.noImageText, { color: colors.text }]}>No images available</Text>
             </View>
           )}
-        </View>
+        </TouchableOpacity>
 
-        {/* Basic Info Card */}
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        {/* Basic Info Card - Touchable */}
+        <TouchableOpacity 
+          activeOpacity={0.8}
+          onPress={handleBooking}
+          style={[styles.card, styles.cardTouchable, { backgroundColor: colors.card, borderColor: colors.border }]}
+        >
           <Text style={[styles.title, { color: colors.text }]}>{decorDetail.style}</Text>
-          <Text style={[styles.price, { color: colors.primary }]}>
-            ${decorDetail.basePrice?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </Text>
+          
+          <View style={styles.priceRow}>
+            <Ionicons name="pricetag-outline" size={18} color={colors.primary} />
+            <Text style={[styles.priceText, { color: colors.primary }]}>
+              {decorDetail.basePrice?.toLocaleString()} ₫
+            </Text>
+          </View>
           
           <View style={styles.locationRow}>
             <Ionicons name="location-outline" size={18} color={colors.primary} />
@@ -217,12 +258,20 @@ const DecorDetailScreen = () => {
           </View>
           
           <View style={styles.categoryRow}>
-            <Ionicons name="pricetag-outline" size={18} color={colors.primary} />
+            <Ionicons name="layers-outline" size={18} color={colors.primary} />
             <Text style={[styles.categoryText, { color: colors.text }]}>
               {decorDetail.categoryName || "Category not specified"}
             </Text>
           </View>
-        </View>
+          
+          {/* Booking call-to-action in the info card */}
+          <View style={styles.bookNowRow}>
+            <Ionicons name="calendar-outline" size={18} color={colors.primary} />
+            <Text style={[styles.bookNowText, { color: colors.primary }]}>
+              Tap to book this service
+            </Text>
+          </View>
+        </TouchableOpacity>
 
         {/* Description Card */}
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -258,7 +307,10 @@ const DecorDetailScreen = () => {
           {decorDetail.seasons && decorDetail.seasons.length > 0 ? (
             <View style={styles.seasonsContainer}>
               {decorDetail.seasons.map((season, index) => (
-                <View key={index} style={[styles.seasonTag, { backgroundColor: `${colors.primary}20` }]}>
+                <View
+                  key={index} 
+                  style={[styles.seasonTag, { backgroundColor: `${colors.primary}20` }]}
+                >
                   <Text style={[styles.seasonText, { color: colors.primary }]}>
                     {getSeasonName(season)}
                   </Text>
@@ -342,18 +394,18 @@ const DecorDetailScreen = () => {
             </View>
             
             <CustomButton
-  title="View Provider Profile"
-  onPress={() => decorDetail.provider?.slug 
-    ? router.push(`/provider/${decorDetail.provider.slug}`)
-    : console.log("Provider slug not available")
-  }
-  btnStyle={[styles.secondaryButton, { borderColor: colors.primary }]}
-  labelStyle={{ color: colors.primary }}
-/>
+              title="View Provider Profile"
+              onPress={() => decorDetail.provider?.slug 
+                ? router.push(`/provider/${decorDetail.provider.slug}`)
+                : console.log("Provider slug not available")
+              }
+              btnStyle={[styles.secondaryButton, { borderColor: colors.primary }]}
+              labelStyle={{ color: colors.primary }}
+            />
           </View>
         )}
 
-        {/* Booking Button */}
+        {/* Main Booking Button */}
         <View style={styles.bookingContainer}>
           <CustomButton
             title="Book This Service"
@@ -442,6 +494,20 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     marginHorizontal: 4,
   },
+  bookingHintOverlay: {
+    position: 'absolute',
+    bottom: 45,
+    right: 16,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  bookingHintText: {
+    color: '#FFFFFF',
+    fontWeight: '500',
+    fontSize: 14,
+  },
 
   // Cards
   card: {
@@ -456,15 +522,23 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  cardTouchable: {
+    position: 'relative',
+  },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 8,
   },
-  price: {
-    fontSize: 22,
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  priceText: {
+    fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 16,
+    marginLeft: 8,
   },
   locationRow: {
     flexDirection: 'row',
@@ -478,10 +552,21 @@ const styles = StyleSheet.create({
   categoryRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 8,
   },
   categoryText: {
     fontSize: 15,
     marginLeft: 8,
+  },
+  bookNowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  bookNowText: {
+    fontSize: 15,
+    marginLeft: 8,
+    fontWeight: '600',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -599,15 +684,13 @@ const styles = StyleSheet.create({
     height: '80%',
     alignSelf: 'center',
   },
-// In your CustomButton component or directly in the styles:
-secondaryButton: {
-  borderWidth: 1,
-  backgroundColor: 'transparent',
-  marginTop: 8,
-  borderRadius: 12,  // Make sure the radius matches your design
-  elevation: 0,      // Remove Android elevation
-  shadowColor: 'transparent', // Remove iOS shadow entirely
-},
+  secondaryButton: {
+    borderWidth: 1,
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    elevation: 0,
+    shadowColor: 'transparent',
+  },
 
   // Booking
   bookingContainer: {
@@ -617,7 +700,7 @@ secondaryButton: {
   bookingButton: {
     paddingVertical: 16,
     borderRadius: 12,
-  },
+  }
 });
 
 export default DecorDetailScreen;

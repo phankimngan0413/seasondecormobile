@@ -87,7 +87,6 @@ const CartScreen = () => {
         setCartItems([]);
       }
     } catch (err: any) {
-     
       setError(err.message || "Failed to load your cart items");
     } finally {
       setLoading(false);
@@ -160,19 +159,23 @@ const CartScreen = () => {
       setRemovingItemId(null);
     }
   };
+  
   const navigateToCheckout = () => {
     if (cartItems.length === 0) {
       Alert.alert("Empty Cart", "Add items to your cart before checking out");
       return;
     }
     
-    // Navigate to checkout screen
-    Alert.alert("Proceeding to Checkout", "This will navigate to the checkout screen");
-    router.push("/checkout");
+    // Navigate directly to checkout screen without showing the alert
+    router.push("/screens/checkout");
   };
   
   const navigateToProductDetails = (productId: number) => {
     router.push(`/product/product-detail/${productId}`);
+  };
+
+  const handleGoBack = () => {
+    router.back();
   };
 
   const renderCartItem = ({ item, index }: { item: CartItem; index: number }) => {
@@ -296,27 +299,35 @@ const CartScreen = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={theme === "dark" ? "light-content" : "dark-content"} />
       
-      {/* Header */}
-      <View style={styles.header}>
-      
-        
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Shopping Cart</Text>
-        
-        <TouchableOpacity 
-          style={styles.refreshButton}
-          onPress={handleRefresh}
-          disabled={loading || refreshing}
-        >
-          <Ionicons 
-            name="refresh" 
-            size={24} 
-            color={loading || refreshing ? colors.border : colors.text} 
-          />
-        </TouchableOpacity>
-      </View>
+      {/* Safe area padding for status bar */}
+      <SafeAreaView style={{ backgroundColor: colors.background }}>
+        {/* Custom Header */}
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={handleGoBack}
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
+          
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Shopping Cart</Text>
+          
+          <TouchableOpacity 
+            style={styles.refreshButton}
+            onPress={handleRefresh}
+            disabled={loading || refreshing}
+          >
+            <Ionicons 
+              name="refresh" 
+              size={24} 
+              color={loading || refreshing ? colors.border : colors.text} 
+            />
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
       
       {/* Main Content */}
       {loading && !refreshing ? (
@@ -376,23 +387,13 @@ const CartScreen = () => {
                 </Text>
               </View>
               
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Shipping</Text>
-                <Text style={[styles.summaryValue, { color: colors.text }]}>
-                  {new Intl.NumberFormat('vi-VN', { 
-                    style: 'currency', 
-                    currency: 'VND' 
-                  }).format(30000)}
-                </Text>
-              </View>
-              
               <View style={[styles.totalRow, { borderTopColor: colors.border }]}>
                 <Text style={[styles.totalLabel, { color: colors.text }]}>Total</Text>
                 <Text style={[styles.totalValue, { color: colors.primary }]}>
                   {new Intl.NumberFormat('vi-VN', { 
                     style: 'currency', 
                     currency: 'VND' 
-                  }).format(totalPrice + 30000)}
+                  }).format(totalPrice)}
                 </Text>
               </View>
               
@@ -406,22 +407,22 @@ const CartScreen = () => {
           )}
         </>
       )}
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    paddingTop: StatusBar.currentHeight || 0, // Add padding for status bar height
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
   },
   backButton: {
     padding: 8,
@@ -429,6 +430,8 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '600',
+    flex: 1,
+    textAlign: 'center',
   },
   refreshButton: {
     padding: 8,
@@ -448,6 +451,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+ 
   productImageContainer: {
     width: 90,
     height: 90,

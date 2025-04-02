@@ -149,9 +149,9 @@ const DecorListScreen = () => {
           />
           
           {/* Price Badge - Fixed to use dummy price since we don't have real price in API */}
-          <View style={styles.priceBadge}>
+          {/* <View style={styles.priceBadge}>
             <Text style={styles.priceText}>{formatCurrency(2500000)}</Text>
-          </View>
+          </View> */}
         </View>
         
         {/* Card Content */}

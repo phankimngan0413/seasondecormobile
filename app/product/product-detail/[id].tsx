@@ -195,9 +195,10 @@ const ProductDetailScreen = () => {
       <View style={[styles.productHeader, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.title, { color: colors.text }]}>{product.productName}</Text>
         <View style={styles.priceRatingContainer}>
-          <Text style={[styles.price, { color: colors.primary }]}>
-            <Ionicons name="pricetag" size={20} color={colors.primary} /> ${product.productPrice.toFixed(2)}
-          </Text>
+        <Text style={[styles.price, { color: colors.primary }]}>
+  <Ionicons name="pricetag" size={20} color={colors.primary} /> 
+  {product.productPrice.toLocaleString()} ₫
+</Text>
           <Text style={[styles.rating, { color: colors.icon }]}>
             <Ionicons name="star" size={18} color="#FFD700" /> {product.rate} ({product.totalRate})
           </Text>

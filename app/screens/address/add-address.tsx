@@ -19,8 +19,8 @@ import axios from "axios";
 import InputField from "@/components/InputField";
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
-import { createAddressAPI } from "@/utils/AddressAPI";
-import { IAddress } from "@/utils/AddressAPI";
+import { createAddressAPI } from "@/utils/addressAPI";
+import { IAddress } from "@/utils/addressAPI";
 import { Ionicons } from "@expo/vector-icons";
 
 // Location interface
@@ -119,6 +119,10 @@ const AddAddressScreen = () => {
       setDistricts(selectedProvince.districts);
     }
   };
+  
+  const handleGoBack = () => {
+    router.back();
+  };
 
   // Handle district selection
   const handleDistrictChange = (districtCode: string, districtName: string) => {
@@ -182,6 +186,7 @@ const AddAddressScreen = () => {
     setErrors(newErrors);
     return isValid;
   };
+  
   const handleSubmit = async () => {
     if (isSubmitting) {
       return;
@@ -220,18 +225,20 @@ const AddAddressScreen = () => {
       
       // First check if response is a direct address object
       if (isAddressResponse(response)) {
+        // Trở về trang trước đó sau khi thêm địa chỉ thành công
         Alert.alert(
           "Success", 
           "Address added successfully!",
-          [{ text: "OK", onPress: () => router.push("/screens/Addresses") }]
+          [{ text: "OK", onPress: () => router.back() }]
         );
       } 
       // Otherwise check if it's a standard API response with success flag
       else if (response && 'success' in response && response.success === true) {
+        // Trở về trang trước đó sau khi thêm địa chỉ thành công
         Alert.alert(
           "Success", 
           "Address added successfully!",
-          [{ text: "OK", onPress: () => router.push("/screens/Addresses") }]
+          [{ text: "OK", onPress: () => router.back() }]
         );
       } 
       // Handle error case
@@ -246,6 +253,7 @@ const AddAddressScreen = () => {
       setIsSubmitting(false);
     }
   };
+  
   const renderProvinceModal = () => (
     <Modal
       visible={showProvinceModal}
@@ -354,9 +362,14 @@ const AddAddressScreen = () => {
       <StatusBar barStyle={validTheme === "dark" ? "light-content" : "dark-content"} />
       
       <View style={styles.header}>
-       
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={handleGoBack}
+        >
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        </TouchableOpacity>
         <Text style={[styles.title, { color: colors.text }]}>Add New Address</Text>
-        <View style={styles.backButton} />
+        <View style={styles.emptyContainer} />
       </View>
       
       <ScrollView 
@@ -538,7 +551,7 @@ const AddAddressScreen = () => {
         
         <View style={styles.buttonContainer}>
           <TouchableOpacity 
-            onPress={() => router.back()} 
+            onPress={handleGoBack} 
             style={[styles.cancelButton, { borderColor: colors.border }]}
           >
             <Text style={[styles.cancelButtonText, { color: colors.text }]}>Cancel</Text>
@@ -591,9 +604,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  emptyContainer: {
+    width: 40, // Để cân bằng layout header
+  },
   title: {
     fontSize: 20,
     fontWeight: "700",
+    textAlign: 'center',
+    flex: 1,
   },
   scrollContainer: { 
     paddingHorizontal: 16,

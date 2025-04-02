@@ -69,28 +69,37 @@ export const getOrderByIdAPI = async (orderId: number) => {
   }
 };
 
-// Create Order
-export const createOrderAPI = async (orderId: number, orderDetails: any) => {
-  const apiClient = await initApiClient();
-  const token = await getToken();
-
-  if (!token) {
-    throw new Error("Unauthorized: Please log in.");
-  }
-
-  try {
-    const response = await apiClient.post(`/api/Order/createorder/${orderId}`, orderDetails, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-
-    console.log("🟢 Order Created:", response.data);
-    return response.data;
-  } catch (error: any) {
-    console.error("🔴 Create Order API Error:", error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || "Failed to create order.");
-  }
-};
-
+/// Create Order 
+export const createOrderAPI = async (
+    orderId: number, 
+    addressId: number, 
+    orderDetails: any
+  ) => {
+    const apiClient = await initApiClient();
+    const token = await getToken();
+  
+    if (!token) {
+      throw new Error("Unauthorized: Please log in.");
+    }
+  
+    try {
+      const response = await apiClient.post(`/api/Order/createorder/${orderId}`, 
+        {
+          ...orderDetails,
+          addressId  // Thêm addressId vào payload
+        }, 
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+  
+      console.log("🟢 Order Created:", response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error("🔴 Create Order API Error:", error.response?.data || error.message);
+      throw new Error(error.response?.data?.message || "Failed to create order.");
+    }
+  };
 // Update Order Status
 export const updateOrderStatusAPI = async (orderId: number, status: string) => {
   const apiClient = await initApiClient();

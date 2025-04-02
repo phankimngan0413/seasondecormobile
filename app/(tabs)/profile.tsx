@@ -9,7 +9,6 @@ import {
   Platform,
   Image,
   TouchableOpacity,
-  Dimensions,
   StatusBar,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -22,8 +21,8 @@ import { getToken, removeToken } from "@/services/auth";
 import ProfileMenu from "@/components/ProfileMenu";
 import { getAccountDetails } from "@/utils/accountAPI";
 import { Ionicons } from "@expo/vector-icons";
-
-const { width } = Dimensions.get("window");
+// Import the wallet component
+import WalletBalance from "@/components/WalletBalance";
 
 interface DecodedToken {
   email: string;
@@ -149,7 +148,7 @@ export default function ProfileScreen() {
           </LinearGradient>
 
           {/* Account Stats */}
-          <View style={[styles.statsContainer, { backgroundColor: colors.card }]}>
+          {/* <View style={[styles.statsContainer, { backgroundColor: colors.card }]}>
             <View style={styles.statItem}>
               <Text style={[styles.statNumber, { color: colors.text }]}>12</Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Orders</Text>
@@ -164,9 +163,12 @@ export default function ProfileScreen() {
               <Text style={[styles.statNumber, { color: colors.text }]}>5</Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Wishlists</Text>
             </View>
-          </View>
+          </View> */}
 
-          {/* Menu Section */}
+          {/* Wallet Balance */}
+          <WalletBalance />
+
+          {/* Account Settings Section */}
           <View style={[styles.menuContainer, { backgroundColor: colors.card }]}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Account Settings</Text>
             <ProfileMenu />
@@ -218,6 +220,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
+  },
+  walletWrapper: {
+    marginTop: -8, // Bring it slightly closer to the stats container
+    marginBottom: 8,
   },
   errorText: {
     marginTop: 12,

@@ -27,7 +27,7 @@ function ThemedStack() {
   const pathname = usePathname();
 
   // Check if current page is login or signup to hide header
-  const hideHeader = ["/login", "/signup","/chat/[userId]"].includes(pathname);
+  const hideHeader = ["/login", "/signup", "/chat/[userId]", "/cart","/screens/checkout","/screens/address/address-list","/screens/address/add-address"].includes(pathname);
 
   // Load fonts
   const [loaded] = useFonts({
@@ -50,8 +50,8 @@ function ThemedStack() {
       <Stack
         screenOptions={{
           headerShown: !hideHeader,
-          headerStyle: { 
-            backgroundColor: theme === "dark" ? "#151718" : "#ffffff" 
+          headerStyle: {
+            backgroundColor: theme === "dark" ? "#151718" : "#ffffff"
           },
           headerTintColor: theme === "dark" ? "#ffffff" : "#000000",
           headerTitle: "Seasonal Home Decor", // Simple text title instead of search bar
@@ -71,10 +71,10 @@ function ThemedStack() {
                 </TouchableOpacity>
                 
                 <TouchableOpacity onPress={() => router.push("/cart")}>
-                  <Ionicons 
-                    name="cart-outline" 
-                    size={26} 
-                    color={theme === "dark" ? "white" : "black"} 
+                  <Ionicons
+                    name="cart-outline"
+                    size={26}
+                    color={theme === "dark" ? "white" : "black"}
                   />
                 </TouchableOpacity>
               </View>
@@ -82,10 +82,8 @@ function ThemedStack() {
         }}
       >
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="cart" options={{ title: "Giỏ hàng" }} />
-        <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="signup" options={{ headerShown: false }} />
-        
+        <Stack.Screen name="cart" options={{ headerShown: false }} />
+
         <Stack.Screen name="product/product-detail/[id]" options={{ title: "Chi tiết sản phẩm" }} />
         <Stack.Screen name="provider/[slug]" options={{ title: "Thông tin nhà cung cấp" }} />
         <Stack.Screen name="decor/[id]" options={{ title: "Chi tiết dịch vụ" }} />

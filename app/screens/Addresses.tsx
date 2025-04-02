@@ -12,11 +12,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { 
   getAddressesAPI, 
   setDefaultAddressAPI, 
-  updateAddressAPI, 
   deleteAddressAPI,
-  createAddressAPI,
   IAddress 
-} from "@/utils/AddressAPI";
+} from "@/utils/addressAPI";
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
 import { useRouter } from "expo-router";
@@ -72,6 +70,7 @@ const AddressListScreen: React.FC = () => {
       }
     });
   };
+
   // Delete address
   const handleDeleteAddress = async (addressId: string) => {
     Alert.alert(
@@ -151,125 +150,123 @@ const AddressListScreen: React.FC = () => {
   }, [fetchAddresses]);
 
   // Render individual address item
-  const renderAddressItem = ({ item }: { item: IAddress }) => (
-    <View 
-      style={[
-        styles.container, 
-        { 
-          backgroundColor: colors.cardBackground,
-          borderColor: item.isDefault ? colors.primary : 'transparent',
-          borderWidth: item.isDefault ? 2 : 0
-        }
-      ]}
-    >
-      <View style={styles.headerContainer}>
-        <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
-          {item.fullName}
-        </Text>
-        {item.isDefault && (
-          <View style={[styles.defaultBadge, { backgroundColor: colors.primary }]}>
-            <Text style={styles.defaultBadgeText}>Default</Text>
+  const renderAddressItem = ({ item }: { item: IAddress }) => {
+    return (
+      <View 
+        style={[ 
+          styles.container, 
+          { 
+            backgroundColor: colors.card || '#ffffff',
+            borderColor: item.isDefault ? colors.primary : colors.border,
+            borderWidth: item.isDefault ? 2 : 1,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+            elevation: 3, // Adding shadow for Android
+          }
+        ]}>
+        <View style={styles.addressHeader}>
+          <View style={styles.addressTitleContainer}>
+            <Ionicons 
+              name={item.addressType === 0 ? "home-outline" : "business-outline"} 
+              size={22} 
+              color={colors.primary} 
+            />
+            <Text style={[styles.addressTitle, { color: colors.text }]} numberOfLines={1}>
+              {item.fullName}
+            </Text>
           </View>
-        )}
+    
+          <View style={styles.badgeContainer}>
+            {item.isDefault && (
+              <View style={[styles.badge, { backgroundColor: colors.primary }]}>
+                <Ionicons name="star" size={14} color="white" />
+                <Text style={styles.badgeText}>Default</Text>
+              </View>
+            )}
+          </View>
+        </View>
+    
+        <View style={styles.separator} />
+    
+        <View style={styles.addressDetailsContainer}>
+          <View style={styles.addressDetail}>
+            <Ionicons name="person-outline" size={18} color={colors.textSecondary} />
+            <Text style={[styles.addressDetailText, { color: colors.text }]}>
+              {item.fullName}
+            </Text>
+          </View>
+    
+          <View style={styles.addressDetail}>
+            <Ionicons name="call-outline" size={18} color={colors.textSecondary} />
+            <Text style={[styles.addressDetailText, { color: colors.text }]}>
+              {item.phone}
+            </Text>
+          </View>
+    
+          <View style={styles.addressDetail}>
+            <Ionicons name="location-outline" size={18} color={colors.textSecondary} />
+            <Text 
+              style={[styles.addressDetailText, { color: colors.text }]} 
+              numberOfLines={2}
+            >
+              {item.street}, {item.ward}, {item.district}, {item.province}
+            </Text>
+          </View>
+    
+          <View style={styles.addressTypeContainer}>
+            <View style={[styles.addressTypeTag, {
+              backgroundColor: item.addressType === 0 ? 'rgba(33, 150, 243, 0.1)' : 'rgba(156, 39, 176, 0.1)'
+            }]}>
+              <Text style={[styles.addressTypeText, {
+                color: item.addressType === 0 ? '#2196f3' : '#9c27b0'
+              }]}>{item.addressType === 0 ? 'Home' : 'Office'}</Text>
+            </View>
+          </View>
+        </View>
+    
+        <View style={styles.actionsContainer}>
+          <TouchableOpacity 
+            style={[styles.defaultButton, { backgroundColor: item.isDefault ? 'rgba(76, 175, 80, 0.1)' : colors.primary }] }
+            onPress={() => {
+              if (!item.isDefault) {
+                handleSetDefaultAddress(item.id);
+              }
+            }}
+            disabled={item.isDefault}
+          >
+            <Ionicons 
+              name="star" 
+              size={18} 
+              color={item.isDefault ? '#4caf50' : 'white'} 
+            />
+            <Text style={[styles.buttonText, { color: item.isDefault ? '#4caf50' : 'white' }]}>
+              {item.isDefault ? 'Default' : 'Set Default'}
+            </Text>
+          </TouchableOpacity>
+    
+          <View style={styles.editDeleteContainer}>
+            <TouchableOpacity 
+              style={[styles.iconButton, { borderColor: colors.border }]}
+              onPress={() => handleUpdateAddress(item)}
+            >
+              <Ionicons name="create-outline" size={20} color={colors.primary} />
+            </TouchableOpacity>
+    
+            <TouchableOpacity 
+              style={[styles.iconButton, { borderColor: colors.border }]}
+              onPress={() => handleDeleteAddress(item.id)}
+            >
+              <Ionicons name="trash-outline" size={20} color="#f44336" />
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
-      
-      <View style={styles.detailsContainer}>
-        <View style={styles.detailRow}>
-          <Ionicons name="finger-print" size={16} color={colors.text} />
-          <Text style={[styles.detailText, { color: colors.text, marginLeft: 10 }]}>
-            ID: {item.id}
-          </Text>
-        </View>
+    );
+  };
 
-        <View style={styles.detailRow}>
-          <Ionicons name="person" size={16} color={colors.text} />
-          <Text style={[styles.detailText, { color: colors.text, marginLeft: 10 }]}>
-            Name: {item.fullName}
-          </Text>
-        </View>
-        
-        <View style={styles.detailRow}>
-          <Ionicons name="phone-portrait" size={16} color={colors.text} />
-          <Text style={[styles.detailText, { color: colors.text, marginLeft: 10 }]}>
-            Phone: {item.phone}
-          </Text>
-        </View>
-        
-        <View style={styles.detailRow}>
-          <Ionicons name="map" size={16} color={colors.text} />
-          <Text style={[styles.detailText, { color: colors.text, marginLeft: 10 }]}>
-            Type: {item.addressType === 0 ? 'Home' : 'Office'}
-          </Text>
-        </View>
-        
-        <View style={styles.detailRow}>
-          <Ionicons name="home" size={16} color={colors.text} />
-          <Text style={[styles.detailText, { color: colors.text, marginLeft: 10 }]}>
-            Default: {item.isDefault ? 'Yes' : 'No'}
-          </Text>
-        </View>
-        
-        <View style={styles.detailRow}>
-          <Ionicons name="location" size={16} color={colors.text} />
-          <Text style={[styles.detailText, { color: colors.text, marginLeft: 10 }]}>
-            Address: {item.street}, {item.ward}, {item.district}, {item.province}
-          </Text>
-        </View>
-        
-        <View style={styles.detailRow}>
-          <Ionicons name="information-circle" size={16} color={colors.text} />
-          <Text style={[styles.detailText, { color: colors.text, marginLeft: 10 }]}>
-            Details: {item.detail}
-          </Text>
-        </View>
-      </View>
-      
-      <View style={styles.addressActionContainer}>
-        <TouchableOpacity 
-          style={[
-            styles.defaultButton, 
-            { 
-              backgroundColor: item.isDefault ? colors.border : colors.primary,
-              opacity: item.isDefault ? 0.5 : 1,
-              flex: 1
-            }
-          ]}
-          onPress={() => {
-            if (!item.isDefault) {
-              handleSetDefaultAddress(item.id);
-            }
-          }}
-          disabled={item.isDefault}
-        >
-          <Ionicons 
-            name="checkmark-circle" 
-            size={20} 
-            color="white" 
-            style={styles.defaultButtonIcon} 
-          />
-          <Text style={styles.defaultButtonText}>
-            {item.isDefault ? 'Default Address' : 'Set as Default'}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.actionIconButton}
-          onPress={() => handleUpdateAddress(item)}
-        >
-          <Ionicons name="pencil" size={20} color={colors.primary} />
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.actionIconButton}
-          onPress={() => handleDeleteAddress(item.id)}
-        >
-          <Ionicons name="trash" size={20} color={colors.secondary} />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  // Render loading state
+  // If loading, show loading spinner
   if (loading) {
     return (
       <View style={[styles.screenContainer, { backgroundColor: colors.background }]}>
@@ -284,7 +281,7 @@ const AddressListScreen: React.FC = () => {
       <View style={[styles.screenContainer, { backgroundColor: colors.background }]}>
         <Text style={[styles.errorText, { color: colors.text }]}>{error}</Text>
         <TouchableOpacity 
-          style={[styles.retryButton, { backgroundColor: colors.primary }]}
+          style={[styles.retryButton, { backgroundColor: colors.primary }] }
           onPress={fetchAddresses}
         >
           <Text style={styles.retryButtonText}>Try Again</Text>
@@ -295,46 +292,25 @@ const AddressListScreen: React.FC = () => {
 
   return (
     <View style={[styles.screenContainer, { backgroundColor: colors.background }]}>
-      <View style={styles.headerContainer}>
-        <Text style={[styles.title, { color: colors.text }]}>My Addresses</Text>
-        
+      <View style={styles.header}>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>My Addresses</Text>
         <TouchableOpacity 
           style={[styles.addButton, { backgroundColor: colors.primary }]}
-          onPress={() => {
-            router.push("/screens/address/add-address");
-          }}
+          onPress={() => router.push("/screens/address/add-address")}
         >
-          <Ionicons name="add" size={20} color="white" />
-          <Text style={styles.addButtonText}>Add Address</Text>
+          <Ionicons name="add" size={24} color="white" />
         </TouchableOpacity>
       </View>
 
-      {addresses.length > 0 ? (
-        <FlatList
-          data={addresses}
-          keyExtractor={(item) => item.id}
-          renderItem={renderAddressItem}
-          refreshing={refreshing}
-          onRefresh={fetchAddresses}
-          contentContainerStyle={styles.listContainer}
-          showsVerticalScrollIndicator={false}
-        />
-      ) : (
-        <View style={styles.emptyStateContainer}>
-          <Ionicons name="location-outline" size={64} color={colors.text} />
-          <Text style={[styles.noAddressText, { color: colors.text }]}>
-            You have no addresses
-          </Text>
-          <TouchableOpacity 
-            style={[styles.addFirstAddressButton, { backgroundColor: colors.primary }]}
-            onPress={() => {
-              router.push("/screens/address/add-address");
-            }}
-          >
-            <Text style={styles.addFirstAddressButtonText}>Add First Address</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      <FlatList
+        data={addresses}
+        keyExtractor={(item) => item.id}
+        renderItem={renderAddressItem}
+        refreshing={refreshing}
+        onRefresh={fetchAddresses}
+        contentContainerStyle={styles.listContainer}
+        showsVerticalScrollIndicator={false}
+      />
     </View>
   );
 };
@@ -344,134 +320,134 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: 40,
   },
-  headerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-  },
-  listContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
   container: {
     borderRadius: 12,
-    padding: 15,
-    marginBottom: 15,
+    marginBottom: 16,
+    overflow: 'hidden',
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    position: 'relative',
+    padding: 0, // Set padding to 0 to match card style
   },
-  headerTitle: {
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    paddingHorizontal: 16,
+    marginBottom: 16,
   },
-  defaultBadge: {
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+  },
+  addButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  addressTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  addressTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 15,
+    borderRadius: 16,
+    marginLeft: 8,
   },
-  defaultBadgeText: {
+  badgeText: {
     color: 'white',
     fontSize: 12,
     fontWeight: '500',
+    marginLeft: 4,
   },
-  detailsContainer: {
-    marginBottom: 10,
+  separator: {
+    height: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    marginHorizontal: 16,
   },
-  detailRow: {
+  addressDetailsContainer: {
+    padding: 16,
+  },
+  addressDetail: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 5,
+    marginBottom: 8,
   },
-  detailText: {
+  addressDetailText: {
     fontSize: 14,
+    marginLeft: 12,
     flex: 1,
   },
-  addressActions: {
+  addressTypeContainer: {
+    marginTop: 4,
+  },
+  addressTypeTag: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 16,
+  },
+  addressTypeText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  actionsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 10,
-  },
-  actionButton: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-    width: '48%',
-  },
-  actionButtonText: {
-    color: 'white',
-    fontWeight: '600',
-    marginLeft: 5,
+    padding: 16,
+    paddingTop: 0,
   },
   defaultButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 25,
-    paddingVertical: 12,
-    paddingHorizontal: 15,
-    width: '100%',
-    marginTop: 10,
-  },
-  defaultButtonIcon: {
-    marginRight: 10,
-  },
-  defaultButtonText: {
-    color: 'white',
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 20,
     paddingVertical: 8,
-    paddingHorizontal: 15,
+    paddingHorizontal: 16,
+    borderRadius: 20,
   },
-  addButtonText: {
-    color: 'white',
-    fontWeight: '600',
-    marginLeft: 5,
+  buttonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 6,
   },
-  emptyStateContainer: {
-    flex: 1,
+  editDeleteContainer: {
+    flexDirection: 'row',
+  },
+  iconButton: {
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
+    borderRadius: 18,
+    marginLeft: 8,
+    borderWidth: 1,
+  },
+  listContainer: {
     paddingHorizontal: 20,
-  },
-  noAddressText: {
-    fontSize: 18,
-    marginTop: 15,
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  addFirstAddressButton: {
-    borderRadius: 25,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-  },
-  addFirstAddressButtonText: {
-    color: 'white',
-    fontWeight: '600',
-  },
-  errorText: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginTop: 20,
-    marginHorizontal: 20,
+    paddingBottom: 20,
   },
   retryButton: {
     borderRadius: 25,
@@ -484,17 +460,9 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
   },
-  addressActionContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-    width: '100%',
-  },
-  actionIconButton: {
-    marginLeft: 15,
-    padding: 5,
-  },
+  errorText:{
 
+  }
 });
 
 export default AddressListScreen;

@@ -33,7 +33,7 @@ const DecorCard = ({ decor }: { decor: IDecor }) => {
   // Handle missing or invalid data for style, description, and price
   const styleText = decor.style || "No Style Available";
   const descriptionText = decor.description || "No description available.";
-  const priceText = decor.basePrice ? `$${decor.basePrice}` : "Price not available";
+  const priceText = decor.basePrice ? `$${decor.basePrice}` :"";
 
   // Handle the seasons rendering based on the structure of seasons data
   let seasonsText = '';
@@ -53,7 +53,7 @@ const DecorCard = ({ decor }: { decor: IDecor }) => {
     <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
       <Image source={{ uri: imageUrl }} style={styles.image} />
       <Text style={[styles.title, { color: colors.titleColor }]}>{styleText}</Text>
-      <Text style={[styles.price, { color: colors.priceColor }]}>{priceText}</Text>
+      {/* <Text style={[styles.price, { color: colors.priceColor }]}>{priceText}</Text> */}
       <Text style={[styles.description, { color: colors.descriptionColor }]} numberOfLines={2}>
         {descriptionText}
       </Text>
