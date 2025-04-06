@@ -36,20 +36,44 @@ interface IProvider {
   slug?: string;
 }
 
+interface ISeason {
+  id?: number;
+  name?: string;
+  seasonName?: string;
+}
+
+interface IImage {
+  id?: number;
+  url?: string;
+  imageUrl?: string;
+  imageURL?: string;
+}
+
 interface IDecor {
   id: number;
   style: string;
-  basePrice: number;
+  basePrice?: number;
   description: string;
-  province: string;
+  province?: string;
   createAt: string;
   accountId: number;
   decorCategoryId: number;
   favoriteCount: number;
-  images: string[]; // Array of string URLs
-  seasons: string[] | Array<{id: number, name: string}>; // Handle both formats
+  images: IImage[] | string[]; // Handle both formats
+  seasons: ISeason[] | string[]; // Handle both formats
   provider?: IProvider;
   categoryName?: string;
+  startDate?: string;
+  status?: number;
+  sublocation?: string;
+}
+
+// Explicitly define the API response structure
+interface ApiResponse {
+  data: IDecor;
+  success: boolean;
+  message: string;
+  errors: any[];
 }
 
 const DecorDetailScreen = () => {
@@ -60,10 +84,13 @@ const DecorDetailScreen = () => {
   const [error, setError] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showFullDescription, setShowFullDescription] = useState(false);
+  const [showFullSublocation, setShowFullSublocation] = useState(false);
   
   const { theme } = useTheme();
   const validTheme = theme as "light" | "dark";
   const colors = Colors[validTheme];
+
+  const PRIMARY_COLOR = colors.primary || "#5fc1f1";
 
   useEffect(() => {
     if (id) {
@@ -71,18 +98,55 @@ const DecorDetailScreen = () => {
     }
   }, [id]);
 
+  // Create a more specific wrapper for the API call
+  const fetchDecorServiceById = async (decorId: number) => {
+    // This wrapper ensures the return type matches what we need
+    const response = await getDecorServiceByIdAPI(decorId);
+    return {
+      data: response,
+      success: true,
+      message: "",
+      errors: []
+    };
+  };
+
   const fetchDecorDetails = async (id: string) => {
     try {
-      // Use type assertion to handle different data formats
-      const data = await getDecorServiceByIdAPI(Number(id)) as unknown as IDecor;
-      console.log("Decor detail data fetched successfully");
-      setDecorDetail(data);
+      setLoading(true);
+      setError("");
+      
+      // Use our wrapper function instead of the direct API call
+      const apiResult = await fetchDecorServiceById(Number(id));
+      
+      if (apiResult && apiResult.data) {
+        console.log("Decor detail data fetched successfully");
+        setDecorDetail(apiResult.data);
+      } else {
+        setError("Invalid response format from server.");
+      }
     } catch (err: any) {
       console.error("Error fetching decor details:", err);
-      setError("Failed to load decor details.");
+      setError(err.message || "Failed to load decor details.");
     } finally {
       setLoading(false);
     }
+  };
+
+  // Helper function to get image URL from either string or object
+  const getImageUrl = (image: any, index: number): string => {
+    if (typeof image === 'string') return image;
+    if (image && typeof image === 'object' && 'url' in image) return image.url;
+    if (image && typeof image === 'object' && 'imageUrl' in image) return image.imageUrl;
+    if (image && typeof image === 'object' && 'imageURL' in image) return image.imageURL;
+    return `https://picsum.photos/500/300?random=${index}`;
+  };
+
+  // Helper function to get season name from either string or object
+  const getSeasonName = (season: any): string => {
+    if (typeof season === 'string') return season;
+    if (season && typeof season === 'object' && 'name' in season) return season.name;
+    if (season && typeof season === 'object' && 'seasonName' in season) return season.seasonName;
+    return 'Unknown Season';
   };
 
   const handlePrev = (e: any) => {
@@ -132,18 +196,24 @@ const DecorDetailScreen = () => {
     setShowFullDescription(!showFullDescription);
   };
 
-  // Helper function to get season name from either string or object
-  const getSeasonName = (season: any): string => {
-    if (typeof season === 'string') return season;
-    if (season && typeof season === 'object' && 'name' in season) return season.name;
-    if (season && typeof season === 'object' && 'seasonName' in season) return season.seasonName;
-    return 'Unknown Season';
+  const toggleSublocation = () => {
+    setShowFullSublocation(!showFullSublocation);
+  };
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "N/A";
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch (err) {
+      return dateString;
+    }
   };
 
   if (loading) {
     return (
       <View style={[styles.centeredContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={PRIMARY_COLOR} />
         <Text style={[styles.loadingText, { color: colors.text }]}>Loading details...</Text>
       </View>
     );
@@ -157,7 +227,7 @@ const DecorDetailScreen = () => {
         <CustomButton 
           title="Go Back" 
           onPress={() => router.back()} 
-          btnStyle={[styles.actionButton, { backgroundColor: colors.primary }]} 
+          btnStyle={[styles.actionButton, { backgroundColor: PRIMARY_COLOR }]} 
         />
       </View>
     );
@@ -171,7 +241,7 @@ const DecorDetailScreen = () => {
         <CustomButton 
           title="Go Back" 
           onPress={() => router.back()}
-          btnStyle={[styles.actionButton, { backgroundColor: colors.primary }]} 
+          btnStyle={[styles.actionButton, { backgroundColor: PRIMARY_COLOR }]} 
         />
       </View>
     );
@@ -180,6 +250,15 @@ const DecorDetailScreen = () => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView style={{ backgroundColor: colors.background }}>
+        {/* Header with back button
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Decor Details</Text>
+          <View style={styles.spacer} />
+        </View> */}
+
         {/* Image Gallery - Touchable */}
         <TouchableOpacity 
           activeOpacity={0.9} 
@@ -196,7 +275,7 @@ const DecorDetailScreen = () => {
               </TouchableOpacity>
 
               <Image
-                source={{ uri: decorDetail.images[currentIndex] }}
+                source={{ uri: getImageUrl(decorDetail.images[currentIndex], currentIndex) }}
                 style={styles.image}
                 resizeMode="cover"
                 onError={() => console.warn(`Failed to load image: ${decorDetail.images[currentIndex]}`)}
@@ -216,7 +295,7 @@ const DecorDetailScreen = () => {
                     key={index}
                     style={[
                       styles.paginationDot,
-                      { backgroundColor: index === currentIndex ? colors.primary : '#FFFFFF' }
+                      { backgroundColor: index === currentIndex ? PRIMARY_COLOR : '#FFFFFF' }
                     ]}
                   />
                 ))}
@@ -235,6 +314,13 @@ const DecorDetailScreen = () => {
           )}
         </TouchableOpacity>
 
+        {/* Status Badge */}
+        <View style={styles.statusContainer}>
+          <View style={[styles.statusBadge, { backgroundColor: decorDetail.status === 0 ? '#4CAF50' : '#FFC107' }]}>
+            <Text style={styles.statusText}>{decorDetail.status === 0 ? 'Active' : 'Pending'}</Text>
+          </View>
+        </View>
+
         {/* Basic Info Card - Touchable */}
         <TouchableOpacity 
           activeOpacity={0.8}
@@ -243,31 +329,38 @@ const DecorDetailScreen = () => {
         >
           <Text style={[styles.title, { color: colors.text }]}>{decorDetail.style}</Text>
           
-          <View style={styles.priceRow}>
-            <Ionicons name="pricetag-outline" size={18} color={colors.primary} />
-            <Text style={[styles.priceText, { color: colors.primary }]}>
+          {/* <View style={styles.priceRow}>
+            <Ionicons name="pricetag-outline" size={18} color={PRIMARY_COLOR} />
+            <Text style={[styles.priceText, { color: PRIMARY_COLOR }]}>
               {decorDetail.basePrice?.toLocaleString()} ₫
             </Text>
-          </View>
+          </View> */}
           
-          <View style={styles.locationRow}>
-            <Ionicons name="location-outline" size={18} color={colors.primary} />
-            <Text style={[styles.locationText, { color: colors.text }]}>
-              {decorDetail.province || "Location not specified"}
+          <View style={styles.infoRow}>
+            <Ionicons name="calendar-outline" size={18} color={PRIMARY_COLOR} />
+            <Text style={[styles.infoText, { color: colors.text }]}>
+              Start Date: {formatDate(decorDetail.startDate || "")}
             </Text>
           </View>
           
-          <View style={styles.categoryRow}>
-            <Ionicons name="layers-outline" size={18} color={colors.primary} />
-            <Text style={[styles.categoryText, { color: colors.text }]}>
+          {/* <View style={styles.infoRow}>
+            <Ionicons name="location-outline" size={18} color={PRIMARY_COLOR} />
+            <Text style={[styles.infoText, { color: colors.text }]}>
+              {decorDetail.province || "Location not specified"}
+            </Text>
+          </View> */}
+          
+          <View style={styles.infoRow}>
+            <Ionicons name="layers-outline" size={18} color={PRIMARY_COLOR} />
+            <Text style={[styles.infoText, { color: colors.text }]}>
               {decorDetail.categoryName || "Category not specified"}
             </Text>
           </View>
           
           {/* Booking call-to-action in the info card */}
           <View style={styles.bookNowRow}>
-            <Ionicons name="calendar-outline" size={18} color={colors.primary} />
-            <Text style={[styles.bookNowText, { color: colors.primary }]}>
+            <Ionicons name="calendar-outline" size={18} color={PRIMARY_COLOR} />
+            <Text style={[styles.bookNowText, { color: PRIMARY_COLOR }]}>
               Tap to book this service
             </Text>
           </View>
@@ -277,10 +370,10 @@ const DecorDetailScreen = () => {
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              <Ionicons name="information-circle-outline" size={20} color={colors.primary} /> Description
+              <Ionicons name="information-circle-outline" size={20} color={PRIMARY_COLOR} /> Description
             </Text>
             <TouchableOpacity onPress={toggleDescription}>
-              <Text style={[styles.readMoreText, { color: colors.primary }]}>
+              <Text style={[styles.readMoreText, { color: PRIMARY_COLOR }]}>
                 {showFullDescription ? "Read Less" : "Read More"}
               </Text>
             </TouchableOpacity>
@@ -296,10 +389,35 @@ const DecorDetailScreen = () => {
           </Text>
         </View>
 
+        {/* Sublocation Details Card */}
+        {decorDetail.sublocation && (
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                <Ionicons name="home-outline" size={20} color={PRIMARY_COLOR} /> Sublocation
+              </Text>
+              <TouchableOpacity onPress={toggleSublocation}>
+                <Text style={[styles.readMoreText, { color: PRIMARY_COLOR }]}>
+                  {showFullSublocation ? "Read Less" : "Read More"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            
+            <Text 
+              style={[styles.description, { color: colors.text }]}
+              numberOfLines={showFullSublocation ? undefined : 4}
+            >
+              {decorDetail.sublocation}
+            </Text>
+          </View>
+        )}
+
         {/* Seasons Card */}
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            <Ionicons name="calendar-outline" size={20} color={colors.primary} /> Available Seasons
+            <Ionicons name="calendar-outline" size={20} color={PRIMARY_COLOR} /> Available Seasons
           </Text>
           
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
@@ -309,9 +427,9 @@ const DecorDetailScreen = () => {
               {decorDetail.seasons.map((season, index) => (
                 <View
                   key={index} 
-                  style={[styles.seasonTag, { backgroundColor: `${colors.primary}20` }]}
+                  style={[styles.seasonTag, { backgroundColor: `${PRIMARY_COLOR}20` }]}
                 >
-                  <Text style={[styles.seasonText, { color: colors.primary }]}>
+                  <Text style={[styles.seasonText, { color: PRIMARY_COLOR }]}>
                     {getSeasonName(season)}
                   </Text>
                 </View>
@@ -328,13 +446,13 @@ const DecorDetailScreen = () => {
         {decorDetail.provider && (
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              <Ionicons name="person-outline" size={20} color={colors.primary} /> Provider
+              <Ionicons name="person-outline" size={20} color={PRIMARY_COLOR} /> Provider
             </Text>
             
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
             
             <View style={styles.providerHeader}>
-              <View style={[styles.providerAvatar, { backgroundColor: colors.primary }]}>
+              <View style={[styles.providerAvatar, { backgroundColor: PRIMARY_COLOR }]}>
                 {decorDetail.provider.avatar ? (
                   <Image 
                     source={{ uri: decorDetail.provider.avatar }} 
@@ -354,7 +472,7 @@ const DecorDetailScreen = () => {
                     {decorDetail.provider.businessName}
                   </Text>
                   {decorDetail.provider.providerVerified && (
-                    <Ionicons name="checkmark-circle" size={16} color={colors.primary} style={styles.verifiedIcon} />
+                    <Ionicons name="checkmark-circle" size={16} color={PRIMARY_COLOR} style={styles.verifiedIcon} />
                   )}
                 </View>
                 
@@ -399,8 +517,8 @@ const DecorDetailScreen = () => {
                 ? router.push(`/provider/${decorDetail.provider.slug}`)
                 : console.log("Provider slug not available")
               }
-              btnStyle={[styles.secondaryButton, { borderColor: colors.primary }]}
-              labelStyle={{ color: colors.primary }}
+              btnStyle={[styles.secondaryButton, { borderColor: PRIMARY_COLOR }]}
+              labelStyle={{ color: PRIMARY_COLOR }}
             />
           </View>
         )}
@@ -410,7 +528,7 @@ const DecorDetailScreen = () => {
           <CustomButton
             title="Book This Service"
             onPress={handleBooking}
-            btnStyle={[styles.bookingButton, { backgroundColor: colors.primary }]}
+            btnStyle={[styles.bookingButton, { backgroundColor: PRIMARY_COLOR }]}
           />
         </View>
       </ScrollView>
@@ -439,6 +557,46 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
+  },
+
+  // Header
+  header: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    padding: 15, 
+    borderBottomWidth: 1 
+  },
+  backButton: { padding: 8 },
+  headerTitle: { 
+    fontSize: 18, 
+    fontWeight: '600', 
+    flex: 1, 
+    textAlign: 'center' 
+  },
+  spacer: { width: 40 },
+
+  // Status badge
+  statusContainer: {
+    position: 'absolute',
+    top: 70,
+    right: 16,
+    zIndex: 20,
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  statusText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 12,
   },
 
   // Image Gallery
@@ -540,21 +698,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginLeft: 8,
   },
-  locationRow: {
+  infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
   },
-  locationText: {
-    fontSize: 15,
-    marginLeft: 8,
-  },
-  categoryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  categoryText: {
+  infoText: {
     fontSize: 15,
     marginLeft: 8,
   },
@@ -703,4 +852,4 @@ const styles = StyleSheet.create({
   }
 });
 
-export default DecorDetailScreen;
+export default DecorDetailScreen

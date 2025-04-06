@@ -3,7 +3,7 @@ import { Stack } from "expo-router/stack";
 import { useTheme } from "@/constants/ThemeContext";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
-import { TouchableOpacity, View } from "react-native";
+import { TouchableOpacity, View, BackHandler, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
@@ -27,7 +27,22 @@ function ThemedStack() {
   const pathname = usePathname();
 
   // Check if current page is login or signup to hide header
-  const hideHeader = ["/login", "/signup", "/chat/[userId]", "/cart","/screens/checkout","/screens/address/address-list","/screens/address/add-address"].includes(pathname);
+  const hideHeader = ["/login", "/signup", "/chat/[userId]", "/cart","/screens/checkout","/screens/address/address-list","/screens/address/add-address","/screens/payment/transactions","/screens/orders/order-success","/screens/Orders"].includes(pathname);
+
+  // Handle Android back button
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+        // If we're on the home screen or tabs, prevent going back
+        if (pathname === "/" || pathname === "/index" || pathname === "(tabs)") {
+          return true; // Prevents default back behavior
+        }
+        return false; // Allow back navigation on other screens
+      });
+
+      return () => backHandler.remove(); // Clean up
+    }
+  }, [pathname]);
 
   // Load fonts
   const [loaded] = useFonts({
@@ -58,7 +73,7 @@ function ThemedStack() {
           headerTitleStyle: {
             fontWeight: 'bold',
           },
-          headerLeft: () => null,
+          headerLeft: () => null, // This should remove the back button for all screens
           headerRight: () =>
             !hideHeader ? (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 15, marginRight: 10 }}>
@@ -81,12 +96,63 @@ function ThemedStack() {
             ) : null,
         }}
       >
-        <Stack.Screen name="(tabs)" />
+        {/* Explicitly set headerLeft: null for the tabs screen */}
+        <Stack.Screen 
+          name="(tabs)" 
+          options={{ 
+            headerLeft: () => null,
+            headerBackVisible: false,
+            gestureEnabled: false, // Disable swipe back gesture
+          }} 
+        />
         <Stack.Screen name="cart" options={{ headerShown: false }} />
-
-        <Stack.Screen name="product/product-detail/[id]" options={{ title: "Chi tiết sản phẩm" }} />
-        <Stack.Screen name="provider/[slug]" options={{ title: "Thông tin nhà cung cấp" }} />
-        <Stack.Screen name="decor/[id]" options={{ title: "Chi tiết dịch vụ" }} />
+        
+        <Stack.Screen 
+          name="product/product-detail/[id]" 
+          options={{ 
+            title: "Chi tiết sản phẩm",
+            // For non-home screens, you can customize the back button if needed
+            headerLeft: () => (
+              <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 10 }}>
+                <Ionicons
+                  name="arrow-back"
+                  size={24}
+                  color={theme === "dark" ? "white" : "black"}
+                />
+              </TouchableOpacity>
+            )
+          }} 
+        />
+        <Stack.Screen 
+          name="provider/[slug]" 
+          options={{ 
+            title: "Thông tin nhà cung cấp",
+            headerLeft: () => (
+              <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 10 }}>
+                <Ionicons
+                  name="arrow-back"
+                  size={24}
+                  color={theme === "dark" ? "white" : "black"}
+                />
+              </TouchableOpacity>
+            )
+          }} 
+        />
+        <Stack.Screen 
+          name="decor/[id]" 
+          options={{ 
+            title: "Chi tiết dịch vụ",
+            headerLeft: () => (
+              <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 10 }}>
+                <Ionicons
+                  name="arrow-back"
+                  size={24}
+                  color={theme === "dark" ? "white" : "black"}
+                />
+              </TouchableOpacity>
+            )
+          }} 
+        />
       </Stack>
     </View>
   );

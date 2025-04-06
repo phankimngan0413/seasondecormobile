@@ -8,7 +8,8 @@ import {
   TouchableOpacity,
   Alert,
   SafeAreaView,
-  StatusBar
+  StatusBar,
+  Platform
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { 
@@ -18,7 +19,7 @@ import {
 } from "@/utils/addressAPI";
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 
 // Define types for route parameters
 type RouteParams = {
@@ -103,25 +104,42 @@ const AddressListScreen: React.FC = () => {
       // Create timestamp to ensure useEffect in previous screen is triggered
       const timestamp = Date.now().toString();
       
-      // Update param and then navigate back
-      if (fromBooking) {
-        router.replace({
-          pathname: `/cart`,
-          params: {
-            style: params.style,
-            price: params.price,
-            selectedAddressId: selectedAddressId,
-            timestamp: timestamp
+      try {
+        if (fromBooking) {
+          // Store selected address in global state to access it when returning to booking screen
+          global.selectedAddressId = selectedAddressId;
+          global.addressTimestamp = timestamp;
+          
+          // Simply go back to the previous screen instead of trying complex navigation
+          router.back();
+        } else if (fromCheckout) {
+          // Same approach for checkout
+          global.selectedAddressId = selectedAddressId;
+          global.addressTimestamp = timestamp;
+          
+          router.back();
+        }
+      } catch (error) {
+        console.error("Navigation error:", error);
+        
+        // Fallback approach - try alternative navigation if the first method fails
+        try {
+          if (fromBooking) {
+            // Alternative: Use a simple URL string for navigation
+            router.push("/");
+          } else if (fromCheckout) {
+            router.push("/");
           }
-        });
-      } else if (fromCheckout) {
-        router.replace({
-          pathname: "/screens/checkout",
-          params: {
-            selectedAddressId: selectedAddressId,
-            timestamp: timestamp
-          }
-        });
+        } catch (fallbackError) {
+          console.error("Fallback navigation failed:", fallbackError);
+          
+          // Last resort
+          Alert.alert(
+            "Navigation Error",
+            "Unable to return with selected address. Please try again.",
+            [{ text: "OK", onPress: () => router.replace("/") }]
+          );
+        }
       }
     }
   };
@@ -280,19 +298,19 @@ const AddressListScreen: React.FC = () => {
   // Render header
   const renderHeader = () => (
     <View style={styles.header}>
-      <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-        <Ionicons name="arrow-back" size={24} color={colors.text} />
-      </TouchableOpacity>
-      
-      <Text style={styles.headerTitle}>Select Delivery Address</Text>
-      
-      <TouchableOpacity 
-        style={[styles.addButton, { backgroundColor: PRIMARY_COLOR }]}
-        onPress={handleAddAddress}
-      >
-        <Ionicons name="add" size={24} color="#fff" />
-      </TouchableOpacity>
-    </View>
+    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+      <Ionicons name="arrow-back" size={24} color={colors.text} />
+    </TouchableOpacity>
+    
+    <Text style={styles.headerTitle}>Select Delivery Address</Text>
+    
+    <TouchableOpacity 
+      style={[styles.addButton, { backgroundColor: PRIMARY_COLOR }]}
+      onPress={handleAddAddress}
+    >
+      <Ionicons name="add" size={24} color="#fff" />
+    </TouchableOpacity>
+  </View>
   );
 
   // Render loading state
@@ -367,8 +385,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
+    paddingTop: 50, // Increased top padding to prevent text from being cut off
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
+    backgroundColor: 'white', // Ensure background color is s
   },
   backButton: {
     padding: 8,
@@ -402,6 +422,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
+  },
+  safeArea: {
+    flex: 1,
+    backgroundColor: 'white',
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   addressTitle: {
     fontSize: 18,
@@ -539,4 +564,5 @@ const styles = StyleSheet.create({
     marginRight: 8,
   }
 });
+
 export default AddressListScreen;

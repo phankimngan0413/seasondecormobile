@@ -8,10 +8,31 @@ export interface IWalletBalance {
   lastUpdated: string;
   message?: string;
 }
-interface WalletData {
+
+export interface WalletData {
   walletId: number;
   balance: number;
 }
+
+// Exact definition based on response
+export interface IServerTransaction {
+  id: number;
+  paymentTransactionId: number;
+  amount: number;
+  transactionDate: string;
+  transactionStatus: string;
+  transactionType: string;
+}
+
+// Exact API response structure
+export interface IServerResponse {
+  success: boolean;
+  message: string;
+  errors: any[];
+  data: IServerTransaction[];
+}
+
+// Interface for UI
 export interface ITransaction {
   transactionId: string;
   amount: number;
@@ -19,9 +40,6 @@ export interface ITransaction {
   status: 'completed' | 'pending' | 'failed';
   description: string;
   timestamp: string;
-  receiverId?: number;
-  receiverName?: string;
-  fees?: number;
 }
 
 export interface ITransactionsResponse {
@@ -29,19 +47,6 @@ export interface ITransactionsResponse {
   transactions: ITransaction[];
   totalCount: number;
   message?: string;
-}
-
-export interface ITransferFundsRequest {
-  receiverId: number;
-  amount: number;
-  description?: string;
-}
-
-export interface ITransferFundsResponse {
-  success: boolean;
-  transactionId?: string;
-  message?: string;
-  errors?: string[];
 }
 
 /**
@@ -55,10 +60,12 @@ export const getWalletBalanceAPI = async (): Promise<IWalletBalance> => {
   try {
     const response = await apiClient.get(url);
     
+    // Add this line to debug
+    
     if (response && response.data) {
       return response.data;
     } else {
-      console.error("🔴 Invalid wallet balance response:", response);
+      console.log("Invalid wallet balance response:", response);
       return {
         success: false,
         balance: 0,
@@ -68,128 +75,92 @@ export const getWalletBalanceAPI = async (): Promise<IWalletBalance> => {
       };
     }
   } catch (error: any) {
-    console.error("🔴 Error fetching wallet balance:", error);
+    console.log("Error fetching wallet balance:", error);
     
     if (error.response) {
-      console.error("API Error Response:", error.response.data);
+      console.log("API Error Response:", error.response.data);
     }
     
     return {
       success: false,
       balance: 0,
-              currency: "VND",
+      currency: "VND",
       lastUpdated: new Date().toISOString(),
       message: "Failed to connect to wallet service"
     };
   }
 };
+/**
+ * Convert from server format to UI format
+ */
+function mapTransaction(tx: IServerTransaction): ITransaction {
+  // Determine transaction type
+  const type = tx.transactionType === "TopUp" ? "credit" : "debit";
+  
+  // Determine status
+  const status = tx.transactionStatus === "Success" ? "completed" : 
+                 tx.transactionStatus === "Pending" ? "pending" : "failed";
+  
+  // Create description
+  const description = tx.transactionType === "TopUp" ? "Top-up to wallet" : tx.transactionType;
+  
+  return {
+    transactionId: tx.id.toString(),
+    amount: tx.amount,
+    type,
+    status,
+    description,
+    timestamp: tx.transactionDate
+  };
+}
 
 /**
  * Get transaction history details
- * @param page Optional page number for pagination
- * @param limit Optional limit of transactions per page
  * @returns Promise with transaction details
  */
-export const getTransactionsDetailsAPI = async (
-  page: number = 1, 
-  limit: number = 20
-): Promise<ITransactionsResponse> => {
-  const url = "/api/wallet/getTransactionsDetails";
-  const params = { page, limit };
-  
-  const apiClient = await initApiClient();
+export const getTransactionsDetailsAPI = async (): Promise<ITransactionsResponse> => {
   try {
-    const response = await apiClient.get(url, { params });
+    const apiClient = await initApiClient();
+    const response = await apiClient.get("/api/wallet/getTransactionsDetails");
     
-    if (response && response.data && Array.isArray(response.data.transactions)) {
-      return response.data;
-    } else {
-      console.error("🔴 Invalid transactions response:", response);
+    // Check if response.data is an array
+    if (response && response.data && Array.isArray(response.data)) {
+      const transactions = response.data.map(mapTransaction);
+      
       return {
-        success: false,
-        transactions: [],
-        totalCount: 0,
-        message: "Invalid response format from the server"
+        success: true,
+        transactions,
+        totalCount: transactions.length,
+        message: "Transactions retrieved successfully"
       };
     }
-  } catch (error: any) {
-    console.error("🔴 Error fetching transactions:", error);
     
-    if (error.response) {
-      console.error("API Error Response:", error.response.data);
+    // Check if response.data is an object with a data property that is an array
+    if (response?.data?.success && Array.isArray(response.data.data)) {
+      const transactions = response.data.data.map(mapTransaction);
+      
+      return {
+        success: true,
+        transactions,
+        totalCount: transactions.length,
+        message: response.data.message
+      };
     }
     
     return {
       success: false,
       transactions: [],
       totalCount: 0,
-      message: "Failed to fetch transaction history"
+      message: "No transactions found"
     };
-  }
-};
-
-/**
- * Transfer funds to another user
- * @param transferData Object containing receiverId, amount and optional description
- * @returns Promise with transfer result
- */
-export const transferFundsAPI = async (
-  transferData: ITransferFundsRequest
-): Promise<ITransferFundsResponse> => {
-  const url = "/api/wallet/transferFunds";
-  
-  const apiClient = await initApiClient();
-  try {
-    const response = await apiClient.post(url, transferData);
-    
-    return response.data;
-  } catch (error: any) {
-    console.error("🔴 Error transferring funds:", error);
-    
-    if (error.response) {
-      console.error("API Error Response:", error.response.data);
-    }
+  } catch (error) {
+    console.log("Error fetching transaction history:", error);
     
     return {
       success: false,
-      message: "Failed to process the transfer request"
+      transactions: [],
+      totalCount: 0,
+      message: "Error while retrieving transaction history"
     };
   }
-};
-
-/**
- * Get a single transaction by ID
- * @param transactionId The ID of the transaction to retrieve
- * @returns Promise with transaction details
- */
-export const getTransactionByIdAPI = async (
-  transactionId: string
-): Promise<{ success: boolean; transaction?: ITransaction; message?: string }> => {
-  const url = `/api/wallet/transaction/${transactionId}`;
-  
-  const apiClient = await initApiClient();
-  try {
-    const response = await apiClient.get(url);
-    
-    if (response && response.data && response.data.transaction) {
-      return response.data;
-    } else {
-      console.error("🔴 Invalid transaction response:", response);
-      return {
-        success: false,
-        message: "Transaction not found or invalid response format"
-      };
-    }
-  } catch (error: any) {
-    console.error("🔴 Error fetching transaction:", error);
-    
-    if (error.response) {
-      console.error("API Error Response:", error.response.data);
-    }
-    
-    return {
-      success: false,
-      message: "Failed to retrieve transaction details"
-    };
-  }
-};
+}

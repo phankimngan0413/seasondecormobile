@@ -11,13 +11,13 @@ import {
   ActivityIndicator,
   Clipboard,
   Alert,
+  Linking,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "@/constants/Colors";
 import { useTheme } from "@/constants/ThemeContext";
 import { topUpWalletAPI } from "@/utils/paymentAPI";
-import { Linking } from "react-native";
 
 // Predefined amounts
 const PREDEFINED_AMOUNTS = [100000, 200000, 500000, 1000000, 2000000];
@@ -32,53 +32,139 @@ const AddFundsScreen = () => {
   const [isCustomAmount, setIsCustomAmount] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<boolean>(false);
+  const [linkingInitialized, setLinkingInitialized] = useState<boolean>(false);
 
+  // Handle predefined amount selection
   const handlePredefinedAmount = (value: number) => {
     setAmount(value.toString());
     setIsCustomAmount(false);
   };
 
-  
+  // Handle custom amount input
   const handleCustomAmount = (value: string) => {
     // Only allow numbers
     const numericValue = value.replace(/[^0-9]/g, "");
     setAmount(numericValue);
     setIsCustomAmount(true);
   };
+
+  // Format currency display
+  const formatCurrency = (value: string) => {
+    if (!value) return "";
+    return parseInt(value).toLocaleString() + " VND";
+  };
+
+  // Handle deep linking for payment responses
+  useEffect(() => {
+    // Prevent multiple initializations
+    if (linkingInitialized) return;
+
+    const handleDeepLink = (event: { url: string }) => {
+      try {
+        const { url } = event;
+        console.log("Received deep link URL:", url);
+
+        // Parse the URL
+        if (url.includes('/payment/success') || url.includes('success')) {
+          // Extract parameters if available
+          let amount = "";
+          try {
+            const urlObj = new URL(url);
+            const params = new URLSearchParams(urlObj.search);
+            const vnpAmount = params.get('vnp_Amount');
+            if (vnpAmount) {
+              amount = ` (${parseInt(vnpAmount).toLocaleString()} VND)`;
+            }
+          } catch (e) {
+            console.log("Error parsing URL parameters:", e);
+          }
+
+          // Handle successful payment
+          Alert.alert(
+            "Payment Successful", 
+            `Funds have been added to your wallet${amount}.`,
+            [
+              {
+                text: "Go to Wallet",
+                onPress: () => {
+                  // Navigate to wallet screen
+                  router.replace("/(tabs)/profile");
+                }
+              }
+            ]
+          );
+        } else if (url.includes('/payment/failure') || url.includes('failure')) {
+          // Handle payment failure
+          Alert.alert(
+            "Payment Failed", 
+            "There was an issue processing your payment. Please try again.",
+            [{ text: "OK" }]
+          );
+        }
+      } catch (error) {
+        console.error("Error handling deep link:", error);
+      }
+    };
+
+    // Register deep link handler
+    const subscription = Linking.addEventListener('url', handleDeepLink);
+
+    // Check for initial URL (in case app was opened via deep link)
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        console.log("Initial URL on mount:", url);
+        handleDeepLink({ url });
+      }
+    }).catch(err => {
+      console.error("Error getting initial URL:", err);
+    });
+
+    setLinkingInitialized(true);
+
+    return () => {
+      subscription.remove();
+    };
+  }, [router, linkingInitialized]);
+
+  // Handle adding funds
   const handleAddFunds = async () => {
     if (!amount || parseInt(amount) <= 0) {
       setError("Please enter a valid amount");
       return;
     }
-  
+
     try {
       setLoading(true);
       setError(null);
-  
+
       const response = await topUpWalletAPI(parseInt(amount));
-  
-      // Kiểm tra và xử lý URL thanh toán
-      const paymentUrl = 
-  typeof response === 'string' 
-    ? response 
-    : (response?.message || '');
+
+      // Process payment URL
+      const paymentUrl = typeof response === 'string' 
+        ? response 
+        : (response?.message || '');
+
       if (paymentUrl) {
         try {
+          console.log("Opening payment URL:", paymentUrl);
           const canOpenUrl = await Linking.canOpenURL(paymentUrl);
+          
           if (canOpenUrl) {
             await Linking.openURL(paymentUrl);
           } else {
-            // Fallback nếu không thể mở URL
+            // Fallback if URL can't be opened
             Alert.alert(
               "Payment Required",
               "Unable to open payment URL automatically. Please copy the link.",
               [
                 {
                   text: "Copy URL",
-                  onPress: () => Clipboard.setString(paymentUrl)
+                  onPress: () => {
+                    Clipboard.setString(paymentUrl);
+                    Alert.alert("Success", "URL copied to clipboard");
+                  }
                 },
-                { text: "OK" }
+                { text: "Cancel" }
               ]
             );
           }
@@ -90,7 +176,7 @@ const AddFundsScreen = () => {
           );
         }
       } else {
-        // Trường hợp không có URL (thanh toán trực tiếp)
+        // Direct payment (no URL needed)
         Alert.alert(
           "Success", 
           `Added ${parseInt(amount).toLocaleString()} VND to your wallet!`
@@ -104,43 +190,6 @@ const AddFundsScreen = () => {
     }
   };
 
-  const formatCurrency = (value: string) => {
-    if (!value) return "";
-    return parseInt(value).toLocaleString() + " VND";
-  };
-  useEffect(() => {
-    const handleDeepLink = (event: { url: string }) => {
-      const { url } = event;
-      
-      // Example deep link handling
-      if (url.includes('/payment/success')) {
-        // Handle successful payment
-        Alert.alert(
-          "Payment Successful", 
-          "Funds have been added to your wallet."
-        );
-      } else if (url.includes('/payment/failure')) {
-        // Handle payment failure
-        Alert.alert(
-          "Payment Failed", 
-          "There was an issue processing your payment."
-        );
-      }
-    };
-  
-    const subscription = Linking.addEventListener('url', handleDeepLink);
-  
-    // Initial deep link check
-    Linking.getInitialURL().then((url) => {
-      if (url) {
-        handleDeepLink({ url });
-      }
-    });
-  
-    return () => {
-      subscription.remove();
-    };
-  }, []);
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}

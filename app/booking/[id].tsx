@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { 
   View, 
   Text, 
@@ -10,7 +10,7 @@ import {
   KeyboardAvoidingView,
   ActivityIndicator
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
@@ -21,6 +21,19 @@ import TimePicker from "@/components/ui/TimePicker";
 
 // Import custom date and time pickers
 import CalendarPicker from "@/components/CalendarPicker";
+
+// Extend the global namespace to include your custom properties
+declare global {
+  var selectedAddressId: string | undefined;
+  var addressTimestamp: string | undefined;
+  var currentBookingState: {
+    serviceId?: string;
+    style?: string;
+    price?: string;
+  } | undefined;
+}
+
+export {};
 
 const BookingScreen = () => {
   // Get service information from route params
@@ -53,17 +66,44 @@ const BookingScreen = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [addressesRefreshKey, setAddressesRefreshKey] = useState(0); // Add a refresh key for addresses
 
-  // Load address list when component mounts
+  // Load address list when component mounts or when refresh key changes
   useEffect(() => {
     fetchAddresses();
-  }, []);
+  }, [addressesRefreshKey]);
+
+  // Add focus effect to detect returning from address list
+  useFocusEffect(
+    useCallback(() => {
+      console.log("BookingScreen focused");
+      
+      // Check if we have address data in global state (from address list)
+      if (global.selectedAddressId) {
+        console.log("Screen focused: Found address in global state:", global.selectedAddressId);
+        setSelectedAddress(global.selectedAddressId);
+        
+        // Clear the global state to avoid confusion in future navigations
+        global.selectedAddressId = undefined;
+        global.addressTimestamp = undefined;
+        
+        // Refresh the address list to get any new addresses
+        setAddressesRefreshKey(prev => prev + 1);
+      }
+      
+      return () => {
+        // Clean up any subscriptions or pending operations when screen loses focus
+      };
+    }, [])
+  );
 
   // Update selected address when the parameter changes (coming back from address list)
   useEffect(() => {
     console.log("Params changed, selectedAddressId:", selectedAddressIdParam, "timestamp:", timestamp);
     if (selectedAddressIdParam) {
       setSelectedAddress(selectedAddressIdParam);
+      // Also refresh the address list
+      setAddressesRefreshKey(prev => prev + 1);
     }
   }, [selectedAddressIdParam, timestamp]);
 
@@ -84,8 +124,28 @@ const BookingScreen = () => {
       if (Array.isArray(fetchedAddresses) && fetchedAddresses.length > 0) {
         setAddresses(fetchedAddresses);
         
-        // If we got a selectedAddressId from params, use that
-        if (selectedAddressIdParam) {
+        // If we got a selectedAddressId from params or global state, use that
+        if (selectedAddress) {
+          // Keep existing selection
+          
+          // But validate it exists in the new address list
+          const addressExists = fetchedAddresses.some(address => address.id === selectedAddress);
+          if (!addressExists) {
+            // If selected address no longer exists, select default or first
+            const defaultAddress = fetchedAddresses.find(address => address.isDefault);
+            if (defaultAddress) {
+              setSelectedAddress(defaultAddress.id);
+            } else {
+              setSelectedAddress(fetchedAddresses[0].id);
+            }
+          }
+        } 
+        else if (global.selectedAddressId) {
+          setSelectedAddress(global.selectedAddressId);
+          // Clear global state after using
+          global.selectedAddressId = undefined;
+        }
+        else if (selectedAddressIdParam) {
           setSelectedAddress(selectedAddressIdParam);
         }
         // Otherwise, default to default address or first address
@@ -130,13 +190,52 @@ const BookingScreen = () => {
 
   // Handle date change
   const onDateChange = (selectedDate: Date) => {
-    setSurveyDate(selectedDate);
+    const now = new Date();
+    
+    // Set the time component of now to 00:00:00 for date-only comparison
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    // If selected date is before today, use today instead
+    if (selectedDate < today) {
+      Alert.alert("Invalid Date", "You cannot select a date in the past. Today's date has been selected.");
+      setSurveyDate(today);
+    } else {
+      setSurveyDate(selectedDate);
+    }
+    
     setShowDatePicker(false);
   };
 
   // Handle time select
   const handleTimeSelect = (selectedTime: Date) => {
-    setSurveyTime(selectedTime);
+    const now = new Date();
+    
+    // Check if the selected date is today
+    const isToday = 
+      surveyDate.getDate() === now.getDate() &&
+      surveyDate.getMonth() === now.getMonth() &&
+      surveyDate.getFullYear() === now.getFullYear();
+    
+    // If today is selected and time is in the past, show alert
+    if (isToday && 
+        (selectedTime.getHours() < now.getHours() || 
+         (selectedTime.getHours() === now.getHours() && 
+          selectedTime.getMinutes() < now.getMinutes()))) {
+      
+      Alert.alert(
+        "Invalid Time", 
+        "You cannot select a time in the past. Please select a future time."
+      );
+      
+      // Set time to next whole hour as default
+      const nextHour = new Date();
+      nextHour.setHours(now.getHours() + 1);
+      nextHour.setMinutes(0);
+      setSurveyTime(nextHour);
+    } else {
+      setSurveyTime(selectedTime);
+    }
+    
     setShowTimePicker(false);
   };
 
@@ -148,34 +247,49 @@ const BookingScreen = () => {
       return;
     }
     
-    // Validate date (must be today or future)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Get current date and time
+    const now = new Date();
     
-    if (surveyDate < today) {
-      Alert.alert("Invalid Date", "Please select today or a future date");
+    // Create a date object that combines selected date and time
+    const selectedDateTime = new Date(
+      surveyDate.getFullYear(),
+      surveyDate.getMonth(),
+      surveyDate.getDate(),
+      surveyTime.getHours(),
+      surveyTime.getMinutes()
+    );
+  
+    // Check if the combined date and time is in the past
+    if (selectedDateTime < now) {
+      Alert.alert(
+        "Invalid Date/Time", 
+        "The selected date and time cannot be in the past. Please select a future date and time."
+      );
       return;
     }
-
+  
     try {
       setLoading(true);
       setError(null);
-
-      // Booking data - Chuyển đổi kiểu dữ liệu sang số
+  
+      // Booking data - Convert data types to numbers
       const bookingData: IBookingRequest = {
         decorServiceId: Number(id),
         addressId: Number(selectedAddress),
         surveyDate: surveyDate.toISOString().split('T')[0], // Format YYYY-MM-DD
         surveyTime: surveyTime.toTimeString().split(' ')[0] // Format HH:mm:ss
       };
-
+  
       console.log("Sending booking data:", bookingData);
-
+  
       // Call booking API
       const response = await createBookingAPI(bookingData);
-
+  
       // Handle response
       if (response.success && response.booking) {
+        // Refresh addresses to get any potential new addresses
+        await fetchAddresses();
+        
         Alert.alert(
           "Booking Successful", 
           `Booking ID: ${response.booking.id}. We will contact you shortly`,
@@ -190,7 +304,7 @@ const BookingScreen = () => {
               onPress: () => {
                 try {
                   if (response.booking && response.booking.id) {
-                    // Use simple string URL for safer navigation
+                    // Use simple navigation without complex objects
                     router.push(`/booking/${response.booking.id}`);
                   } else {
                     // Fallback if booking id is not available
@@ -218,14 +332,24 @@ const BookingScreen = () => {
       setLoading(false);
     }
   };
-
-  // Handle select address - Navigate to address list
+  
   const handleSelectAddress = () => {
+    // Save current state to global variables for retrieval when returning
+    global.currentBookingState = {
+      serviceId: id,
+      style,
+      price
+    };
+    
+    // Navigate to address list using simple path
     router.push({
       pathname: "/screens/address/address-list",
       params: { 
         fromBooking: "true", 
-        currentAddressId: selectedAddress || "" 
+        currentAddressId: selectedAddress || "",
+        id: id || "",
+        style: style || "",
+        price: price || ""
       }
     });
   };
@@ -503,7 +627,7 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     fontSize: 14,
   },
-  // Old form styles
+  // Form styles
   formContainer: {
     margin: 16,
     borderRadius: 12,

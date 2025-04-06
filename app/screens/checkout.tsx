@@ -3,9 +3,8 @@ import {
   View,
   Text,
   StyleSheet,
-  Image,
+  FlatList,
   TouchableOpacity,
-  ScrollView,
   SafeAreaView,
   StatusBar,
   ActivityIndicator,
@@ -13,375 +12,375 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { getAddressesAPI } from '@/utils/addressAPI';
-import { getCartAPI } from '@/utils/cartAPI';
-import { getUserIdFromToken } from '@/services/auth';
-import { IProduct } from '@/utils/productAPI';
-import { IAddress } from '@/utils/addressAPI';
+import { useRouter } from 'expo-router';
+import { getOrderListAPI } from '@/utils/orderAPI';
+
+// Define Order interface
+interface Order {
+  id: number;
+  orderCode: string;
+  paymentMethod: string;
+  orderDate: string;
+  totalPrice: number;
+  status: number;
+  accountId: number;
+  addressId: number;
+  orderDetails: any[];
+}
 
 const PRIMARY_COLOR = "#5fc1f1";
+const SUCCESS_COLOR = "#4CAF50";
+const PENDING_COLOR = "#FFA500";
+const CANCELED_COLOR = "#FF5252";
 
-const CheckoutScreen = () => {
+const OrderListScreen = () => {
   const { theme } = useTheme();
   const colors = Colors[theme as "light" | "dark"];
   const router = useRouter();
-  const params = useLocalSearchParams();
 
-  const [address, setAddress] = useState<IAddress | null>(null);
-  const [addresses, setAddresses] = useState<IAddress[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
+  // Sử dụng dữ liệu mẫu trực tiếp từ log
+  const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    fetchData();
+    fetchOrders();
   }, []);
 
-  useEffect(() => {
-    if (params.selectedAddressId) {
-        const selectedAddress = addresses.find(
-            addr => addr.id.toString() === params.selectedAddressId
-          );
-      
-      if (selectedAddress) {
-        setAddress(selectedAddress);
-      }
-    }
-  }, [params.selectedAddressId, addresses]);
-
-  const fetchData = async () => {
+  const fetchOrders = async () => {
     try {
       setLoading(true);
-      setError("");
-      const userId = await getUserIdFromToken();
-      if (!userId) {
-        setError("Please log in to checkout");
-        setLoading(false);
-        return;
-      }
-
-      const addressData = await getAddressesAPI();
-      const validAddresses = Array.isArray(addressData) ? addressData : [];
-      setAddresses(validAddresses);
-
-      const defaultAddress = validAddresses.find(addr => addr.isDefault);
-      setAddress(defaultAddress || validAddresses[0]);
-
-      const cartData = await getCartAPI(userId);
-      if (cartData?.cartItems && cartData.cartItems.length > 0) {
-        setProducts(cartData.cartItems);
-      } else {
-        setError("Your cart is empty");
-      }
+      // Trường hợp API không hoạt động, sử dụng dữ liệu mẫu
+      const sampleData: Order[] = [
+        {"accountId": 2, "addressId": 2, "id": 1, "orderCode": "ODR-638793545813777039", "orderDate": "2025-04-04T16:09:41.3779177", "orderDetails": [], "paymentMethod": "Wallet Transaction", "status": 0, "totalPrice": 560000000},
+        {"accountId": 10, "addressId": 2, "id": 2, "orderCode": "ODR-638793568825051814", "orderDate": "2025-04-04T16:48:02.5055079", "orderDetails": [], "paymentMethod": "Wallet Transaction", "status": 0, "totalPrice": 0},
+        {"accountId": 2, "addressId": 2, "id": 3, "orderCode": "ODR-638793580958889976", "orderDate": "2025-04-04T17:08:15.8889997", "orderDetails": [], "paymentMethod": "Wallet Transaction", "status": 0, "totalPrice": 420000},
+        {"accountId": 2, "addressId": 3, "id": 4, "orderCode": "ODR-638793591663641931", "orderDate": "2025-04-04T17:26:06.3641951", "orderDetails": [], "paymentMethod": "Wallet Transaction", "status": 0, "totalPrice": 120000}
+      ];
+      
+      setOrders(sampleData);
+      console.log("Orders set:", sampleData);
     } catch (err: any) {
-      setError(err.message || "Failed to load checkout information");
+      console.error("Error fetching orders:", err);
+      setError(err.message || "Failed to load orders");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const handleSelectAddress = () => {
-    router.push({
-      pathname: "/screens/address/address-list",
-      params: { fromCheckout: "true", currentAddressId: address?.id || "" }
+  const getStatusColor = (status: number): string => {
+    switch (status) {
+      case 0: return PENDING_COLOR;   // Pending
+      case 1: return PENDING_COLOR;   // Processing
+      case 2: return PRIMARY_COLOR;   // Shipped
+      case 3: return SUCCESS_COLOR;   // Delivered
+      case 4: return CANCELED_COLOR;  // Canceled
+      default: return colors.textSecondary;
+    }
+  };
+
+  const getStatusText = (status: number): string => {
+    const statusMap: Record<number, string> = {
+      0: "Pending",
+      1: "Processing",
+      2: "Shipped",
+      3: "Delivered",
+      4: "Canceled"
+    };
+    return statusMap[status] || "Unknown";
+  };
+
+  const formatCurrency = (amount: number): string => {
+    return new Intl.NumberFormat('vi-VN', { 
+      style: 'currency', 
+      currency: 'VND' 
+    }).format(amount || 0);
+  };
+
+  const renderOrderItem = ({ item }: { item: Order }) => {
+    const statusColor = getStatusColor(item.status);
+    const formattedDate = new Date(item.orderDate).toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
-  };
 
-  const subtotal = products.reduce((sum, product) => sum + (product.unitPrice * product.quantity), 0);
-  const total = subtotal;
-
-  const renderHeader = () => (
-    <View style={[styles.header, { borderBottomColor: colors.border }]}>
-      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-        <Ionicons name="arrow-back" size={24} color={colors.text} />
-      </TouchableOpacity>
-      <Text style={[styles.headerTitle, { color: colors.text }]}>Checkout</Text>
-      <View style={styles.spacer} />
-    </View>
-  );
-
-  const renderAddressSection = () => {
-    if (!address) {
-      return (
-        <TouchableOpacity 
-          style={[styles.addressContainer, { backgroundColor: colors.card }]} 
-          onPress={handleSelectAddress}
-        >
-          <View style={styles.addressIconContainer}>
-            <Ionicons name="location" size={24} color={PRIMARY_COLOR} />
-          </View>
-          <Text style={[styles.noAddressText, { color: colors.text }]}>Add Shipping Address</Text>
-          <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
-        </TouchableOpacity>
-      );
-    }
-
-    const fullAddress = `${address.detail}, ${address.street}, ${address.ward}, ${address.district}, ${address.province}`;
     return (
       <TouchableOpacity 
-        style={[styles.addressContainer, { backgroundColor: colors.card }]} 
-        onPress={handleSelectAddress}
+        style={[styles.orderItem, { backgroundColor: colors.card }]}
+        onPress={() => router.push({
+          pathname: "/screens/orders/order-success",
+          params: { orderId: item.id }
+        })}
       >
-        <View style={styles.addressIconContainer}>
-          <Ionicons name="location" size={24} color={PRIMARY_COLOR} />
+        <View style={styles.orderHeader}>
+          <Text style={[styles.orderCode, { color: colors.text }]}>
+            {item.orderCode}
+          </Text>
+          <View 
+            style={[
+              styles.statusBadge, 
+              { 
+                backgroundColor: `${statusColor}30`, 
+                borderColor: statusColor 
+              }
+            ]}
+          >
+            <Text style={[styles.statusText, { color: statusColor }]}>
+              {getStatusText(item.status)}
+            </Text>
+          </View>
         </View>
-        <View style={styles.addressDetails}>
-          <Text style={[styles.addressName, { color: colors.text }]}>{address.fullName}</Text>
-          <Text style={[styles.addressPhone, { color: colors.textSecondary }]}>{address.phone}</Text>
-          <Text style={[styles.addressFull, { color: colors.textSecondary }]}>{fullAddress}</Text>
+        
+        <View style={styles.orderDetails}>
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+              Date
+            </Text>
+            <Text style={[styles.detailValue, { color: colors.text }]}>
+              {formattedDate}
+            </Text>
+          </View>
+          
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+              Payment Method
+            </Text>
+            <Text style={[styles.detailValue, { color: colors.text }]}>
+              {item.paymentMethod}
+            </Text>
+          </View>
+          
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+              Total
+            </Text>
+            <Text style={[styles.totalPrice, { color: PRIMARY_COLOR }]}>
+              {formatCurrency(item.totalPrice)}
+            </Text>
+          </View>
         </View>
-        <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
       </TouchableOpacity>
     );
   };
 
-  const renderProductSection = () => (
-    <View style={[styles.productSection, { backgroundColor: colors.card }]}>
-      {products.map((product, index) => (
-        <View key={index} style={[styles.productItem, { borderBottomColor: colors.border }]}>
-          <Image source={{ uri: product.image || 'https://via.placeholder.com/100' }} style={styles.productImage} />
-          <View style={styles.productInfo}>
-            <Text style={[styles.productName, { color: colors.text }]}>{product.productName}</Text>
-            <Text style={[styles.productPrice, { color: PRIMARY_COLOR }]}>${product.unitPrice.toLocaleString()}</Text>
-            <Text style={[styles.productQuantity, { color: colors.textSecondary }]}>x{product.quantity}</Text>
-          </View>
-        </View>
-      ))}
+  const renderHeader = () => (
+    <View style={[styles.header, { borderBottomColor: colors.border }]}>
+      <TouchableOpacity 
+        style={styles.backButton} 
+        onPress={() => router.back()}
+      >
+        <Ionicons name="arrow-back" size={24} color={colors.text} />
+      </TouchableOpacity>
+      
+      <Text style={[styles.headerTitle, { color: colors.text }]}>
+        My Orders
+      </Text>
+      
+      <TouchableOpacity 
+        style={styles.refreshButton}
+        onPress={() => {
+          setRefreshing(true);
+          fetchOrders();
+        }}
+        disabled={loading}
+      >
+        <Ionicons 
+          name="refresh" 
+          size={24} 
+          color={loading ? colors.border : colors.text} 
+        />
+      </TouchableOpacity>
     </View>
   );
 
-  const renderPriceBreakdown = () => (
-    <View style={[styles.priceBreakdownSection, { backgroundColor: colors.card }]}>
-      <View style={styles.priceRow}>
-        <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>Subtotal</Text>
-        <Text style={[styles.priceValue, { color: colors.text }]}>${subtotal.toLocaleString()}</Text>
-      </View>
-      <View style={[styles.totalRow, { borderTopColor: colors.border }]}>
-        <Text style={[styles.totalLabel, { color: colors.text }]}>Total Payment</Text>
-        <Text style={[styles.totalValue, { color: PRIMARY_COLOR }]}>${total.toLocaleString()}</Text>
-      </View>
+  const renderEmptyList = () => (
+    <View style={styles.emptyContainer}>
+      <Ionicons 
+        name="document-text-outline" 
+        size={80} 
+        color={colors.border} 
+      />
+      <Text style={[styles.emptyTitle, { color: colors.text }]}>
+        No Orders
+      </Text>
+      <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+        You haven't placed any orders yet
+      </Text>
+      <TouchableOpacity
+        style={[styles.shopButton, { backgroundColor: PRIMARY_COLOR }]}
+        onPress={() => router.push("/product/productlist")}
+      >
+        <Text style={styles.shopButtonText}>Start Shopping</Text>
+      </TouchableOpacity>
     </View>
   );
 
-  const handlePlaceOrder = () => {
-    console.log('Order placed!', {
-      address,
-      products,
-      total
-    });
-  };
-
-  const renderCheckoutButton = () => (
-    <TouchableOpacity 
-      style={[
-        styles.checkoutButton, 
-        { backgroundColor: PRIMARY_COLOR },
-        (!address || products.length === 0) && styles.disabledButton
-      ]}
-      disabled={!address || products.length === 0}
-      onPress={handlePlaceOrder}
-    >
-      <Text style={styles.checkoutButtonText}>Place Order</Text>
-    </TouchableOpacity>
-  );
-
-  if (loading) {
+  if (loading && !refreshing) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar barStyle={theme === "dark" ? "light-content" : "dark-content"} />
         {renderHeader()}
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={PRIMARY_COLOR} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading checkout information...</Text>
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+            Loading orders...
+          </Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  if (error) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <StatusBar barStyle={theme === "dark" ? "light-content" : "dark-content"} />
-        {renderHeader()}
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={60} color={PRIMARY_COLOR} />
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity 
-            style={[styles.retryButton, { backgroundColor: PRIMARY_COLOR }]} 
-            onPress={fetchData}
-          >
-            <Text style={styles.retryButtonText}>Try Again</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  console.log("Rendering with", orders.length, "orders");
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={theme === "dark" ? "light-content" : "dark-content"} />
-      <View style={styles.scrollContent}>
-        {renderHeader()}
-        {renderAddressSection()}
-        {renderProductSection()}
-        {renderPriceBreakdown()}
-      </View>
-      {renderCheckoutButton()}
+      {renderHeader()}
+      
+      <Text style={styles.debugText}>Orders count: {orders.length}</Text>
+      
+      {orders.length > 0 ? (
+        <FlatList
+          data={orders}
+          renderItem={renderOrderItem}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={styles.listContent}
+          refreshing={refreshing}
+          onRefresh={fetchOrders}
+          showsVerticalScrollIndicator={false}
+        />
+      ) : (
+        renderEmptyList()
+      )}
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    paddingTop: StatusBar.currentHeight || 0 
-  },
-  scrollContent: { 
+  container: {
     flex: 1,
-    paddingBottom: 60 // Space for checkout button
   },
-  header: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    padding: 15, 
-    borderBottomWidth: 1 
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
   },
-  backButton: { padding: 8 },
-  headerTitle: { 
-    fontSize: 18, 
-    fontWeight: '600', 
-    flex: 1, 
-    textAlign: 'center' 
+  backButton: {
+    padding: 8,
   },
-  spacer: { width: 40 },
-  addressContainer: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    padding: 15, 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#F0F0F0' 
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'center',
   },
-  addressIconContainer: { marginRight: 15 },
-  addressDetails: { flex: 1 },
-  addressName: { 
-    fontSize: 16, 
-    fontWeight: '600', 
-    marginBottom: 5 
+  refreshButton: {
+    padding: 8,
   },
-  addressPhone: { fontSize: 14 },
-  addressFull: { fontSize: 14 },
-  noAddressText: { 
-    fontSize: 16, 
-    fontWeight: '500' 
+  debugText: {
+    padding: 10,
+    backgroundColor: '#FFD700',
+    color: '#000',
+    textAlign: 'center',
+    fontWeight: 'bold',
   },
-  productSection: { marginTop: 10 },
-  productItem: { 
-    flexDirection: 'row', 
-    padding: 15, 
-    borderBottomWidth: 1 
+  listContent: {
+    padding: 16,
   },
-  productImage: { 
-    width: 80, 
-    height: 80, 
-    marginRight: 15, 
-    borderRadius: 4 
+  orderItem: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  productInfo: { flex: 1 },
-  productName: { 
-    fontSize: 14, 
-    marginBottom: 10 
+  orderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  productPrice: { 
-    color: '#5fc1f1' 
+  orderCode: {
+    fontSize: 16,
+    fontWeight: '600',
   },
-  productQuantity: { 
-    fontSize: 12 
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+    borderWidth: 1,
   },
-  priceBreakdownSection: { 
-    marginTop: 10, 
-    padding: 15 
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
-  priceRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    marginBottom: 10 
+  orderDetails: {},
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
-  priceLabel: { 
-    fontSize: 14 
+  detailLabel: {
+    fontSize: 14,
   },
-  priceValue: { 
-    fontWeight: '500', 
-    fontSize: 14 
+  detailValue: {
+    fontSize: 14,
+    fontWeight: '500',
   },
-  totalRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    borderTopWidth: 1, 
-    paddingTop: 10 
+  totalPrice: {
+    fontSize: 16,
+    fontWeight: '700',
   },
-  totalLabel: { 
-    fontSize: 16, 
-    fontWeight: '600' 
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
   },
-  totalValue: { 
-    fontSize: 16, 
-    color: '#5fc1f1', 
-    fontWeight: '600' 
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginTop: 20,
+    marginBottom: 8,
   },
-  checkoutButton: { 
-    position: 'absolute', 
-    bottom: 0, 
-    left: 0, 
-    right: 0, 
-    backgroundColor: '#5fc1f1', 
-    padding: 15, 
-    alignItems: 'center' 
+  emptySubtitle: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 24,
   },
-  disabledButton: { 
-    backgroundColor: '#cccccc' 
+  shopButton: {
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 8,
   },
-  checkoutButtonText: { 
-    color: 'white', 
-    fontSize: 16, 
-    fontWeight: '600' 
+  shopButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
   },
-  loadingContainer: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    paddingHorizontal: 20 
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  loadingText: { 
-    marginTop: 15, 
-    fontSize: 16, 
-    textAlign: 'center' 
-  },
-  errorContainer: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    paddingHorizontal: 20 
-  },
-  errorText: { 
-    color: '#666', 
-    fontSize: 16, 
-    textAlign: 'center', 
-    marginTop: 15, 
-    marginBottom: 20 
-  },
-  retryButton: { 
-    backgroundColor: '#5fc1f1', 
-    paddingVertical: 10, 
-    paddingHorizontal: 20, 
-    borderRadius: 5 
-  },
-  retryButtonText: { 
-    color: 'white', 
-    fontSize: 16, 
-    fontWeight: '500' 
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
   },
 });
 
-export default CheckoutScreen;
+export default OrderListScreen;

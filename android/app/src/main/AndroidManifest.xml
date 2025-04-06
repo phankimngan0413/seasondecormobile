@@ -28,6 +28,19 @@
         <data android:scheme="com.baymaxphan.seasondecormobileapp"/>
         <data android:scheme="exp+seasondecormobileapp"/>
       </intent-filter>
+       <intent-filter>
+        <action android:name="android.intent.action.VIEW"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+        <category android:name="android.intent.category.BROWSABLE"/>
+        <data 
+            android:host="screens"
+            android:scheme="com.baymaxphan.seasondecormobileapp"
+            android:path="/screens/payment/success"/>
+        <data 
+            android:host="screens"
+            android:scheme="com.baymaxphan.seasondecormobileapp"
+            android:path="/screens/payment/failure"/>
+    </intent-filter>
     </activity>
   </application>
 </manifest>
