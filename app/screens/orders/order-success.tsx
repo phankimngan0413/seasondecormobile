@@ -9,15 +9,18 @@ import {
   StatusBar,
   ActivityIndicator,
   ScrollView,
+  Alert,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { getOrderByIdAPI } from '@/utils/orderAPI';
+import { getOrderByIdAPI, payOrderWithWalletAPI } from '@/utils/orderAPI';
+import { getWalletBalanceAPI } from "@/utils/walletAPI";
 
 const PRIMARY_COLOR = "#5fc1f1";
 const SUCCESS_COLOR = "#4CAF50";
+const PAYMENT_COLOR = "#FF9500";
 
 const OrderSuccessScreen = () => {
   const { theme } = useTheme();
@@ -25,14 +28,28 @@ const OrderSuccessScreen = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
   const orderId = params.orderId;
+  const isPaid = params.paid === "true";
 
   const [orderData, setOrderData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [insufficientFunds, setInsufficientFunds] = useState(false);
 
   useEffect(() => {
     fetchOrderDetails();
+    fetchWalletBalance();
   }, []);
+
+  const fetchWalletBalance = async () => {
+    try {
+      const response = await getWalletBalanceAPI();
+      setWalletBalance(response.balance || 0);
+    } catch (err) {
+      console.error("Failed to fetch wallet balance", err);
+    }
+  };
 
   const fetchOrderDetails = async () => {
     if (!orderId) {
@@ -45,11 +62,58 @@ const OrderSuccessScreen = () => {
       setLoading(true);
       const data = await getOrderByIdAPI(Number(orderId));
       setOrderData(data);
+      
+      // Check if wallet balance is sufficient for the order
+      const walletData = await getWalletBalanceAPI();
+      setWalletBalance(walletData.balance || 0);
+      setInsufficientFunds(walletData.balance < data.totalPrice);
     } catch (err: any) {
       setError(err.message || "Failed to load order details");
       console.error("Error fetching order:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePayNow = async () => {
+    if (insufficientFunds) {
+      Alert.alert(
+        "Insufficient Funds",
+        "Your wallet balance is insufficient to complete this payment. Would you like to add funds?",
+        [
+          {
+            text: "Cancel",
+            style: "cancel"
+          },
+          {
+            text: "Add Funds",
+            onPress: () => router.push({
+              pathname: '/screens/payment/add-funds',
+              params: { orderId: orderId }
+            })
+          }
+        ]
+      );
+      return;
+    }
+
+    try {
+      setPaymentLoading(true);
+      await payOrderWithWalletAPI(Number(orderId));
+      Alert.alert(
+        "Payment Successful",
+        "Your order has been paid successfully!",
+        [
+          {
+            text: "OK",
+            onPress: () => fetchOrderDetails() // Refresh order details
+          }
+        ]
+      );
+    } catch (err: any) {
+      Alert.alert("Payment Failed", err.message || "There was a problem processing your payment.");
+    } finally {
+      setPaymentLoading(false);
     }
   };
 
@@ -70,6 +134,17 @@ const OrderSuccessScreen = () => {
     return statusMap[status] || "Unknown";
   };
 
+  const getStatusColor = (status: number) => {
+    const statusColorMap: Record<number, string> = {
+      0: "#FF9500", // Orange for pending
+      1: "#007AFF", // Blue for processing
+      2: "#5856D6", // Purple for shipped
+      3: "#4CAF50", // Green for delivered
+      4: "#FF3B30"  // Red for canceled
+    };
+    return statusColorMap[status] || "#8E8E93"; // Gray for unknown
+  };
+
   const renderHeader = () => (
     <View style={[styles.header, { borderBottomColor: colors.border }]}>
       <TouchableOpacity 
@@ -85,13 +160,20 @@ const OrderSuccessScreen = () => {
 
   const renderSuccessMessage = () => (
     <View style={styles.successContainer}>
-      <View style={styles.iconCircle}>
-        <Ionicons name="checkmark" size={50} color="white" />
+      <View style={[styles.iconCircle, { backgroundColor: isPaid ? SUCCESS_COLOR : PAYMENT_COLOR }]}>
+        <Ionicons 
+          name={isPaid ? "checkmark" : "receipt-outline"} 
+          size={50} 
+          color="white" 
+        />
       </View>
-      <Text style={styles.successTitle}>Order Successful!</Text>
+      <Text style={[styles.successTitle, { color: isPaid ? SUCCESS_COLOR : PAYMENT_COLOR }]}>
+        {isPaid ? "Order Successful!" : "Order Placed!"}
+      </Text>
       <Text style={[styles.successMessage, { color: colors.textSecondary }]}>
-        Your order has been placed successfully. 
-        Thank you for your purchase!
+        {isPaid 
+          ? "Your order has been placed and paid successfully. Thank you for your purchase!" 
+          : "Your order has been placed successfully. Please complete the payment to process your order."}
       </Text>
       <View style={[styles.orderCodeContainer, { backgroundColor: colors.card }]}>
         <Text style={[styles.orderCodeLabel, { color: colors.textSecondary }]}>Order Code:</Text>
@@ -111,8 +193,16 @@ const OrderSuccessScreen = () => {
       
       <View style={styles.summaryRow}>
         <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Status</Text>
-        <View style={[styles.statusBadge, { backgroundColor: `${SUCCESS_COLOR}30` }]}>
-          <Text style={[styles.statusText, { color: SUCCESS_COLOR }]}>{getStatusText(orderData?.status)}</Text>
+        <View style={[
+          styles.statusBadge, 
+          { backgroundColor: `${getStatusColor(orderData?.status)}30` }
+        ]}>
+          <Text style={[
+            styles.statusText, 
+            { color: getStatusColor(orderData?.status) }
+          ]}>
+            {getStatusText(orderData?.status)}
+          </Text>
         </View>
       </View>
       
@@ -132,6 +222,49 @@ const OrderSuccessScreen = () => {
           }).format(orderData?.totalPrice || 0)}
         </Text>
       </View>
+
+      {orderData?.status === 0 && (
+        <View style={styles.paymentStatusContainer}>
+          <View style={styles.walletBalanceRow}>
+            <Text style={[styles.walletBalanceLabel, { color: colors.textSecondary }]}>
+              Wallet Balance:
+            </Text>
+            <Text style={[
+              styles.walletBalanceValue, 
+              { color: insufficientFunds ? '#FF3B30' : SUCCESS_COLOR }
+            ]}>
+              {new Intl.NumberFormat('vi-VN', { 
+                style: 'currency', 
+                currency: 'VND' 
+              }).format(walletBalance || 0)}
+            </Text>
+          </View>
+          
+          {insufficientFunds && (
+            <Text style={styles.insufficientFundsText}>
+              Insufficient balance. Please add funds to your wallet.
+            </Text>
+          )}
+          
+          <TouchableOpacity
+            style={[
+              styles.payNowButton,
+              { backgroundColor: insufficientFunds ? '#FF3B30' : PAYMENT_COLOR },
+              paymentLoading && { opacity: 0.7 }
+            ]}
+            onPress={handlePayNow}
+            disabled={paymentLoading}
+          >
+            {paymentLoading ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.payNowButtonText}>
+                {insufficientFunds ? "Add Funds" : "Pay Now"}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 
@@ -350,6 +483,43 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 12,
     fontWeight: '600'
+  },
+  
+  // Payment Section
+  paymentStatusContainer: {
+    marginTop: 15,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0'
+  },
+  walletBalanceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 10
+  },
+  walletBalanceLabel: {
+    fontSize: 14
+  },
+  walletBalanceValue: {
+    fontSize: 14,
+    fontWeight: '600'
+  },
+  insufficientFundsText: {
+    fontSize: 12,
+    color: '#FF3B30',
+    marginBottom: 10
+  },
+  payNowButton: {
+    backgroundColor: PAYMENT_COLOR,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 5
+  },
+  payNowButtonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 16
   },
   
   // Products Section

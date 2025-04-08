@@ -27,7 +27,7 @@ function ThemedStack() {
   const pathname = usePathname();
 
   // Check if current page is login or signup to hide header
-  const hideHeader = ["/login", "/signup", "/chat/[userId]", "/cart","/screens/checkout","/screens/address/address-list","/screens/address/add-address","/screens/payment/transactions","/screens/orders/order-success","/screens/Orders"].includes(pathname);
+  const hideHeader = ["/login", "/signup", "/chat/[userId]", "/cart","/screens/checkout","/screens/address/address-list","/screens/address/add-address","/screens/payment/transactions","/screens/orders/order-success","/screens/Orders","/screens/Following","/screens/Bookings"].includes(pathname);
 
   // Handle Android back button
   useEffect(() => {

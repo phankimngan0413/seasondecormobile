@@ -24,6 +24,7 @@ interface Contact {
   lastMessageTime?: string;
   email?: string;
   isImage?: boolean; // Explicitly defined as boolean
+  sortPriority?: number; // Added for custom sorting
 }
 
 interface Message {
@@ -53,6 +54,64 @@ export default function ChatListScreen() {
 
   const flatListRef = useRef<FlatList>(null);
 
+  // Helper function to parse date strings safely
+  const parseDate = (dateStr: string | undefined) => {
+    if (!dateStr) return 0;
+    
+    try {
+      // Try regular date parsing
+      const timestamp = new Date(dateStr).getTime();
+      
+      // Check if the timestamp is valid
+      if (!isNaN(timestamp)) {
+        return timestamp;
+      }
+      
+      // Custom format like "07/04/25"
+      if (dateStr.includes('/')) {
+        const [day, month, year] = dateStr.split('/').map(part => parseInt(part, 10));
+        if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+          return new Date(year > 2000 ? year : 2000 + year, month - 1, day).getTime();
+        }
+      }
+      
+      return 0;
+    } catch (error) {
+      console.error("Error parsing date:", error, dateStr);
+      return 0;
+    }
+  };
+
+  // Enhanced custom sort function for contacts
+  const sortContacts = (contacts: Contact[]) => {
+    return [...contacts].sort((a, b) => {
+      // First priority: empty messages or "Contacts retrieved successfully" go to the top
+      const aIsEmpty = !a.message || a.message.trim() === '' || a.message === "Contacts retrieved successfully";
+      const bIsEmpty = !b.message || b.message.trim() === '' || b.message === "Contacts retrieved successfully";
+      
+      if (aIsEmpty && !bIsEmpty) return -1;
+      if (!aIsEmpty && bIsEmpty) return 1;
+      
+      // Second priority: sort by last message time
+      const aTime = parseDate(a.lastMessageTime);
+      const bTime = parseDate(b.lastMessageTime);
+      
+      if (aTime && bTime) {
+        return bTime - aTime; // More recent messages first
+      }
+      
+      // If times are equal or invalid, use sort priority
+      const aPriority = a.sortPriority || 0;
+      const bPriority = b.sortPriority || 0;
+      if (aPriority !== bPriority) {
+        return bPriority - aPriority; // Higher priority first
+      }
+      
+      // Last resort: sort by name
+      return (a.contactName || '').localeCompare(b.contactName || '');
+    });
+  };
+
   // Fetching contact data from the API
   const fetchContacts = async () => {
     setLoading(true);
@@ -67,10 +126,16 @@ export default function ChatListScreen() {
             (!contact.message || contact.message.trim() === '') && 
             contact.lastMessageTime && contact.lastMessageTime.trim() !== ''
           );
+          
+          // Assign sort priority: empty messages or "Contacts retrieved successfully" get highest priority
+          const sortPriority = (!contact.message || 
+                              contact.message.trim() === '' || 
+                              contact.message === "Contacts retrieved successfully") ? 10 : 0;
                          
           return {
             ...contact,
             isImage,
+            sortPriority,
             // Ensure contactId is valid
             contactId: contact.contactId || 0
           };
@@ -81,12 +146,8 @@ export default function ChatListScreen() {
           contact.contactId !== undefined && contact.contactId !== null
         );
         
-        // Sort by most recent messages if possible
-        const sortedData = [...validContacts].sort((a, b) => {
-          if (!a.lastMessageTime) return 1;
-          if (!b.lastMessageTime) return -1;
-          return new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime();
-        });
+        // Sort data with our custom sorter
+        const sortedData = sortContacts(validContacts);
         setContacts(sortedData);
       } else {
         console.log("No contacts found or empty data");
@@ -130,37 +191,48 @@ export default function ChatListScreen() {
         (newMessage.lastMessageTime || newMessage.sentTime)
       );
       
+      // Calculate sort priority
+      const sortPriority = (!newMessage.message || 
+                           newMessage.message.trim() === '' || 
+                           newMessage.message === "Contacts retrieved successfully") ? 10 : 0;
+      
       setContacts((prevContacts) => {
         // Check if contact already exists
         const existingContactIndex = prevContacts.findIndex(
           c => c.contactId === newMessage.contactId
         );
 
+        let updatedContacts;
+        
         if (existingContactIndex !== -1) {
-          // Update existing contact and move to top
-          const updatedContacts = [...prevContacts];
+          // Update existing contact with new data
+          updatedContacts = [...prevContacts];
           updatedContacts[existingContactIndex] = {
             ...updatedContacts[existingContactIndex],
             message: newMessage.message || '',
             lastMessageTime: newMessage.lastMessageTime || newMessage.sentTime || new Date().toISOString(),
-            isImage
+            isImage,
+            sortPriority
           };
-          
-          // Remove and add to beginning
-          const updatedContact = updatedContacts.splice(existingContactIndex, 1)[0];
-          return [updatedContact, ...updatedContacts];
         } else {
-          // Add new contact to beginning with safe defaults
-          return [{
-            contactId: newMessage.contactId,
-            contactName: newMessage.contactName || `Contact ${newMessage.contactId}`,
-            message: newMessage.message || '',
-            lastMessageTime: newMessage.lastMessageTime || newMessage.sentTime || new Date().toISOString(),
-            avatar: newMessage.avatar || null,
-            email: newMessage.email || '',
-            isImage
-          }, ...prevContacts];
+          // Add new contact with all required data
+          updatedContacts = [
+            ...prevContacts,
+            {
+              contactId: newMessage.contactId,
+              contactName: newMessage.contactName || `Contact ${newMessage.contactId}`,
+              message: newMessage.message || '',
+              lastMessageTime: newMessage.lastMessageTime || newMessage.sentTime || new Date().toISOString(),
+              avatar: newMessage.avatar || null,
+              email: newMessage.email || '',
+              isImage,
+              sortPriority
+            }
+          ];
         }
+        
+        // Re-sort the contacts with our custom sorter
+        return sortContacts(updatedContacts);
       });
 
       // Scroll to top to show the new message
@@ -222,6 +294,34 @@ export default function ChatListScreen() {
     }
   }, []);
 
+  // Format the time display
+  const formatTimeDisplay = useCallback((timeString?: string) => {
+    if (!timeString) return "No time";
+    
+    // If already in DD/MM/YY format, return as is
+    if (/^\d{2}\/\d{2}\/\d{2}$/.test(timeString)) {
+      return timeString;
+    }
+    
+    try {
+      const date = new Date(timeString);
+      if (isNaN(date.getTime())) return timeString;
+      
+      const now = new Date();
+      const isToday = date.getDate() === now.getDate() && 
+                     date.getMonth() === now.getMonth() && 
+                     date.getFullYear() === now.getFullYear();
+      
+      if (isToday) {
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      } else {
+        return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear().toString().slice(-2)}`;
+      }
+    } catch (error) {
+      return timeString;
+    }
+  }, []);
+
   // Safe render function with validation
   const renderContactItem = useCallback(({ item, index }: { item: Contact, index: number }) => {
     if (!item) {
@@ -232,6 +332,16 @@ export default function ChatListScreen() {
     if (item.contactId === undefined || item.contactId === null) {
       console.warn("Invalid contact ID at index", index, item);
       return null;
+    }
+    
+    // Determine message display text
+    let messageDisplay = "No messages yet";
+    if (item.isImage) {
+      messageDisplay = "Sent a photo";
+    } else if (item.message === "Contacts retrieved successfully") {
+      messageDisplay = "New contact"; // Replace API message with user-friendly text
+    } else if (item.message) {
+      messageDisplay = item.message;
     }
     
     return (
@@ -249,15 +359,15 @@ export default function ChatListScreen() {
             {item.contactName || `Contact ${item.contactId}`}
           </Text>
           <Text style={[styles.lastMessage, { color: colors.icon }]} numberOfLines={1}>
-            {item.isImage ? "Sent a photo" : (item.message || "No messages yet")}
+            {messageDisplay}
           </Text>
         </View>
         <Text style={[styles.timeText, { color: colors.icon }]}>
-          {item.lastMessageTime || "No time"}
+          {formatTimeDisplay(item.lastMessageTime)}
         </Text>
       </TouchableOpacity>
     );
-  }, [colors, handleConversationClick]);
+  }, [colors, handleConversationClick, formatTimeDisplay]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

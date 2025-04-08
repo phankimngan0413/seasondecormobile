@@ -160,3 +160,33 @@ export const processOrderPaymentAPI = async (orderId: number, paymentDetails: an
     throw new Error(error.response?.data?.message || "Failed to process order payment.");
   }
 };
+
+// Pay for Order using Wallet
+export const payOrderWithWalletAPI = async (orderId: number) => {
+  const apiClient = await initApiClient();
+  const token = await getToken();
+
+  if (!token) {
+    throw new Error("Unauthorized: Please log in.");
+  }
+
+  try {
+    const response = await apiClient.post(
+      `/api/Order/payment/${orderId}`, 
+      { paymentMethod: "Wallet" },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    console.log("🟢 Order Paid with Wallet:", response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error("🔴 Wallet Payment API Error:", error.response?.data || error.message);
+    
+    // Check for specific error types
+    if (error.response?.status === 400 && error.response?.data?.message?.includes("insufficient")) {
+      throw new Error("Insufficient wallet balance. Please add funds to your wallet.");
+    }
+    
+    throw new Error(error.response?.data?.message || "Failed to process payment.");
+  }
+};

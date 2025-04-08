@@ -3,21 +3,38 @@ import { initApiClient } from "@/config/axiosConfig";
 // Interfaces cho Booking
 export interface IBooking {
   id: number;
+  bookingId?: number;
+  bookingCode: string;
   decorServiceId: number;
   userId: number;
   addressId: number;
+  address: string;
   surveyDate: string;
   surveyTime: string;
   status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
   createdAt: string;
   updatedAt: string;
+  totalPrice?: number;
+  cost?: number;
+  serviceItems?: string;
+  decorService?: {
+    id: number;
+    style: string;
+    description: string;
+    category?: string;
+    image?: string;
+    createdAt?: string;
+    status?: number;
+    accountId?: number;
+    decorCategoryId?: number;
+    favoriteCount?: number;
+  };
 }
 
 export interface IBookingRequest {
   decorServiceId: number;
   addressId: number;
   surveyDate: string;
-  surveyTime: string;
 }
 
 export interface IBookingResponse {
@@ -34,6 +51,93 @@ export interface IBookingListResponse {
   message?: string;
 }
 
+export interface IPaginatedBookingsResponse {
+  items: IBooking[];
+  totalCount: number;
+  pageIndex: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface IBookingFilterOptions {
+  status?: string;
+  decorServiceId?: number;
+  pageIndex?: number;
+  pageSize?: number;
+  sortBy?: string;
+  descending?: boolean;
+}
+
+/**
+ * Lấy danh sách booking phân trang với các tùy chọn lọc
+ * @param options Các tùy chọn lọc và phân trang
+ * @returns Promise với danh sách booking phân trang
+ */
+export const getPaginatedBookingsForCustomerAPI = async (
+  options: IBookingFilterOptions = {}
+): Promise<IPaginatedBookingsResponse> => {
+  const {
+    status,
+    decorServiceId,
+    pageIndex = 1,
+    pageSize = 10,
+    sortBy = "createdAt",
+    descending = true
+  } = options;
+
+  const url = "/api/Booking/getPaginatedBookingsForCustomer";
+  
+  const params: Record<string, any> = {
+    PageIndex: pageIndex,
+    PageSize: pageSize,
+    SortBy: sortBy,
+    Descending: descending
+  };
+
+  // Thêm các tham số tùy chọn
+  if (status) params.Status = status;
+  if (decorServiceId) params.DecorServiceId = decorServiceId;
+  
+  const apiClient = await initApiClient();
+  try {
+    const response = await apiClient.get(url, { params });
+    
+    if (response && response.data) {
+      const responseData = response.data.data || response.data;
+      return {
+        items: responseData.data || responseData.items || [],
+        totalCount: responseData.totalCount || 0,
+        pageIndex: responseData.pageIndex || pageIndex,
+        pageSize: responseData.pageSize || pageSize,
+        totalPages: responseData.totalPages || 0
+      };
+    } else {
+      console.error("🔴 Invalid paginated bookings response:", response);
+      return {
+        items: [],
+        totalCount: 0,
+        pageIndex: pageIndex,
+        pageSize: pageSize,
+        totalPages: 0
+      };
+    }
+  } catch (error: any) {
+    console.error("🔴 Error fetching paginated bookings:", error);
+    
+    if (error.response) {
+      console.error("API Error Response:", error.response.data);
+    }
+    
+    return {
+      items: [],
+      totalCount: 0,
+      pageIndex: pageIndex,
+      pageSize: pageSize,
+      totalPages: 0
+    };
+  }
+};
+
 /**
  * Tạo một booking mới
  * @param bookingData Thông tin booking
@@ -42,12 +146,12 @@ export interface IBookingListResponse {
 export const createBookingAPI = async (
   bookingData: IBookingRequest
 ): Promise<IBookingResponse> => {
-  const url = "/api/bookings/create";
-  
+  const url = "/api/Booking/create";
+
   const apiClient = await initApiClient();
   try {
     const response = await apiClient.post(url, bookingData);
-    
+
     if (response && response.data) {
       return {
         success: true,
@@ -63,7 +167,7 @@ export const createBookingAPI = async (
     }
   } catch (error: any) {
     console.error("🔴 Error creating booking:", error);
-    
+
     if (error.response) {
       console.error("API Error Response:", error.response.data);
       return {
@@ -72,7 +176,7 @@ export const createBookingAPI = async (
         errors: error.response.data.errors
       };
     }
-    
+
     return {
       success: false,
       message: "Network error or server unavailable"
@@ -205,6 +309,128 @@ export const cancelBookingAPI = async (
       return {
         success: false,
         message: error.response.data.message || "Failed to cancel booking",
+        errors: error.response.data.errors
+      };
+    }
+    
+    return {
+      success: false,
+      message: "Network error or server unavailable"
+    };
+  }
+};
+export const requestCancelBookingAPI = async (
+  bookingCode: string
+): Promise<IBookingResponse> => {
+  const url = `/api/Booking/requestCancel/${bookingCode}`;
+  
+  const apiClient = await initApiClient();
+  try {
+    const response = await apiClient.put(url);
+    
+    if (response && response.data) {
+      return {
+        success: true,
+        booking: response.data.booking,
+        message: response.data.message || "Cancellation request submitted successfully"
+      };
+    } else {
+      console.error("🔴 Invalid cancellation request response:", response);
+      return {
+        success: false,
+        message: "Failed to request cancellation"
+      };
+    }
+  } catch (error: any) {
+    console.error("🔴 Error requesting cancellation:", error);
+    
+    if (error.response) {
+      console.error("API Error Response:", error.response.data);
+      return {
+        success: false,
+        message: error.response.data.message || "Failed to request cancellation",
+        errors: error.response.data.errors
+      };
+    }
+    
+    return {
+      success: false,
+      message: "Network error or server unavailable"
+    };
+  }
+};
+export const makeBookingDepositAPI = async (
+  bookingCode: string,
+  depositData: any
+): Promise<IBookingResponse> => {
+  const url = `/api/Booking/deposit/${bookingCode}`;
+  
+  const apiClient = await initApiClient();
+  try {
+    const response = await apiClient.post(url, depositData);
+    
+    if (response && response.data) {
+      return {
+        success: true,
+        booking: response.data.booking,
+        message: response.data.message || "Deposit made successfully"
+      };
+    } else {
+      console.error("🔴 Invalid deposit response:", response);
+      return {
+        success: false,
+        message: "Failed to make deposit"
+      };
+    }
+  } catch (error: any) {
+    console.error("🔴 Error making deposit:", error);
+    
+    if (error.response) {
+      console.error("API Error Response:", error.response.data);
+      return {
+        success: false,
+        message: error.response.data.message || "Failed to make deposit",
+        errors: error.response.data.errors
+      };
+    }
+    
+    return {
+      success: false,
+      message: "Network error or server unavailable"
+    };
+  }
+};
+export const makeBookingPaymentAPI = async (
+  bookingCode: string,
+  paymentData: any
+): Promise<IBookingResponse> => {
+  const url = `/api/Booking/payment/${bookingCode}`;
+  
+  const apiClient = await initApiClient();
+  try {
+    const response = await apiClient.post(url, paymentData);
+    
+    if (response && response.data) {
+      return {
+        success: true,
+        booking: response.data.booking,
+        message: response.data.message || "Payment made successfully"
+      };
+    } else {
+      console.error("🔴 Invalid payment response:", response);
+      return {
+        success: false,
+        message: "Failed to make payment"
+      };
+    }
+  } catch (error: any) {
+    console.error("🔴 Error making payment:", error);
+    
+    if (error.response) {
+      console.error("API Error Response:", error.response.data);
+      return {
+        success: false,
+        message: error.response.data.message || "Failed to make payment",
         errors: error.response.data.errors
       };
     }

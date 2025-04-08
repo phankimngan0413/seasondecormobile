@@ -17,9 +17,8 @@ import { Colors } from "@/constants/Colors";
 import { createBookingAPI, IBookingRequest } from "@/utils/bookingAPI";
 import { getAddressesAPI, IAddress } from "@/utils/addressAPI";
 import { getToken } from "@/services/auth";
-import TimePicker from "@/components/ui/TimePicker";
 
-// Import custom date and time pickers
+// Import custom date picker
 import CalendarPicker from "@/components/CalendarPicker";
 
 // Extend the global namespace to include your custom properties
@@ -40,7 +39,6 @@ const BookingScreen = () => {
   const params = useLocalSearchParams();
   const id = params.id as string;
   const style = params.style as string;
-  const price = params.price as string;
   
   // Get the selectedAddressId from params (will update when coming back from address list)
   const selectedAddressIdParam = params.selectedAddressId as string | undefined;
@@ -62,12 +60,30 @@ const BookingScreen = () => {
   const [addressesLoading, setAddressesLoading] = useState(true);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [surveyDate, setSurveyDate] = useState(new Date());
-  const [surveyTime, setSurveyTime] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [addressesRefreshKey, setAddressesRefreshKey] = useState(0); // Add a refresh key for addresses
 
+  useFocusEffect(
+    useCallback(() => {
+      // Always refresh the address list when the screen is focused
+      fetchAddresses();
+      
+      // Check if we have address data in global state (from address list)
+      if (global.selectedAddressId) {
+        setSelectedAddress(global.selectedAddressId);
+        
+        // Clear the global state to avoid confusion in future navigations
+        global.selectedAddressId = undefined;
+        global.addressTimestamp = undefined;
+      }
+      
+      return () => {
+        // Clean up any subscriptions or pending operations when screen loses focus
+      };
+    }, [])
+  );
+  
   // Load address list when component mounts or when refresh key changes
   useEffect(() => {
     fetchAddresses();
@@ -160,25 +176,10 @@ const BookingScreen = () => {
           }
         }
       } else if (Array.isArray(fetchedAddresses) && fetchedAddresses.length === 0) {
-        // No addresses available, prompt user to add a new address
-        Alert.alert(
-          "No Addresses Found",
-          "You need to add an address before booking.",
-          [
-            {
-              text: "Add Address",
-              onPress: () => {
-                // Navigate to add address screen
-                router.push("/screens/address/add-address");
-              }
-            },
-            {
-              text: "Cancel",
-              onPress: () => router.back(),
-              style: "cancel"
-            }
-          ]
-        );
+        // No addresses available, but we won't show an alert
+        // The user will see the "Add Shipping Address" button in the UI
+        setAddresses([]);
+        setSelectedAddress(null);
       }
     } catch (error) {
       console.error("Address loading error:", error);
@@ -206,64 +207,33 @@ const BookingScreen = () => {
     setShowDatePicker(false);
   };
 
-  // Handle time select
-  const handleTimeSelect = (selectedTime: Date) => {
-    const now = new Date();
-    
-    // Check if the selected date is today
-    const isToday = 
-      surveyDate.getDate() === now.getDate() &&
-      surveyDate.getMonth() === now.getMonth() &&
-      surveyDate.getFullYear() === now.getFullYear();
-    
-    // If today is selected and time is in the past, show alert
-    if (isToday && 
-        (selectedTime.getHours() < now.getHours() || 
-         (selectedTime.getHours() === now.getHours() && 
-          selectedTime.getMinutes() < now.getMinutes()))) {
-      
-      Alert.alert(
-        "Invalid Time", 
-        "You cannot select a time in the past. Please select a future time."
-      );
-      
-      // Set time to next whole hour as default
-      const nextHour = new Date();
-      nextHour.setHours(now.getHours() + 1);
-      nextHour.setMinutes(0);
-      setSurveyTime(nextHour);
-    } else {
-      setSurveyTime(selectedTime);
-    }
-    
-    setShowTimePicker(false);
-  };
-
   // Handle booking
   const handleBooking = async () => {
     // Form validation
     if (!selectedAddress) {
-      Alert.alert("Notification", "Please select an address");
+      Alert.alert("Notification", "Please add a shipping address before proceeding");
+      // Navigate to add address screen
+      router.push("/screens/address/add-address");
       return;
     }
     
     // Get current date and time
     const now = new Date();
     
-    // Create a date object that combines selected date and time
+    // Create a date object that combines selected date and current time
     const selectedDateTime = new Date(
       surveyDate.getFullYear(),
       surveyDate.getMonth(),
       surveyDate.getDate(),
-      surveyTime.getHours(),
-      surveyTime.getMinutes()
+      now.getHours(),
+      now.getMinutes()
     );
   
-    // Check if the combined date and time is in the past
-    if (selectedDateTime < now) {
+    // Check if the date is in the past
+    if (surveyDate < now) {
       Alert.alert(
-        "Invalid Date/Time", 
-        "The selected date and time cannot be in the past. Please select a future date and time."
+        "Invalid Date", 
+        "The selected date cannot be in the past. Please select a future date."
       );
       return;
     }
@@ -272,12 +242,14 @@ const BookingScreen = () => {
       setLoading(true);
       setError(null);
   
+      // Use current time for survey time
+      const currentTime = new Date();
+      
       // Booking data - Convert data types to numbers
       const bookingData: IBookingRequest = {
         decorServiceId: Number(id),
         addressId: Number(selectedAddress),
-        surveyDate: surveyDate.toISOString().split('T')[0], // Format YYYY-MM-DD
-        surveyTime: surveyTime.toTimeString().split(' ')[0] // Format HH:mm:ss
+        surveyDate: surveyDate.toISOString().split('T')[0] // Format YYYY-MM-DD
       };
   
       console.log("Sending booking data:", bookingData);
@@ -337,8 +309,7 @@ const BookingScreen = () => {
     // Save current state to global variables for retrieval when returning
     global.currentBookingState = {
       serviceId: id,
-      style,
-      price
+      style
     };
     
     // Navigate to address list using simple path
@@ -348,8 +319,7 @@ const BookingScreen = () => {
         fromBooking: "true", 
         currentAddressId: selectedAddress || "",
         id: id || "",
-        style: style || "",
-        price: price || ""
+        style: style || ""
       }
     });
   };
@@ -455,7 +425,7 @@ const BookingScreen = () => {
         </View>
         {renderAddressSection()}
 
-        {/* Booking Form */}
+        {/* Booking Form - Only Date Picker */}
         <View style={[styles.formContainer, { backgroundColor: colors.card }]}>
           {/* Survey Date */}
           <View style={styles.formGroup}>
@@ -480,46 +450,22 @@ const BookingScreen = () => {
               onClose={() => setShowDatePicker(false)}
             />
           </View>
-
-          {/* Survey Time */}
-          <View style={styles.formGroup}>
-            <Text style={[styles.label, { color: colors.text }]}>
-              <Ionicons name="time-outline" size={18} color={colors.primary} /> 
-              {" "}Survey Time
-            </Text>
-            <TouchableOpacity 
-              style={[styles.dateInput, { borderColor: colors.border }]}
-              onPress={() => setShowTimePicker(true)}
-            >
-              <Text style={[styles.dateText, { color: colors.text }]}>
-                {surveyTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Service Cost */}
-          <View style={[styles.priceContainer, { borderTopColor: colors.border }]}>
-            <Text style={[styles.priceLabel, { color: colors.text }]}>
-              Total Cost
-            </Text>
-            <Text style={[styles.priceValue, { color: colors.primary }]}>
-              {Number(price || 0).toLocaleString()} ₫
-            </Text>
-          </View>
         </View>
-
-        {/* Custom Time Picker Modal */}
-        <TimePicker
-          visible={showTimePicker}
-          initialTime={surveyTime}
-          onTimeSelect={handleTimeSelect}
-          onCancel={() => setShowTimePicker(false)}
-        />
         
         {/* Display any errors */}
         {error && (
           <View style={[styles.errorContainer, { backgroundColor: `${colors.error}10` }]}>
             <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+          </View>
+        )}
+
+        {/* Add Address Note if no address is available */}
+        {!selectedAddress && !addressesLoading && (
+          <View style={[styles.noteContainer, { backgroundColor: `${colors.primary}10` }]}>
+            <Ionicons name="information-circle-outline" size={20} color={colors.primary} style={{ marginRight: 8 }} />
+            <Text style={[styles.noteText, { color: colors.text }]}>
+              Please add a shipping address to continue with your booking
+            </Text>
           </View>
         )}
 
@@ -545,7 +491,9 @@ const BookingScreen = () => {
           ) : (
             <>
               <Ionicons name="checkmark-circle" size={22} color="#fff" />
-              <Text style={styles.bookButtonText}>Confirm Booking</Text>
+              <Text style={styles.bookButtonText}>
+                {!selectedAddress ? "Add Address" : "Confirm Booking"}
+              </Text>
             </>
           )}
         </TouchableOpacity>
@@ -597,7 +545,9 @@ const styles = StyleSheet.create({
     padding: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
+    marginHorizontal: 16,
     marginBottom: 10,
+    borderRadius: 8,
   },
   addressIconContainer: {
     marginRight: 15,
@@ -655,22 +605,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
   },
-  priceContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-  },
-  priceLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  priceValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
   bookButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -698,6 +632,17 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 14,
+  },
+  noteContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    margin: 16,
+    padding: 12,
+    borderRadius: 8,
+  },
+  noteText: {
+    fontSize: 14,
+    flex: 1,
   },
 });
 

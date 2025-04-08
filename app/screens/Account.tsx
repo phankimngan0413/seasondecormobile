@@ -42,6 +42,17 @@ const AccountScreen = () => {
     avatar?: string | null;  
   }
 
+  // Interface for field validation errors
+  interface FieldErrors {
+    firstName?: string[];
+    lastName?: string[];
+    phone?: string[];
+    slug?: string[];
+    dateOfBirth?: string[];
+    gender?: string[];
+    [key: string]: string[] | undefined;
+  }
+
   const [userData, setUserData] = useState<UserData | null>(null);
   const [firstName, setFirstName] = useState<string>("");
   const [lastName, setLastName] = useState<string>("");
@@ -52,6 +63,7 @@ const AccountScreen = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [updating, setUpdating] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [avatar, setAvatar] = useState<string | null>(null);
   const [gender, setGender] = useState<boolean>(true); // true for Male, false for Female
   const [showGenderModal, setShowGenderModal] = useState<boolean>(false);
@@ -128,7 +140,62 @@ const AccountScreen = () => {
     }
   };
 
+  // Reset error for a specific field when user makes changes
+  const clearErrorForField = (field: string) => {
+    if (fieldErrors[field]) {
+      const newErrors = {...fieldErrors};
+      delete newErrors[field];
+      setFieldErrors(newErrors);
+    }
+  };
+
+  // Parse API error response and extract field-specific errors
+  const parseApiErrors = (err: any) => {
+    // Reset previous errors
+    setFieldErrors({});
+    
+    try {
+      // Check if the error has a response property (axios error)
+      const errorData = err.errors || (err.response && err.response.data) || err;
+      
+      if (errorData && errorData.errors) {
+        // Convert API field names to our component's field names (camelCase)
+        const mappedErrors: FieldErrors = {};
+        
+        Object.entries(errorData.errors).forEach(([key, value]) => {
+          // Convert FirstName to firstName, etc.
+          const fieldName = key.charAt(0).toLowerCase() + key.slice(1);
+          mappedErrors[fieldName] = Array.isArray(value) ? value : [String(value)];
+        });
+        
+        setFieldErrors(mappedErrors);
+        
+        // Create a summary message for the alert
+        const errorMessages = Object.values(mappedErrors)
+          .flat()
+          .join('\n• ');
+        
+        return '• ' + errorMessages;
+      }
+      
+      // If error structure is not as expected, return generic message
+      return "Could not update profile. Please check all fields and try again.";
+    } catch (parseError) {
+      console.error("Error parsing API error:", parseError);
+      return "Could not update profile due to an unexpected error.";
+    }
+  };
+
+  // Function to validate that a string contains only letters and spaces
+  const containsOnlyLettersAndSpaces = (text: string) => {
+    return /^[A-Za-z\s]+$/.test(text);
+  };
+
   const handleUpdate = async () => {
+    // Reset any existing errors
+    setFieldErrors({});
+    setError(null);
+    
     // Validate age before submitting
     if (!isAgeValid) {
       Alert.alert("Age Restriction", "You must be at least 18 years old to use this service.");
@@ -138,6 +205,26 @@ const AccountScreen = () => {
     // Validate required fields
     if (!firstName.trim()) {
       Alert.alert("Missing Information", "Please enter your first name.");
+      return;
+    }
+
+    // Validate first name format (letters and spaces only)
+    if (!containsOnlyLettersAndSpaces(firstName.trim())) {
+      setFieldErrors({
+        ...fieldErrors,
+        firstName: ["First name can only contain letters and spaces"]
+      });
+      Alert.alert("Validation Error", "First name can only contain letters and spaces.");
+      return;
+    }
+
+    // Validate last name format (letters and spaces only)
+    if (!containsOnlyLettersAndSpaces(lastName.trim())) {
+      setFieldErrors({
+        ...fieldErrors,
+        lastName: ["Last name can only contain letters and spaces"]
+      });
+      Alert.alert("Validation Error", "Last name can only contain letters and spaces.");
       return;
     }
 
@@ -191,7 +278,10 @@ const AccountScreen = () => {
       Alert.alert("Success", "Profile updated successfully!");
     } catch (err) {
       console.error("Update failed:", err);
-      Alert.alert("Update Failed", "Could not update profile information. Please check all fields and try again.");
+      
+      // Parse the error and show detailed message to user
+      const errorMessage = parseApiErrors(err);
+      Alert.alert("Update Failed", errorMessage);
     } finally {
       setUpdating(false);
     }
@@ -260,6 +350,16 @@ const AccountScreen = () => {
     );
   }
 
+  // Helper to display field error message if it exists
+  const getFieldErrorMessage = (fieldName: string) => {
+    return fieldErrors[fieldName] ? fieldErrors[fieldName]![0] : null;
+  };
+
+  // Helper to determine if a field has an error
+  const hasFieldError = (fieldName: string) => {
+    return !!fieldErrors[fieldName];
+  };
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -273,7 +373,6 @@ const AccountScreen = () => {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          
           <Text style={[styles.title, {color: colors.text}]}>Edit Profile</Text>
           <View style={styles.backButton} />
         </View>
@@ -310,10 +409,17 @@ const AccountScreen = () => {
               <InputField
                 icon="person-outline"
                 value={firstName}
-                onChangeText={setFirstName}
+                onChangeText={(text) => {
+                  setFirstName(text);
+                  clearErrorForField('firstName');
+                }}
                 placeholder="First name"
                 label=""
+                style={hasFieldError('firstName') ? styles.invalidField : undefined}
               />
+              {hasFieldError('firstName') && (
+                <Text style={styles.errorText}>{getFieldErrorMessage('firstName')}</Text>
+              )}
             </View>
             
             <View style={styles.formHalf}>
@@ -321,10 +427,17 @@ const AccountScreen = () => {
               <InputField
                 icon="person-outline"
                 value={lastName}
-                onChangeText={setLastName}
+                onChangeText={(text) => {
+                  setLastName(text);
+                  clearErrorForField('lastName');
+                }}
                 placeholder="Last name"
                 label=""
+                style={hasFieldError('lastName') ? styles.invalidField : undefined}
               />
+              {hasFieldError('lastName') && (
+                <Text style={styles.errorText}>{getFieldErrorMessage('lastName')}</Text>
+              )}
             </View>
           </View>
           
@@ -332,30 +445,51 @@ const AccountScreen = () => {
           <InputField
             icon="call-outline"
             value={phone}
-            onChangeText={setPhone}
+            onChangeText={(text) => {
+              setPhone(text);
+              clearErrorForField('phone');
+            }}
             placeholder="Enter phone number"
             label=""
             keyboardType="phone-pad"
+            style={hasFieldError('phone') ? styles.invalidField : undefined}
           />
+          {hasFieldError('phone') && (
+            <Text style={styles.errorText}>{getFieldErrorMessage('phone')}</Text>
+          )}
           
           <Text style={[styles.label, {color: colors.textSecondary}]}>Username</Text>
           <InputField
             icon="at-outline"
             value={slug}
-            onChangeText={setSlug}
+            onChangeText={(text) => {
+              setSlug(text);
+              clearErrorForField('slug');
+            }}
             placeholder="Your unique username"
             label=""
+            style={hasFieldError('slug') ? styles.invalidField : undefined}
           />
+          {hasFieldError('slug') && (
+            <Text style={styles.errorText}>{getFieldErrorMessage('slug')}</Text>
+          )}
           
           <Text style={[styles.label, {color: colors.textSecondary}]}>Gender</Text>
           <TouchableOpacity 
-            style={[styles.dropdownField, {backgroundColor: colors.background}]}
+            style={[
+              styles.dropdownField, 
+              {backgroundColor: colors.background},
+              hasFieldError('gender') ? styles.invalidField : undefined
+            ]}
             onPress={() => setShowGenderModal(true)}
           >
             <Ionicons name="person-outline" size={20} color={colors.textSecondary} style={styles.dropdownIcon} />
             <Text style={[styles.dropdownText, {color: colors.text}]}>{gender ? "Male" : "Female"}</Text>
             <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
+          {hasFieldError('gender') && (
+            <Text style={styles.errorText}>{getFieldErrorMessage('gender')}</Text>
+          )}
           
           {/* Gender Selection Modal */}
           <Modal
@@ -379,6 +513,7 @@ const AccountScreen = () => {
                   ]}
                   onPress={() => {
                     setGender(true);
+                    clearErrorForField('gender');
                     setShowGenderModal(false);
                   }}
                 >
@@ -395,6 +530,7 @@ const AccountScreen = () => {
                   ]}
                   onPress={() => {
                     setGender(false);
+                    clearErrorForField('gender');
                     setShowGenderModal(false);
                   }}
                 >
@@ -408,13 +544,20 @@ const AccountScreen = () => {
           </Modal>
           
           <Text style={[styles.label, {color: colors.textSecondary}]}>Date of Birth</Text>
-          <BirthdayDatePicker
-            selectedDate={dob instanceof Date && !isNaN(dob.getTime()) ? dob : new Date()}
-            onChange={handleDateChange}
-          />
+          {/* Remove style prop from BirthdayDatePicker as it's not supported */}
+          <View style={hasFieldError('dateOfBirth') ? styles.invalidField : undefined}>
+            <BirthdayDatePicker
+              selectedDate={dob instanceof Date && !isNaN(dob.getTime()) ? dob : new Date()}
+              onChange={handleDateChange}
+            />
+          </View>
           
           {!isAgeValid && (
             <Text style={styles.errorText}>You must be at least 18 years old</Text>
+          )}
+          
+          {hasFieldError('dateOfBirth') && (
+            <Text style={styles.errorText}>{getFieldErrorMessage('dateOfBirth')}</Text>
           )}
           
           <Text style={[styles.label, {color: colors.textSecondary, marginTop: 10}]}>Email Address</Text>

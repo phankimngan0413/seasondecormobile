@@ -1,11 +1,11 @@
 import React, { useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  Image, 
-  Platform 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  Platform
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,70 +14,88 @@ import { useTheme } from '@/constants/ThemeContext';
 export default function PaymentSuccessScreen() {
   const router = useRouter();
   const { theme } = useTheme();
-
+  
   useEffect(() => {
     // Any additional logic on success screen load
   }, []);
-
+  
   return (
     <View style={[
       styles.container, 
-      { 
-        backgroundColor: theme === 'dark' ? '#151718' : '#ffffff' 
+      {
+        backgroundColor: theme === 'dark' ? '#151718' : '#ffffff'
       }
     ]}>
       <View style={styles.successContainer}>
-        <Ionicons 
-          name="checkmark-circle" 
-          size={120} 
-          color="#4CAF50" 
+        <Ionicons
+          name="checkmark-circle"
+          size={120}
+          color="#4CAF50"
         />
         
         <Text style={[
-          styles.successTitle, 
+          styles.successTitle,
           { color: theme === 'dark' ? '#ffffff' : '#000000' }
         ]}>
           Payment Successful
         </Text>
         
         <Text style={[
-          styles.successMessage, 
+          styles.successMessage,
           { color: theme === 'dark' ? '#aaaaaa' : '#666666' }
         ]}>
           Your payment has been processed successfully.
         </Text>
         
         <View style={styles.buttonContainer}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[
-              styles.button, 
-              { 
+              styles.button,
+              {
                 backgroundColor: theme === 'dark' ? '#2C3E50' : '#3498DB',
                 borderColor: theme === 'dark' ? '#34495E' : '#2980B9'
               }
             ]}
-            onPress={() => router.push('/screens/Wallet')}
+            onPress={() => router.push('/(tabs)/profile')}
           >
             <Text style={[
-              styles.buttonText, 
+              styles.buttonText,
               { color: theme === 'dark' ? '#ffffff' : '#ffffff' }
             ]}>
               View Wallet
             </Text>
           </TouchableOpacity>
           
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[
-              styles.button, 
-              { 
+              styles.button,
+              {
+                backgroundColor: theme === 'dark' ? '#27AE60' : '#27AE60',
+                borderColor: theme === 'dark' ? '#219653' : '#219653'
+              }
+            ]}
+            onPress={() => router.push('/screens/checkout')}
+          >
+            <Text style={[
+              styles.buttonText,
+              { color: '#ffffff' }
+            ]}>
+              Continue to Checkout
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[
+              styles.button,
+              {
                 backgroundColor: theme === 'dark' ? '#273746' : '#ECF0F1',
                 borderColor: theme === 'dark' ? '#2C3E50' : '#BDC3C7'
               }
             ]}
-            onPress={() => router.push('/(tabs)/profile')}
+            onPress={() => router.push('/(tabs)/home')}
           >
             <Text style={[
-              styles.buttonText, 
+              styles.buttonText,
               { color: theme === 'dark' ? '#ffffff' : '#2C3E50' }
             ]}>
               Back to Home

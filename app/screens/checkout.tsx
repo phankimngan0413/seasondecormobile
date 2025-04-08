@@ -1,386 +1,603 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  Image,
   TouchableOpacity,
+  ScrollView,
   SafeAreaView,
   StatusBar,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
-import { useRouter } from 'expo-router';
-import { getOrderListAPI } from '@/utils/orderAPI';
-
-// Define Order interface
-interface Order {
-  id: number;
-  orderCode: string;
-  paymentMethod: string;
-  orderDate: string;
-  totalPrice: number;
-  status: number;
-  accountId: number;
-  addressId: number;
-  orderDetails: any[];
-}
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { getAddressesAPI } from '@/utils/addressAPI';
+import { getCartAPI } from '@/utils/cartAPI';
+import { getUserIdFromToken } from '@/services/auth';
+import { IProduct } from '@/utils/productAPI';
+import { IAddress } from '@/utils/addressAPI';
+import { createOrderAPI, payOrderWithWalletAPI } from '@/utils/orderAPI';
+import { getWalletBalanceAPI } from "@/utils/walletAPI";
 
 const PRIMARY_COLOR = "#5fc1f1";
-const SUCCESS_COLOR = "#4CAF50";
-const PENDING_COLOR = "#FFA500";
-const CANCELED_COLOR = "#FF5252";
 
-const OrderListScreen = () => {
+const CheckoutScreen = () => {
   const { theme } = useTheme();
   const colors = Colors[theme as "light" | "dark"];
   const router = useRouter();
+  const params = useLocalSearchParams();
 
-  // Sử dụng dữ liệu mẫu trực tiếp từ log
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [address, setAddress] = useState<IAddress | null>(null);
+  const [addresses, setAddresses] = useState<IAddress[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [refreshing, setRefreshing] = useState(false);
+  const [orderLoading, setOrderLoading] = useState(false);
+  const [cartId, setCartId] = useState<number | null>(null);
+  const [userId, setUserId] = useState<number | null>(null);
+  const [walletBalance, setWalletBalance] = useState<number>(0);
+  const [walletLoading, setWalletLoading] = useState(true);
+  const [insufficientFunds, setInsufficientFunds] = useState(false);
 
   useEffect(() => {
-    fetchOrders();
+    fetchData();
   }, []);
 
-  const fetchOrders = async () => {
+  const fetchWalletBalance = async () => {
+    try {
+      setWalletLoading(true);
+      const response = await getWalletBalanceAPI();
+      setWalletBalance(response.balance || 0);
+    } catch (err) {
+      console.error("Failed to fetch wallet balance", err);
+      setWalletBalance(0);
+    } finally {
+      setWalletLoading(false);
+    }
+  };
+
+  const fetchData = async () => {
     try {
       setLoading(true);
-      // Trường hợp API không hoạt động, sử dụng dữ liệu mẫu
-      const sampleData: Order[] = [
-        {"accountId": 2, "addressId": 2, "id": 1, "orderCode": "ODR-638793545813777039", "orderDate": "2025-04-04T16:09:41.3779177", "orderDetails": [], "paymentMethod": "Wallet Transaction", "status": 0, "totalPrice": 560000000},
-        {"accountId": 10, "addressId": 2, "id": 2, "orderCode": "ODR-638793568825051814", "orderDate": "2025-04-04T16:48:02.5055079", "orderDetails": [], "paymentMethod": "Wallet Transaction", "status": 0, "totalPrice": 0},
-        {"accountId": 2, "addressId": 2, "id": 3, "orderCode": "ODR-638793580958889976", "orderDate": "2025-04-04T17:08:15.8889997", "orderDetails": [], "paymentMethod": "Wallet Transaction", "status": 0, "totalPrice": 420000},
-        {"accountId": 2, "addressId": 3, "id": 4, "orderCode": "ODR-638793591663641931", "orderDate": "2025-04-04T17:26:06.3641951", "orderDetails": [], "paymentMethod": "Wallet Transaction", "status": 0, "totalPrice": 120000}
-      ];
-      
-      setOrders(sampleData);
-      console.log("Orders set:", sampleData);
+      setError("");
+      const userId = await getUserIdFromToken();
+      if (!userId) {
+        setError("Please log in to checkout");
+        setLoading(false);
+        return;
+      }
+
+      setUserId(userId);
+
+      // Fetch wallet balance
+      await fetchWalletBalance();
+
+      const addressData = await getAddressesAPI();
+      const validAddresses = Array.isArray(addressData) ? addressData : [];
+      setAddresses(validAddresses);
+
+      const defaultAddress = validAddresses.find(addr => addr.isDefault);
+      setAddress(defaultAddress || validAddresses[0]);
+
+      const cartData = await getCartAPI(userId);
+      if (cartData?.cartItems && cartData.cartItems.length > 0) {
+        setProducts(cartData.cartItems);
+        setCartId(cartData.id);
+      } else {
+        setError("Your cart is empty");
+      }
     } catch (err: any) {
-      console.error("Error fetching orders:", err);
-      setError(err.message || "Failed to load orders");
+      setError(err.message || "Failed to load checkout information");
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
 
-  const getStatusColor = (status: number): string => {
-    switch (status) {
-      case 0: return PENDING_COLOR;   // Pending
-      case 1: return PENDING_COLOR;   // Processing
-      case 2: return PRIMARY_COLOR;   // Shipped
-      case 3: return SUCCESS_COLOR;   // Delivered
-      case 4: return CANCELED_COLOR;  // Canceled
-      default: return colors.textSecondary;
+  const renderWalletBalance = () => {
+    if (walletLoading) {
+      return null;
     }
-  };
-
-  const getStatusText = (status: number): string => {
-    const statusMap: Record<number, string> = {
-      0: "Pending",
-      1: "Processing",
-      2: "Shipped",
-      3: "Delivered",
-      4: "Canceled"
-    };
-    return statusMap[status] || "Unknown";
-  };
-
-  const formatCurrency = (amount: number): string => {
-    return new Intl.NumberFormat('vi-VN', { 
-      style: 'currency', 
-      currency: 'VND' 
-    }).format(amount || 0);
-  };
-
-  const renderOrderItem = ({ item }: { item: Order }) => {
-    const statusColor = getStatusColor(item.status);
-    const formattedDate = new Date(item.orderDate).toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
 
     return (
       <TouchableOpacity 
-        style={[styles.orderItem, { backgroundColor: colors.card }]}
-        onPress={() => router.push({
-          pathname: "/screens/orders/order-success",
-          params: { orderId: item.id }
-        })}
+        style={[styles.walletBalanceContainer, { 
+          backgroundColor: colors.card,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: 15,
+          borderRadius: 10,
+          marginHorizontal: 15,
+          marginTop: 10
+        }]}
+        onPress={() => router.push('/screens/payment/transactions')}
       >
-        <View style={styles.orderHeader}>
-          <Text style={[styles.orderCode, { color: colors.text }]}>
-            {item.orderCode}
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Ionicons 
+            name="wallet" 
+            size={24} 
+            color={PRIMARY_COLOR} 
+            style={{ marginRight: 10 }}
+          />
+          <Text style={[styles.walletBalanceText, { color: colors.text }]}>
+            Wallet Balance
           </Text>
-          <View 
-            style={[
-              styles.statusBadge, 
-              { 
-                backgroundColor: `${statusColor}30`, 
-                borderColor: statusColor 
-              }
-            ]}
-          >
-            <Text style={[styles.statusText, { color: statusColor }]}>
-              {getStatusText(item.status)}
-            </Text>
-          </View>
         </View>
-        
-        <View style={styles.orderDetails}>
-          <View style={styles.detailRow}>
-            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-              Date
-            </Text>
-            <Text style={[styles.detailValue, { color: colors.text }]}>
-              {formattedDate}
-            </Text>
-          </View>
-          
-          <View style={styles.detailRow}>
-            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-              Payment Method
-            </Text>
-            <Text style={[styles.detailValue, { color: colors.text }]}>
-              {item.paymentMethod}
-            </Text>
-          </View>
-          
-          <View style={styles.detailRow}>
-            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-              Total
-            </Text>
-            <Text style={[styles.totalPrice, { color: PRIMARY_COLOR }]}>
-              {formatCurrency(item.totalPrice)}
-            </Text>
-          </View>
-        </View>
+        <Text style={[
+          styles.walletBalanceAmount, 
+          { color: insufficientFunds ? '#FF3B30' : PRIMARY_COLOR }
+        ]}>
+          {walletBalance.toLocaleString()} VND
+        </Text>
       </TouchableOpacity>
     );
   };
 
+  const renderInsufficientFundsWarning = () => {
+    if (!insufficientFunds || walletLoading) {
+      return null;
+    }
+
+    return (
+      <View style={styles.warningContainer}>
+        <Ionicons name="alert-circle" size={20} color="#FF3B30" style={{ marginRight: 8 }} />
+        <Text style={styles.warningText}>
+          Insufficient funds. Please add money to your wallet.
+        </Text>
+        <TouchableOpacity 
+          style={styles.topUpButton}
+          onPress={() => router.push('/screens/payment/add-funds')}
+        >
+          <Text style={styles.topUpButtonText}>Add Fund</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+  const handleSelectAddress = () => {
+    router.push({
+      pathname: "/screens/address/address-list",
+      params: { fromCheckout: "true", currentAddressId: address?.id || "" }
+    });
+  };
+
+  const subtotal = products.reduce((sum, product) => sum + (product.unitPrice * product.quantity), 0);
+  const total = subtotal;
+
+  // Check if wallet balance is sufficient
+  useEffect(() => {
+    if (!walletLoading) {
+      setInsufficientFunds(walletBalance < total);
+    }
+  }, [walletBalance, total, walletLoading]);
+
   const renderHeader = () => (
     <View style={[styles.header, { borderBottomColor: colors.border }]}>
-      <TouchableOpacity 
-        style={styles.backButton} 
-        onPress={() => router.back()}
-      >
+      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
         <Ionicons name="arrow-back" size={24} color={colors.text} />
       </TouchableOpacity>
-      
-      <Text style={[styles.headerTitle, { color: colors.text }]}>
-        My Orders
-      </Text>
-      
+      <Text style={[styles.headerTitle, { color: colors.text }]}>Checkout</Text>
+      <View style={styles.spacer} />
+    </View>
+  );
+
+  const renderAddressSection = () => {
+    if (!address) {
+      return (
+        <TouchableOpacity 
+          style={[styles.addressContainer, { backgroundColor: colors.card }]} 
+          onPress={handleSelectAddress}
+        >
+          <View style={styles.addressIconContainer}>
+            <Ionicons name="location" size={24} color={PRIMARY_COLOR} />
+          </View>
+          <Text style={[styles.noAddressText, { color: colors.text }]}>Add Shipping Address</Text>
+          <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
+        </TouchableOpacity>
+      );
+    }
+
+    const fullAddress = `${address.detail}, ${address.street}, ${address.ward}, ${address.district}, ${address.province}`;
+    return (
       <TouchableOpacity 
-        style={styles.refreshButton}
-        onPress={() => {
-          setRefreshing(true);
-          fetchOrders();
-        }}
-        disabled={loading}
+        style={[styles.addressContainer, { backgroundColor: colors.card }]} 
+        onPress={handleSelectAddress}
       >
-        <Ionicons 
-          name="refresh" 
-          size={24} 
-          color={loading ? colors.border : colors.text} 
-        />
+        <View style={styles.addressIconContainer}>
+          <Ionicons name="location" size={24} color={PRIMARY_COLOR} />
+        </View>
+        <View style={styles.addressDetails}>
+          <Text style={[styles.addressName, { color: colors.text }]}>{address.fullName}</Text>
+          <Text style={[styles.addressPhone, { color: colors.textSecondary }]}>{address.phone}</Text>
+          <Text style={[styles.addressFull, { color: colors.textSecondary }]}>{fullAddress}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
       </TouchableOpacity>
+    );
+  };
+
+  const renderProductSection = () => (
+    <View style={[styles.productSection, { backgroundColor: colors.card }]}>
+      {products.map((product, index) => (
+        <View key={index} style={[styles.productItem, { borderBottomColor: colors.border }]}>
+          <Image source={{ uri: product.image || 'https://via.placeholder.com/100' }} style={styles.productImage} />
+          <View style={styles.productInfo}>
+            <Text style={[styles.productName, { color: colors.text }]}>{product.productName}</Text>
+            <Text style={[styles.productPrice, { color: PRIMARY_COLOR }]}>${product.unitPrice.toLocaleString()}</Text>
+            <Text style={[styles.productQuantity, { color: colors.textSecondary }]}>x{product.quantity}</Text>
+          </View>
+        </View>
+      ))}
     </View>
   );
 
-  const renderEmptyList = () => (
-    <View style={styles.emptyContainer}>
-      <Ionicons 
-        name="document-text-outline" 
-        size={80} 
-        color={colors.border} 
-      />
-      <Text style={[styles.emptyTitle, { color: colors.text }]}>
-        No Orders
-      </Text>
-      <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-        You haven't placed any orders yet
-      </Text>
-      <TouchableOpacity
-        style={[styles.shopButton, { backgroundColor: PRIMARY_COLOR }]}
-        onPress={() => router.push("/product/productlist")}
-      >
-        <Text style={styles.shopButtonText}>Start Shopping</Text>
-      </TouchableOpacity>
+  const renderPriceBreakdown = () => (
+    <View style={[styles.priceBreakdownSection, { backgroundColor: colors.card }]}>
+      <View style={styles.priceRow}>
+        <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>Subtotal</Text>
+        <Text style={[styles.priceValue, { color: colors.text }]}>${subtotal.toLocaleString()}</Text>
+      </View>
+      <View style={[styles.totalRow, { borderTopColor: colors.border }]} >
+        <Text style={[styles.totalLabel, { color: colors.text }]}>Total Payment</Text>
+        <Text style={[styles.totalValue, { color: PRIMARY_COLOR }]}>${total.toLocaleString()}</Text>
+      </View>
     </View>
   );
 
-  if (loading && !refreshing) {
+  const handlePlaceOrder = async () => {
+    if (!address) {
+      Alert.alert("Missing Address", "Please select a shipping address");
+      return;
+    }
+
+    if (!cartId) {
+      Alert.alert("Cart Error", "There was an issue with your cart. Please try again.");
+      return;
+    }
+
+    if (insufficientFunds) {
+      Alert.alert(
+        "Insufficient Funds", 
+        "Your wallet balance is insufficient to complete this order. Would you like to add funds?",
+        [
+          {
+            text: "Cancel",
+            style: "cancel"
+          },
+          {
+            text: "Add Funds",
+            onPress: () => router.push('/screens/payment/add-funds')
+          }
+        ]
+      );
+      return;
+    }
+
+    try {
+      setOrderLoading(true);
+      
+      const orderDetails = {
+        total: total,
+        paymentMethod: "Wallet",
+        note: ""
+      };
+
+      // Step 1: Create the order
+      const orderResult = await createOrderAPI(cartId, Number(address.id), orderDetails);
+      
+      try {
+        // Step 2: Process payment immediately
+        await payOrderWithWalletAPI(orderResult.id);
+        
+        // Step 3: Navigate to success page
+        router.replace({
+          pathname: "/screens/orders/order-success",
+          params: { 
+            orderId: orderResult.id, 
+            total: total,
+            paid: "true"
+          }
+        });
+      } catch (paymentError: any) {
+        // If payment fails, show specific error but don't delete the order
+        Alert.alert(
+          "Payment Failed", 
+          paymentError.message || "There was a problem processing your payment.",
+          [
+            {
+              text: "Try Again Later",
+              style: "cancel"
+            },
+            {
+              text: "Add Funds",
+              onPress: () => router.push({
+                pathname: '/screens/payment/add-funds',
+                params: { orderId: orderResult.id }
+              })
+            }
+          ]
+        );
+      }
+      
+    } catch (err: any) {
+      Alert.alert("Order Failed", err.message || "There was a problem creating your order. Please try again.");
+    } finally {
+      setOrderLoading(false);
+    }
+  };
+
+  const renderCheckoutButton = () => (
+    <TouchableOpacity 
+      style={[
+        styles.checkoutButton, 
+        { backgroundColor: insufficientFunds ? '#FF3B30' : PRIMARY_COLOR },
+        (orderLoading || !address || products.length === 0) && styles.disabledButton
+      ]}
+      disabled={orderLoading || !address || products.length === 0}
+      onPress={handlePlaceOrder}
+    >
+      {orderLoading ? (
+        <ActivityIndicator size="small" color="#FFFFFF" />
+      ) : (
+        <Text style={styles.checkoutButtonText}>
+          {insufficientFunds ? "Add Funds to Place Order" : "Place Order & Pay Now"}
+        </Text>
+      )}
+    </TouchableOpacity>
+  );
+
+  if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar barStyle={theme === "dark" ? "light-content" : "dark-content"} />
         {renderHeader()}
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={PRIMARY_COLOR} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-            Loading orders...
-          </Text>
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading checkout information...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  console.log("Rendering with", orders.length, "orders");
+  if (error) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar barStyle={theme === "dark" ? "light-content" : "dark-content"} />
+        {renderHeader()}
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle-outline" size={60} color={PRIMARY_COLOR} />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity 
+            style={[styles.retryButton, { backgroundColor: PRIMARY_COLOR }]} 
+            onPress={fetchData}
+          >
+            <Text style={styles.retryButtonText}>Try Again</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={theme === "dark" ? "light-content" : "dark-content"} />
-      {renderHeader()}
-      
-      <Text style={styles.debugText}>Orders count: {orders.length}</Text>
-      
-      {orders.length > 0 ? (
-        <FlatList
-          data={orders}
-          renderItem={renderOrderItem}
-          keyExtractor={(item) => item.id.toString()}
-          contentContainerStyle={styles.listContent}
-          refreshing={refreshing}
-          onRefresh={fetchOrders}
-          showsVerticalScrollIndicator={false}
-        />
-      ) : (
-        renderEmptyList()
-      )}
+      <ScrollView style={styles.scrollContent}>
+        {renderHeader()}
+        {renderAddressSection()}
+        {renderProductSection()}
+        {renderPriceBreakdown()}
+        {renderWalletBalance()}
+        {renderInsufficientFundsWarning()}
+        <View style={styles.bottomSpacing} />
+      </ScrollView>
+      {renderCheckoutButton()}
     </SafeAreaView>
   );
 };
-
 const styles = StyleSheet.create({
-  container: {
+  container: { 
+    flex: 1, 
+    paddingTop: StatusBar.currentHeight || 0 
+  },
+  scrollContent: { 
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  bottomSpacing: {
+    height: 80, // Space for checkout button
+  },
+  header: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    padding: 15, 
+    borderBottomWidth: 1 
+  },
+  backButton: { padding: 8 },
+  headerTitle: { 
+    fontSize: 18, 
+    fontWeight: '600', 
+    flex: 1, 
+    textAlign: 'center' 
+  },
+  spacer: { width: 40 },
+  addressContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    padding: 15, 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#F0F0F0' 
+  },
+  addressIconContainer: { marginRight: 15 },
+  addressDetails: { flex: 1 },
+  addressName: { 
+    fontSize: 16, 
+    fontWeight: '600', 
+    marginBottom: 5 
+  },
+  addressPhone: { fontSize: 14 },
+  addressFull: { fontSize: 14 },
+  noAddressText: { 
+    fontSize: 16, 
+    fontWeight: '500' 
+  },
+  productSection: { marginTop: 10 },
+  productItem: { 
+    flexDirection: 'row', 
+    padding: 15, 
+    borderBottomWidth: 1 
+  },
+  productImage: { 
+    width: 80, 
+    height: 80, 
+    marginRight: 15, 
+    borderRadius: 4 
+  },
+  productInfo: { flex: 1 },
+  productName: { 
+    fontSize: 14, 
+    marginBottom: 10 
+  },
+  productPrice: { 
+    color: '#5fc1f1' 
+  },
+  productQuantity: { 
+    fontSize: 12 
+  },
+  priceBreakdownSection: { 
+    marginTop: 10, 
+    padding: 15 
+  },
+  priceRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    marginBottom: 10 
+  },
+  priceLabel: { 
+    fontSize: 14 
+  },
+  priceValue: { 
+    fontWeight: '500', 
+    fontSize: 14 
+  },
+  totalRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    borderTopWidth: 1, 
+    paddingTop: 10 
+  },
+  totalLabel: { 
+    fontSize: 16, 
+    fontWeight: '600' 
+  },
+  totalValue: { 
+    fontSize: 16, 
+    color: '#5fc1f1', 
+    fontWeight: '600' 
+  },
+  checkoutButton: { 
+    position: 'absolute', 
+    bottom: 0, 
+    left: 0, 
+    right: 0, 
+    backgroundColor: '#5fc1f1', 
+    padding: 15, 
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
+    height: 60,
+    justifyContent: 'center'
   },
-  backButton: {
-    padding: 8,
+  disabledButton: { 
+    backgroundColor: '#cccccc' 
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    flex: 1,
-    textAlign: 'center',
+  checkoutButtonText: { 
+    color: 'white', 
+    fontSize: 16, 
+    fontWeight: '600' 
   },
-  refreshButton: {
-    padding: 8,
+  loadingContainer: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    paddingHorizontal: 20 
   },
-  debugText: {
-    padding: 10,
-    backgroundColor: '#FFD700',
-    color: '#000',
-    textAlign: 'center',
-    fontWeight: 'bold',
+  loadingText: { 
+    marginTop: 15, 
+    fontSize: 16, 
+    textAlign: 'center' 
   },
-  listContent: {
-    padding: 16,
+  errorContainer: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    paddingHorizontal: 20 
   },
-  orderItem: {
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+  errorText: { 
+    color: '#666', 
+    fontSize: 16, 
+    textAlign: 'center', 
+    marginTop: 15, 
+    marginBottom: 20 
+  },
+  retryButton: { 
+    backgroundColor: '#5fc1f1', 
+    paddingVertical: 10, 
+    paddingHorizontal: 20, 
+    borderRadius: 5 
+  },
+  retryButtonText: { 
+    color: 'white', 
+    fontSize: 16, 
+    fontWeight: '500' 
+  },
+  walletBalanceContainer: {
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 2.62,
+    elevation: 3,
   },
-  orderHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  orderCode: {
+  walletBalanceText: {
     fontSize: 16,
-    fontWeight: '600',
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  orderDetails: {},
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  detailLabel: {
-    fontSize: 14,
-  },
-  detailValue: {
-    fontSize: 14,
     fontWeight: '500',
   },
-  totalPrice: {
+  walletBalanceAmount: {
     fontSize: 16,
-    fontWeight: '700',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  emptyTitle: {
-    fontSize: 20,
     fontWeight: '600',
-    marginTop: 20,
-    marginBottom: 8,
   },
-  emptySubtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  shopButton: {
-    paddingHorizontal: 32,
-    paddingVertical: 12,
+  warningContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF5F5',
+    marginHorizontal: 15,
+    marginTop: 10,
+    padding: 12,
     borderRadius: 8,
-    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#FFCCCC',
   },
-  shopButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  loadingContainer: {
+  warningText: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    color: '#FF3B30',
+    fontSize: 14,
   },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
+  topUpButton: {
+    backgroundColor: '#FF3B30',
+    borderRadius: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginLeft: 8,
+  },
+  topUpButtonText: {
+    color: 'white',
+    fontWeight: '500',
+    fontSize: 12,
   },
 });
 
-export default OrderListScreen;
+export default CheckoutScreen;
