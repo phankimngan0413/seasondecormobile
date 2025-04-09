@@ -15,7 +15,7 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
 import { createBookingAPI, IBookingRequest } from "@/utils/bookingAPI";
-import { getAddressesAPI, IAddress } from "@/utils/addressAPI";
+import { getAddressesAPI, IAddress } from "@/utils/AddressAPI";
 import { getToken } from "@/services/auth";
 
 // Import custom date picker

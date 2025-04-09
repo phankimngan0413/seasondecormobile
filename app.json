@@ -12,19 +12,10 @@
     "icon": "./assets/images/icon.png",
     "scheme": "com.baymaxphan.seasondecormobileapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.baymaxphan.seasondecormobileapp",
-      "infoPlist": {
-        "CFBundleURLTypes": [
-          {
-            "CFBundleURLSchemes": [
-              "com.baymaxphan.seasondecormobileapp"
-            ]
-          }
-        ]
-      }
+      "bundleIdentifier": "com.baymaxphan.seasondecormobileapp"
     },
     "android": {
       "adaptiveIcon": {
@@ -32,21 +23,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.baymaxphan.seasondecormobileapp",
-      "intentFilters": [
-        {
-          "action": "VIEW",
-          "autoVerify": true,
-          "data": [
-            {
-              "scheme": "com.baymaxphan.seasondecormobileapp"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
-        }
-      ]
+      "jsEngine": "hermes"
     },
     "web": {
       "bundler": "metro",
@@ -64,11 +41,13 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-font",
-      "./withAndroidGradlew.js"
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "updates": {
+      "enabled": false
     },
     "extra": {
       "router": {

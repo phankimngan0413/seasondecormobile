@@ -1,11 +1,14 @@
 const { getDefaultConfig } = require('expo/metro-config');
+const path = require('path');
 
 const config = getDefaultConfig(__dirname);
 
-// Add the additional extensions to assetExts
-config.resolver.assetExts.push(
-  // Add any other asset extensions you might be using
-  'png', 'jpg', 'jpeg', 'gif', 'webp', 'ttf'
-);
+// Thêm cấu hình resolver để hỗ trợ alias
+config.resolver = {
+  ...config.resolver,
+  extraNodeModules: {
+    '@': path.resolve(__dirname),
+  }
+};
 
 module.exports = config;

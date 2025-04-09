@@ -19,8 +19,8 @@ import axios from "axios";
 import InputField from "@/components/InputField";
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
-import { createAddressAPI } from "@/utils/addressAPI";
-import { IAddress } from "@/utils/addressAPI";
+import { createAddressAPI } from "@/utils/AddressAPI";
+import { IAddress } from "@/utils/AddressAPI";
 import { Ionicons } from "@expo/vector-icons";
 
 // Location interface

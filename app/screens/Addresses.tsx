@@ -14,7 +14,7 @@ import {
   setDefaultAddressAPI, 
   deleteAddressAPI,
   IAddress 
-} from "@/utils/addressAPI";
+} from "@/utils/AddressAPI";
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
 import { useRouter } from "expo-router";

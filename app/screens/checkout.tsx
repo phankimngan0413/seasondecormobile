@@ -15,11 +15,11 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { getAddressesAPI } from '@/utils/addressAPI';
+import { getAddressesAPI } from '@/utils/AddressAPI';
 import { getCartAPI } from '@/utils/cartAPI';
 import { getUserIdFromToken } from '@/services/auth';
 import { IProduct } from '@/utils/productAPI';
-import { IAddress } from '@/utils/addressAPI';
+import { IAddress } from '@/utils/AddressAPI';
 import { createOrderAPI, payOrderWithWalletAPI } from '@/utils/orderAPI';
 import { getWalletBalanceAPI } from "@/utils/walletAPI";
 
