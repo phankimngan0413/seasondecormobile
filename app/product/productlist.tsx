@@ -1,10 +1,20 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, ActivityIndicator, FlatList, StyleSheet, TouchableOpacity } from "react-native";
+import { 
+  View, 
+  Text, 
+  ActivityIndicator, 
+  FlatList, 
+  StyleSheet, 
+  TouchableOpacity,
+  Dimensions
+} from "react-native";
 import { useRouter } from "expo-router";
 import { getProductsAPI, IProduct } from "@/utils/productAPI";
 import ProductCard from "@/app/product/ProductCard";
-import { useTheme } from "@/constants/ThemeContext"; // Importing theme context
-import { Colors } from "@/constants/Colors"; // Importing theme colors
+import { useTheme } from "@/constants/ThemeContext";
+import { Colors } from "@/constants/Colors";
+
+const { width } = Dimensions.get("window");
 
 const ProductListScreen = () => {
   const [products, setProducts] = useState<IProduct[]>([]);
@@ -14,8 +24,8 @@ const ProductListScreen = () => {
 
   // Access current theme
   const { theme } = useTheme();
-  const validTheme = theme as "light" | "dark"; // Ensure theme is either light or dark
-  const colors = Colors[validTheme]; // Use colors based on the current theme
+  const validTheme = theme as "light" | "dark";
+  const colors = Colors[validTheme];
 
   useEffect(() => {
     fetchProducts();
@@ -42,10 +52,18 @@ const ProductListScreen = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Header Section */}
+      <View style={styles.headerContainer}>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Sản phẩm của chúng tôi</Text>
+        <Text style={[styles.headerSubtitle, { color: colors.text }]}>
+          Khám phá các sản phẩm trang trí cho mùa lễ hội
+        </Text>
+      </View>
+      
       <FlatList
         data={products}
         keyExtractor={(item) => item.id.toString()}
-        numColumns={2} // Display items in 2 columns
+        numColumns={2}
         renderItem={({ item }) => (
           <TouchableOpacity
             onPress={() =>
@@ -59,7 +77,8 @@ const ProductListScreen = () => {
             <ProductCard product={item} onAddToCart={() => {}} />
           </TouchableOpacity>
         )}
-        contentContainerStyle={[styles.productList, { backgroundColor: colors.background }]}
+        contentContainerStyle={styles.productList}
+        columnWrapperStyle={styles.columnWrapper}
         showsVerticalScrollIndicator={false}
       />
     </View>
@@ -68,26 +87,34 @@ const ProductListScreen = () => {
 
 const styles = StyleSheet.create({
   container: {
-    paddingTop: 20,
-    paddingHorizontal: 10,
+    paddingTop: 10,
     flex: 1,
-    justifyContent: "center",  // Center content vertically
-    alignItems: "center",      // Center content horizontally
+  },
+  headerContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 10,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    opacity: 0.7,
   },
   productList: {
-    justifyContent: "center", // Center items vertically in the list
-    alignItems: "center",     // Center items horizontally in the list
+    paddingHorizontal: 12,
     paddingBottom: 20,
-    flexDirection: "row",     // Ensure the products are in a row (for 2 columns)
-    flexWrap: "wrap",         // Allow wrapping of products into multiple rows
-    width: "100%",            // Ensure the product list takes full width
+    width: '100%',
+  },
+  columnWrapper: {
+    justifyContent: 'space-between',
   },
   productWrapper: {
-    flexBasis: "48%",         // Take up about half of the width (for 2 columns)
-    marginHorizontal: "1%",   // Add some space between items
-    marginBottom: 20,         // Add space below each item
-    alignItems: "center",     // Center items inside each product wrapper
-    justifyContent: "center", // Ensure content is centered within the wrapper
+    width: (width - 36) / 2, // Đảm bảo 2 sản phẩm trên một hàng với khoảng cách phù hợp
+    marginBottom: 16,
   },
   errorText: {
     color: "red",
@@ -101,6 +128,5 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
   },
 });
-
 
 export default ProductListScreen;

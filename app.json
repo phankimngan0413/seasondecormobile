@@ -19,11 +19,18 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.baymaxphan.seasondecormobileapp",
-      "jsEngine": "hermes"
+      "jsEngine": "hermes",
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
+      ],
+      "config": {
+        "usesCleartextTraffic": true
+      }
     },
     "web": {
       "bundler": "metro",
@@ -55,7 +62,8 @@
       },
       "eas": {
         "projectId": "ac46eeba-ea91-41cd-9938-625a5b5e1902"
-      }
+      },
+      "apiUrl": "http://season-decor.somee.com"
     }
   }
 }

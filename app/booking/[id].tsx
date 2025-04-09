@@ -78,6 +78,9 @@ const BookingScreen = () => {
         global.addressTimestamp = undefined;
       }
       
+      // Clear errors when returning to the screen
+      setError(null);
+      
       return () => {
         // Clean up any subscriptions or pending operations when screen loses focus
       };
@@ -98,6 +101,7 @@ const BookingScreen = () => {
       if (global.selectedAddressId) {
         console.log("Screen focused: Found address in global state:", global.selectedAddressId);
         setSelectedAddress(global.selectedAddressId);
+        setError(null); // Clear any errors when a new address is selected
         
         // Clear the global state to avoid confusion in future navigations
         global.selectedAddressId = undefined;
@@ -118,6 +122,7 @@ const BookingScreen = () => {
     console.log("Params changed, selectedAddressId:", selectedAddressIdParam, "timestamp:", timestamp);
     if (selectedAddressIdParam) {
       setSelectedAddress(selectedAddressIdParam);
+      setError(null); // Clear any errors when a new address is selected
       // Also refresh the address list
       setAddressesRefreshKey(prev => prev + 1);
     }
@@ -129,7 +134,7 @@ const BookingScreen = () => {
       setAddressesLoading(true);
       const token = await getToken();
       if (!token) {
-        Alert.alert("Error", "Please log in to continue");
+        setError("Please log in to continue");
         router.push("/login");
         return;
       }
@@ -192,13 +197,14 @@ const BookingScreen = () => {
   // Handle date change
   const onDateChange = (selectedDate: Date) => {
     const now = new Date();
+    setError(null); // Clear any errors
     
     // Set the time component of now to 00:00:00 for date-only comparison
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     
-    // If selected date is before today, use today instead
+    // If selected date is before today, use today instead and show inline error
     if (selectedDate < today) {
-      Alert.alert("Invalid Date", "You cannot select a date in the past. Today's date has been selected.");
+      setError("You cannot select a date in the past. Today's date has been selected.");
       setSurveyDate(today);
     } else {
       setSurveyDate(selectedDate);
@@ -209,9 +215,12 @@ const BookingScreen = () => {
 
   // Handle booking
   const handleBooking = async () => {
+    // Clear all previous errors
+    setError(null);
+    
     // Form validation
     if (!selectedAddress) {
-      Alert.alert("Notification", "Please add a shipping address before proceeding");
+      setError("Please add a shipping address before proceeding");
       // Navigate to add address screen
       router.push("/screens/address/add-address");
       return;
@@ -231,20 +240,13 @@ const BookingScreen = () => {
   
     // Check if the date is in the past
     if (surveyDate < now) {
-      Alert.alert(
-        "Invalid Date", 
-        "The selected date cannot be in the past. Please select a future date."
-      );
+      setError("The selected date cannot be in the past. Please select a future date.");
       return;
     }
   
     try {
       setLoading(true);
-      setError(null);
   
-      // Use current time for survey time
-      const currentTime = new Date();
-      
       // Booking data - Convert data types to numbers
       const bookingData: IBookingRequest = {
         decorServiceId: Number(id),
@@ -293,19 +295,45 @@ const BookingScreen = () => {
           ]
         );
       } else {
-        Alert.alert("Error", response.message || "Unable to book service");
+        // Use the exact error message from the backend
+        setError(response.message || "Unable to book service");
       }
     } catch (err: any) {
       console.error("Booking error:", err);
-      const errorMessage = err.message || "Unable to book service. Please try again.";
+      
+      // Extract the exact error message from the error object
+      let errorMessage = "Unable to book service. Please try again.";
+      
+      // Check if the error object contains a structured response from the backend
+      if (err.response && err.response.data && err.response.data.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      // If the error is in JSON string format, try to parse it
+      if (typeof errorMessage === 'string' && errorMessage.startsWith('{') && errorMessage.endsWith('}')) {
+        try {
+          const parsedError = JSON.parse(errorMessage);
+          if (parsedError.message) {
+            errorMessage = parsedError.message;
+          }
+        } catch (e) {
+          // If parsing fails, keep the original message
+          console.log("Error parsing error message:", e);
+        }
+      }
+      
       setError(errorMessage);
-      Alert.alert("Error", errorMessage);
     } finally {
       setLoading(false);
     }
   };
   
   const handleSelectAddress = () => {
+    // Reset error when selecting a new address
+    setError(null);
+    
     // Save current state to global variables for retrieval when returning
     global.currentBookingState = {
       serviceId: id,
@@ -343,6 +371,12 @@ const BookingScreen = () => {
     return parts.join(", ");
   };
 
+  // Check if error is related to address
+  const isAddressError = (errorMessage: string | null): boolean => {
+    if (!errorMessage) return false;
+    return errorMessage.toLowerCase().includes("address");
+  };
+
   // Render address section similar to checkout
   const renderAddressSection = () => {
     if (addressesLoading) {
@@ -357,6 +391,7 @@ const BookingScreen = () => {
     }
 
     const selectedAddressObj = getSelectedAddressObject();
+    const hasAddressError = error && isAddressError(error);
 
     if (!selectedAddressObj) {
       return (
@@ -376,20 +411,44 @@ const BookingScreen = () => {
     const fullAddress = formatAddress(selectedAddressObj);
     
     return (
-      <TouchableOpacity 
-        style={[styles.addressContainer, { backgroundColor: colors.card }]} 
-        onPress={handleSelectAddress}
-      >
-        <View style={styles.addressIconContainer}>
-          <Ionicons name="location" size={24} color={colors.primary} />
-        </View>
-        <View style={styles.addressDetails}>
-          <Text style={[styles.addressName, { color: colors.text }]}>{selectedAddressObj.fullName}</Text>
-          <Text style={[styles.addressPhone, { color: colors.textSecondary }]}>{selectedAddressObj.phone}</Text>
-          <Text style={[styles.addressFull, { color: colors.textSecondary }]}>{fullAddress}</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
-      </TouchableOpacity>
+      <>
+        <TouchableOpacity 
+          style={[
+            styles.addressContainer, 
+            { 
+              backgroundColor: colors.card,
+              borderColor: hasAddressError ? colors.error : colors.border,
+              borderWidth: hasAddressError ? 1 : 0
+            }
+          ]} 
+          onPress={handleSelectAddress}
+        >
+          <View style={styles.addressIconContainer}>
+            <Ionicons 
+              name="location" 
+              size={24} 
+              color={hasAddressError ? colors.error : colors.primary} 
+            />
+          </View>
+          <View style={styles.addressDetails}>
+            <Text style={[styles.addressName, { color: colors.text }]}>{selectedAddressObj.fullName}</Text>
+            <Text style={[styles.addressPhone, { color: colors.textSecondary }]}>{selectedAddressObj.phone}</Text>
+            <Text style={[styles.addressFull, { color: colors.textSecondary }]}>{fullAddress}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={24} color={hasAddressError ? colors.error : colors.textSecondary} />
+        </TouchableOpacity>
+        
+        {/* If there's an address-specific error, add the Choose Different Address button */}
+        {hasAddressError && (
+          <TouchableOpacity 
+            style={styles.chooseAddressButton} 
+            onPress={handleSelectAddress}
+          >
+            <Ionicons name="swap-horizontal" size={18} color="#fff" style={{ marginRight: 5 }} />
+            <Text style={styles.chooseAddressButtonText}>Choose Different Address</Text>
+          </TouchableOpacity>
+        )}
+      </>
     );
   };
 
@@ -426,6 +485,9 @@ const BookingScreen = () => {
         {renderAddressSection()}
 
         {/* Booking Form - Only Date Picker */}
+        <View style={styles.sectionTitle}>
+          <Text style={[styles.sectionTitleText, { color: colors.text }]}>Booking Details</Text>
+        </View>
         <View style={[styles.formContainer, { backgroundColor: colors.card }]}>
           {/* Survey Date */}
           <View style={styles.formGroup}>
@@ -454,8 +516,9 @@ const BookingScreen = () => {
         
         {/* Display any errors */}
         {error && (
-          <View style={[styles.errorContainer, { backgroundColor: `${colors.error}10` }]}>
-            <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle" size={20} color="#dc3545" style={styles.errorIcon} />
+            <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
 
@@ -483,8 +546,8 @@ const BookingScreen = () => {
         >
           {loading ? (
             <View style={styles.loadingButton}>
-              <ActivityIndicator size="small" color={colors.text} />
-              <Text style={[styles.bookButtonText, { color: colors.text }]}>
+              <ActivityIndicator size="small" color="#fff" />
+              <Text style={styles.bookButtonText}>
                 Processing...
               </Text>
             </View>
@@ -579,7 +642,8 @@ const styles = StyleSheet.create({
   },
   // Form styles
   formContainer: {
-    margin: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
     borderRadius: 12,
     padding: 16,
     shadowColor: '#000',
@@ -613,6 +677,22 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
   },
+  chooseAddressButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    marginTop: 4,
+    padding: 10,
+    borderRadius: 6,
+    backgroundColor: '#F44336',
+  },
+  chooseAddressButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
   loadingButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -624,14 +704,24 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   errorContainer: {
-    margin: 16,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#ffebee',
+    marginHorizontal: 16,
+    marginBottom: 16,
     padding: 12,
     borderRadius: 8,
     borderLeftWidth: 4,
-    borderLeftColor: 'red',
+    borderLeftColor: '#dc3545',
+  },
+  errorIcon: {
+    marginRight: 8,
+    marginTop: 2,
   },
   errorText: {
     fontSize: 14,
+    color: '#dc3545',
+    flex: 1,
   },
   noteContainer: {
     flexDirection: 'row',

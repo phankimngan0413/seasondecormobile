@@ -28,14 +28,14 @@ interface Order {
   orderDetails: any[];
 }
 
-const PRIMARY_COLOR = "#3498db";      // Xanh dương mới
-const SUCCESS_COLOR = "#2ecc71";      // Xanh lá mới
-const PENDING_COLOR = "#636e72";      // Vàng cam mới
-const PROCESSING_COLOR = "#f39c12"; 
-const SHIPPED_COLOR = "#1abc9c";      // Xanh ngọc mới 
-const CANCELED_COLOR = "#e74c3c";     // Đỏ mới
-const TOTAL_PRICE_COLOR = "#3498db";  // Xanh dương cho giá
-
+const PRIMARY_COLOR = "#3498db";      // Blue
+const PENDING_COLOR = "#f39c12";      // Orange
+const PAYMENT_COLOR = "#9b59b6";      // Purple
+const PROCESSING_COLOR = "#3498db";   // Blue
+const SHIPPING_COLOR = "#1abc9c";     // Teal
+const COMPLETED_COLOR = "#2ecc71";    // Green
+const CANCELLED_COLOR = "#e74c3c";    // Red
+const TOTAL_PRICE_COLOR = "#3498db";  // Blue for price
 
 const OrderListScreen = () => {
   const { theme } = useTheme();
@@ -47,6 +47,18 @@ const OrderListScreen = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState<number | null>(null);
+
+  // Status filter options
+  const statusFilters = [
+    { label: "All", value: null },
+    { label: "Pending", value: 0 },
+    { label: "Payment", value: 1 },
+    { label: "Processing", value: 2 },
+    { label: "Shipping", value: 3 },
+    { label: "Completed", value: 4 },
+    { label: "Cancelled", value: 5 }
+  ];
 
   // Fetch orders on mount
   useEffect(() => {
@@ -94,23 +106,38 @@ const OrderListScreen = () => {
 
   const getStatusColor = (status: number): string => {
     switch (status) {
-      case 0: return PENDING_COLOR;      // Pending
-      case 1: return PROCESSING_COLOR;   // Processing
-      case 2: return SHIPPED_COLOR;      // Shipped
-      case 3: return SUCCESS_COLOR;      // Delivered
-      case 4: return CANCELED_COLOR;     // Canceled
+      case 0: return PENDING_COLOR;     // Pending
+      case 1: return PAYMENT_COLOR;     // OrderPayment
+      case 2: return PROCESSING_COLOR;  // Processing
+      case 3: return SHIPPING_COLOR;    // Shipping
+      case 4: return COMPLETED_COLOR;   // Completed
+      case 5: return CANCELLED_COLOR;   // Cancelled
       default: return colors.textSecondary;
     }
   };
+
   const getStatusText = (status: number): string => {
     const statusMap: Record<number, string> = {
       0: "Pending",
-      1: "Processing",
-      2: "Shipped",
-      3: "Delivered",
-      4: "Canceled"
+      1: "Awaiting Payment",
+      2: "Processing",
+      3: "Shipping",
+      4: "Completed",
+      5: "Cancelled"
     };
     return statusMap[status] || "Unknown";
+  };
+
+  const getStatusIcon = (status: number): string => {
+    const iconMap: Record<number, string> = {
+      0: "time-outline",           // Pending
+      1: "card-outline",           // Awaiting Payment
+      2: "construct-outline",      // Processing
+      3: "car-outline",            // Shipping
+      4: "checkmark-circle-outline", // Completed
+      5: "close-circle-outline"    // Cancelled
+    };
+    return iconMap[status] || "help-circle-outline";
   };
 
   const formatCurrency = (amount: number): string => {
@@ -119,6 +146,10 @@ const OrderListScreen = () => {
       currency: 'VND' 
     }).format(amount || 0);
   };
+
+  const filteredOrders = selectedStatus !== null
+    ? orders.filter(order => order.status === selectedStatus)
+    : orders;
 
   const renderHeader = () => (
     <View style={[styles.header, { borderBottomColor: colors.border }]}>
@@ -150,9 +181,44 @@ const OrderListScreen = () => {
     </View>
   );
 
-  // Render item - styling giống OrderSuccessScreen
+  const renderStatusFilters = () => (
+    <View style={styles.filtersContainer}>
+      <FlatList
+        horizontal
+        data={statusFilters}
+        keyExtractor={(item) => item.label}
+        showsHorizontalScrollIndicator={false}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              selectedStatus === item.value && { 
+                backgroundColor: item.value !== null 
+                  ? getStatusColor(item.value) 
+                  : PRIMARY_COLOR 
+              }
+            ]}
+            onPress={() => setSelectedStatus(item.value)}
+          >
+            <Text 
+              style={[
+                styles.filterText, 
+                selectedStatus === item.value && styles.activeFilterText
+              ]}
+            >
+              {item.label}
+            </Text>
+          </TouchableOpacity>
+        )}
+        contentContainerStyle={styles.filtersContentContainer}
+      />
+    </View>
+  );
+
+  // Render item with updated styling
   const renderItem = ({ item }: { item: Order }) => {
     const statusColor = getStatusColor(item.status);
+    const statusIcon = getStatusIcon(item.status);
     
     return (
       <TouchableOpacity 
@@ -160,7 +226,6 @@ const OrderListScreen = () => {
           backgroundColor: colors.card,
           borderLeftWidth: 4,
           borderLeftColor: statusColor,
-          borderRadius: 12,
         }]}
         onPress={() => router.push({
           pathname: "/screens/orders/order-success",
@@ -168,9 +233,15 @@ const OrderListScreen = () => {
         })}
       >
         <View style={styles.orderHeader}>
-          <Text style={[styles.orderCode, { color: colors.text }]}>
-            {item.orderCode}
-          </Text>
+          <View style={styles.orderCodeContainer}>
+            <Text style={[styles.orderCode, { color: colors.text }]}>
+              {item.orderCode}
+            </Text>
+            <Text style={[styles.orderDate, { color: colors.textSecondary }]}>
+              {new Date(item.orderDate).toLocaleDateString()}
+            </Text>
+          </View>
+          
           <View 
             style={[
               styles.statusBadge, 
@@ -181,25 +252,19 @@ const OrderListScreen = () => {
               }
             ]}
           >
-            <Text style={[styles.statusText, { color: statusColor, fontWeight: 'bold' }]}>
+            <Ionicons name={statusIcon} size={14} color={statusColor} style={styles.statusIcon} />
+            <Text style={[styles.statusText, { color: statusColor }]}>
               {getStatusText(item.status)}
             </Text>
           </View>
         </View>
         
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        
         <View style={styles.orderDetails}>
           <View style={styles.detailRow}>
             <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-              Date
-            </Text>
-            <Text style={[styles.detailValue, { color: colors.text }]}>
-              {new Date(item.orderDate).toLocaleDateString()}
-            </Text>
-          </View>
-          
-          <View style={styles.detailRow}>
-            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-              Payment
+              Payment Method
             </Text>
             <Text style={[styles.detailValue, { color: colors.text }]}>
               {item.paymentMethod}
@@ -208,16 +273,56 @@ const OrderListScreen = () => {
           
           <View style={styles.detailRow}>
             <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-              Total
+              Total Amount
             </Text>
             <Text style={[styles.totalPrice, { color: TOTAL_PRICE_COLOR }]}>
               {formatCurrency(item.totalPrice)}
             </Text>
           </View>
         </View>
+        
+        <View style={styles.orderFooter}>
+          {/* Action buttons based on status */}
+          {item.status === 0 && (
+            <TouchableOpacity style={[styles.actionButton, { backgroundColor: PAYMENT_COLOR }]}>
+              <Text style={styles.actionButtonText}>Pay Now</Text>
+            </TouchableOpacity>
+          )}
+          
+          {item.status === 1 && (
+            <TouchableOpacity style={[styles.actionButton, { backgroundColor: PAYMENT_COLOR }]}>
+              <Text style={styles.actionButtonText}>Complete Payment</Text>
+            </TouchableOpacity>
+          )}
+          
+          {item.status === 3 && (
+            <TouchableOpacity style={[styles.actionButton, { backgroundColor: COMPLETED_COLOR }]}>
+              <Text style={styles.actionButtonText}>Track Order</Text>
+            </TouchableOpacity>
+          )}
+          
+          {item.status === 4 && (
+            <TouchableOpacity style={[styles.actionButton, { backgroundColor: PRIMARY_COLOR }]}>
+              <Text style={styles.actionButtonText}>Buy Again</Text>
+            </TouchableOpacity>
+          )}
+          
+          {/* Cancel button for orders that can be cancelled */}
+          {(item.status === 0 || item.status === 1 || item.status === 2) && (
+            <TouchableOpacity style={[styles.cancelButton, { borderColor: CANCELLED_COLOR }]}>
+              <Text style={[styles.cancelButtonText, { color: CANCELLED_COLOR }]}>Cancel</Text>
+            </TouchableOpacity>
+          )}
+          
+          {/* View details button for all orders */}
+          <TouchableOpacity style={[styles.detailsButton, { borderColor: PRIMARY_COLOR }]}>
+            <Text style={[styles.detailsButtonText, { color: PRIMARY_COLOR }]}>View Details</Text>
+          </TouchableOpacity>
+        </View>
       </TouchableOpacity>
     );
   };
+
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
       <Ionicons 
@@ -237,13 +342,6 @@ const OrderListScreen = () => {
       >
         <Text style={styles.shopButtonText}>Start Shopping</Text>
       </TouchableOpacity>
-    </View>
-  );
-
-  // Debug component to show order count
-  const DebugBar = () => (
-    <View style={styles.debugBar}>
-      <Text style={styles.debugText}>Orders count: {orders.length}</Text>
     </View>
   );
 
@@ -268,11 +366,11 @@ const OrderListScreen = () => {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={theme === "dark" ? "light-content" : "dark-content"} />
       {renderHeader()}
-      <DebugBar />
+      {renderStatusFilters()}
       
-      {orders.length > 0 ? (
+      {filteredOrders.length > 0 ? (
         <FlatList
-          data={orders}
+          data={filteredOrders}
           renderItem={renderItem}
           keyExtractor={item => item.id.toString()}
           contentContainerStyle={styles.listContent}
@@ -311,20 +409,34 @@ const styles = StyleSheet.create({
   refreshButton: {
     padding: 8,
   },
-  debugBar: {
-    padding: 8,
-    backgroundColor: '#FFD700',
+  filtersContainer: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
   },
-  debugText: {
-    color: '#000',
-    textAlign: 'center',
-    fontWeight: 'bold',
+  filtersContentContainer: {
+    paddingHorizontal: 16,
+  },
+  filterButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 8,
+    backgroundColor: '#f0f0f0',
+  },
+  filterText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  activeFilterText: {
+    color: '#fff',
+    fontWeight: '500',
   },
   listContent: {
     padding: 16,
   },
   orderItem: {
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 16,
     marginBottom: 16,
     shadowColor: "#000",
@@ -336,23 +448,42 @@ const styles = StyleSheet.create({
   orderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 12,
   },
+  orderCodeContainer: {
+    flex: 1,
+  },
   orderCode: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
+    marginBottom: 4,
+  },
+  orderDate: {
+    fontSize: 12,
   },
   statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
+  },
+  statusIcon: {
+    marginRight: 4,
   },
   statusText: {
     fontSize: 12,
     fontWeight: '600',
   },
-  orderDetails: {},
+  divider: {
+    height: 1,
+    width: '100%',
+    marginBottom: 12,
+  },
+  orderDetails: {
+    marginBottom: 16,
+  },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -369,6 +500,44 @@ const styles = StyleSheet.create({
   totalPrice: {
     fontSize: 16,
     fontWeight: '700',
+  },
+  orderFooter: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  actionButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  actionButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  cancelButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    backgroundColor: 'transparent',
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  detailsButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    backgroundColor: 'transparent',
+  },
+  detailsButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   emptyContainer: {
     flex: 1,

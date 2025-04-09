@@ -1,19 +1,23 @@
+import { AxiosResponse } from 'axios';
 import { initApiClient } from "@/config/axiosConfig";
 
-// Interfaces cho Booking
+// Define a more specific status type to avoid 'any' type issues
+export type BookingStatusCode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
+
+// Updated Booking interface with numeric status
 export interface IBooking {
-  id: number;
-  bookingId?: number;
+  id?: number;
+  bookingId: number;
   bookingCode: string;
-  decorServiceId: number;
-  userId: number;
-  addressId: number;
+  decorServiceId?: number;
+  userId?: number;
+  addressId?: number;
   address: string;
-  surveyDate: string;
-  surveyTime: string;
-  status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
+  surveyDate?: string;
+  surveyTime?: string;
+  status: BookingStatusCode; // Using the specific type for status
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
   totalPrice?: number;
   cost?: number;
   serviceItems?: string;
@@ -23,20 +27,37 @@ export interface IBooking {
     description: string;
     category?: string;
     image?: string;
-    createdAt?: string;
+    createAt?: string;
     status?: number;
     accountId?: number;
     decorCategoryId?: number;
     favoriteCount?: number;
+    images?: Array<{id: number, imageURL: string}>;
+    seasons?: Array<{id: number, seasonName: string}>;
+  };
+  provider?: {
+    id: number;
+    businessName: string;
+    avatar?: string;
+    phone?: string;
+    slug?: string;
+    isProvider?: boolean;
+    providerVerified?: boolean;
+    providerStatus?: number;
+    followersCount?: number;
+    followingsCount?: number;
   };
 }
 
+// Define request interfaces
 export interface IBookingRequest {
   decorServiceId: number;
   addressId: number;
   surveyDate: string;
+  surveyTime?: string;
 }
 
+// Define response interfaces
 export interface IBookingResponse {
   success: boolean;
   booking?: IBooking;
@@ -50,14 +71,24 @@ export interface IBookingListResponse {
   totalCount: number;
   message?: string;
 }
-
 export interface IPaginatedBookingsResponse {
-  items: IBooking[];
-  totalCount: number;
-  pageIndex: number;
-  pageSize: number;
-  totalPages: number;
+  success?: boolean;
+  message?: string;
+  errors?: any[];
+  data?: {
+    data: IBooking[];
+    totalCount: number;
+    pageIndex?: number;
+    pageSize?: number;
+    totalPages?: number;
+  };
+  items?: IBooking[];  // Kept for backward compatibility
+  totalCount?: number; // Kept for backward compatibility
+  pageIndex?: number;  // Kept for backward compatibility
+  pageSize?: number;   // Kept for backward compatibility
+  totalPages?: number; // Kept for backward compatibility
 }
+
 
 export interface IBookingFilterOptions {
   status?: string;
@@ -70,12 +101,19 @@ export interface IBookingFilterOptions {
 
 /**
  * Lấy danh sách booking phân trang với các tùy chọn lọc
- * @param options Các tùy chọn lọc và phân trang
+ * @param options - Các tùy chọn lọc và phân trang
+ * @returns Promise với danh sách booking phân trang
+ */
+/**
+ * Lấy danh sách booking phân trang với các tùy chọn lọc
+ * @param options - Các tùy chọn lọc và phân trang
  * @returns Promise với danh sách booking phân trang
  */
 export const getPaginatedBookingsForCustomerAPI = async (
   options: IBookingFilterOptions = {}
 ): Promise<IPaginatedBookingsResponse> => {
+  console.log('🔍 getPaginatedBookingsForCustomerAPI - Starting API call with options:', JSON.stringify(options, null, 2));
+  
   const {
     status,
     decorServiceId,
@@ -86,6 +124,7 @@ export const getPaginatedBookingsForCustomerAPI = async (
   } = options;
 
   const url = "/api/Booking/getPaginatedBookingsForCustomer";
+  console.log(`🔍 API URL: ${url}`);
   
   const params: Record<string, any> = {
     PageIndex: pageIndex,
@@ -95,24 +134,50 @@ export const getPaginatedBookingsForCustomerAPI = async (
   };
 
   // Thêm các tham số tùy chọn
-  if (status) params.Status = status;
-  if (decorServiceId) params.DecorServiceId = decorServiceId;
+  if (status) {
+    params.Status = status;
+    console.log(`🔍 Filtering by status: ${status}`);
+  }
+  if (decorServiceId) {
+    params.DecorServiceId = decorServiceId;
+    console.log(`🔍 Filtering by decorServiceId: ${decorServiceId}`);
+  }
+  
+  console.log('🔍 Request parameters:', JSON.stringify(params, null, 2));
   
   const apiClient = await initApiClient();
   try {
+    console.log('🔍 Sending API request...');
     const response = await apiClient.get(url, { params });
     
+    console.log('🔍 API response headers:', JSON.stringify(response.headers, null, 2));
+    
     if (response && response.data) {
-      const responseData = response.data.data || response.data;
-      return {
-        items: responseData.data || responseData.items || [],
-        totalCount: responseData.totalCount || 0,
-        pageIndex: responseData.pageIndex || pageIndex,
-        pageSize: responseData.pageSize || pageSize,
-        totalPages: responseData.totalPages || 0
-      };
+      
+      // Check data structure to determine response format
+      if (response.data.items) {
+      } else if (response.data.data && response.data.data.data) {
+      }
+      
+      // Log the total count and total pages
+      if (response.data.totalCount) {
+      } else if (response.data.data && response.data.data.totalCount) {
+      }
+      
+      if (response.data.totalPages) {
+      } else if (response.data.data && response.data.data.totalPages) {
+      }
+      
+      // Sample the first item if available
+      if (response.data.items && response.data.items.length > 0) {
+      } else if (response.data.data && response.data.data.data && response.data.data.data.length > 0) {
+      }
+      
+      console.log('🔍 API call successful, returning data');
+      return response.data;
     } else {
       console.error("🔴 Invalid paginated bookings response:", response);
+      console.log('🔍 Returning empty response due to invalid data');
       return {
         items: [],
         totalCount: 0,
@@ -123,11 +188,8 @@ export const getPaginatedBookingsForCustomerAPI = async (
     }
   } catch (error: any) {
     console.error("🔴 Error fetching paginated bookings:", error);
-    
-    if (error.response) {
-      console.error("API Error Response:", error.response.data);
-    }
-    
+
+
     return {
       items: [],
       totalCount: 0,
@@ -139,25 +201,21 @@ export const getPaginatedBookingsForCustomerAPI = async (
 };
 
 /**
- * Tạo một booking mới
- * @param bookingData Thông tin booking
- * @returns Promise với kết quả booking
+ * Create a booking
+ * @param bookingData Booking information
+ * @returns Promise with booking result
  */
 export const createBookingAPI = async (
   bookingData: IBookingRequest
 ): Promise<IBookingResponse> => {
   const url = "/api/Booking/create";
-
+  
   const apiClient = await initApiClient();
   try {
-    const response = await apiClient.post(url, bookingData);
-
+    const response: AxiosResponse<IBookingResponse> = await apiClient.post(url, bookingData);
+    
     if (response && response.data) {
-      return {
-        success: true,
-        booking: response.data.booking,
-        message: response.data.message || "Booking created successfully"
-      };
+      return response.data;
     } else {
       console.error("🔴 Invalid booking response:", response);
       return {
@@ -167,155 +225,41 @@ export const createBookingAPI = async (
     }
   } catch (error: any) {
     console.error("🔴 Error creating booking:", error);
-
-    if (error.response) {
+    
+    if (error.response && error.response.data) {
+      // Log the full error response for debugging
       console.error("API Error Response:", error.response.data);
+      
+      // Check if we have the specific address-in-use error
+      if (error.response.data.message && 
+          error.response.data.message.includes("address is currently in use")) {
+        return {
+          success: false,
+          message: error.response.data.message,
+          errors: error.response.data.errors || []
+        };
+      }
+      
+      // Return the exact error message from the backend
       return {
         success: false,
         message: error.response.data.message || "Failed to create booking",
-        errors: error.response.data.errors
+        errors: error.response.data.errors || []
       };
     }
-
-    return {
-      success: false,
-      message: "Network error or server unavailable"
-    };
-  }
-};
-
-/**
- * Lấy danh sách booking của người dùng
- * @param page Trang hiện tại
- * @param limit Số lượng booking trên mỗi trang
- * @returns Promise với danh sách booking
- */
-export const getBookingsAPI = async (
-  page: number = 1, 
-  limit: number = 20
-): Promise<IBookingListResponse> => {
-  const url = "/api/bookings";
-  const params = { page, limit };
-  
-  const apiClient = await initApiClient();
-  try {
-    const response = await apiClient.get(url, { params });
     
-    if (response && response.data && Array.isArray(response.data.bookings)) {
-      return {
-        success: true,
-        bookings: response.data.bookings,
-        totalCount: response.data.totalCount || 0,
-        message: response.data.message
-      };
-    } else {
-      console.error("🔴 Invalid bookings response:", response);
+    // For network errors or when response structure is unexpected
+    if (error.message && error.message.includes("Network Error")) {
       return {
         success: false,
-        bookings: [],
-        totalCount: 0,
-        message: "Invalid response format"
+        message: "Network error or server unavailable"
       };
     }
-  } catch (error: any) {
-    console.error("🔴 Error fetching bookings:", error);
     
-    if (error.response) {
-      console.error("API Error Response:", error.response.data);
-    }
-    
+    // Return a generic error if we can't get a specific message
     return {
       success: false,
-      bookings: [],
-      totalCount: 0,
-      message: "Failed to fetch booking history"
-    };
-  }
-};
-
-/**
- * Lấy chi tiết một booking cụ thể
- * @param bookingId ID của booking
- * @returns Promise với chi tiết booking
- */
-export const getBookingByIdAPI = async (
-  bookingId: number
-): Promise<IBookingResponse> => {
-  const url = `/api/bookings/${bookingId}`;
-  
-  const apiClient = await initApiClient();
-  try {
-    const response = await apiClient.get(url);
-    
-    if (response && response.data && response.data.booking) {
-      return {
-        success: true,
-        booking: response.data.booking,
-        message: response.data.message
-      };
-    } else {
-      console.error("🔴 Invalid booking detail response:", response);
-      return {
-        success: false,
-        message: "Booking not found or invalid response"
-      };
-    }
-  } catch (error: any) {
-    console.error("🔴 Error fetching booking details:", error);
-    
-    if (error.response) {
-      console.error("API Error Response:", error.response.data);
-    }
-    
-    return {
-      success: false,
-      message: "Failed to retrieve booking details"
-    };
-  }
-};
-
-/**
- * Hủy một booking
- * @param bookingId ID của booking cần hủy
- * @returns Promise với kết quả hủy booking
- */
-export const cancelBookingAPI = async (
-  bookingId: number
-): Promise<IBookingResponse> => {
-  const url = `/api/bookings/${bookingId}/cancel`;
-  
-  const apiClient = await initApiClient();
-  try {
-    const response = await apiClient.put(url);
-    
-    if (response && response.data) {
-      return {
-        success: true,
-        booking: response.data.booking,
-        message: response.data.message || "Booking cancelled successfully"
-      };
-    } else {
-      console.error("🔴 Invalid cancel booking response:", response);
-      return {
-        success: false,
-        message: "Failed to cancel booking"
-      };
-    }
-  } catch (error: any) {
-    console.error("🔴 Error cancelling booking:", error);
-    
-    if (error.response) {
-      console.error("API Error Response:", error.response.data);
-      return {
-        success: false,
-        message: error.response.data.message || "Failed to cancel booking",
-        errors: error.response.data.errors
-      };
-    }
-    
-    return {
-      success: false,
-      message: "Network error or server unavailable"
+      message: error.message || "Failed to process your booking request"
     };
   }
 };
@@ -326,14 +270,10 @@ export const requestCancelBookingAPI = async (
   
   const apiClient = await initApiClient();
   try {
-    const response = await apiClient.put(url);
+    const response: AxiosResponse<IBookingResponse> = await apiClient.put(url);
     
     if (response && response.data) {
-      return {
-        success: true,
-        booking: response.data.booking,
-        message: response.data.message || "Cancellation request submitted successfully"
-      };
+      return response.data;
     } else {
       console.error("🔴 Invalid cancellation request response:", response);
       return {
@@ -359,6 +299,55 @@ export const requestCancelBookingAPI = async (
     };
   }
 };
+
+/**
+ * Confirm a booking
+ * @param bookingCode Booking code to confirm
+ * @returns Promise with confirmation result
+ */
+export const confirmBookingAPI = async (
+  bookingCode: string
+): Promise<IBookingResponse> => {
+  const url = `/api/Booking/confirm/${bookingCode}`;
+  
+  const apiClient = await initApiClient();
+  try {
+    const response: AxiosResponse<IBookingResponse> = await apiClient.put(url);
+    
+    if (response && response.data) {
+      return response.data;
+    } else {
+      console.error("🔴 Invalid booking confirmation response:", response);
+      return {
+        success: false,
+        message: "Failed to confirm booking"
+      };
+    }
+  } catch (error: any) {
+    console.error("🔴 Error confirming booking:", error);
+    
+    if (error.response) {
+      console.error("API Error Response:", error.response.data);
+      return {
+        success: false,
+        message: error.response.data.message || "Failed to confirm booking",
+        errors: error.response.data.errors
+      };
+    }
+    
+    return {
+      success: false,
+      message: "Network error or server unavailable"
+    };
+  }
+};
+
+/**
+ * Make a deposit payment for a booking
+ * @param bookingCode Booking code to make deposit for
+ * @param depositData Deposit payment data
+ * @returns Promise with deposit result
+ */
 export const makeBookingDepositAPI = async (
   bookingCode: string,
   depositData: any
@@ -367,14 +356,10 @@ export const makeBookingDepositAPI = async (
   
   const apiClient = await initApiClient();
   try {
-    const response = await apiClient.post(url, depositData);
+    const response: AxiosResponse<IBookingResponse> = await apiClient.post(url, depositData);
     
     if (response && response.data) {
-      return {
-        success: true,
-        booking: response.data.booking,
-        message: response.data.message || "Deposit made successfully"
-      };
+      return response.data;
     } else {
       console.error("🔴 Invalid deposit response:", response);
       return {
@@ -390,47 +375,6 @@ export const makeBookingDepositAPI = async (
       return {
         success: false,
         message: error.response.data.message || "Failed to make deposit",
-        errors: error.response.data.errors
-      };
-    }
-    
-    return {
-      success: false,
-      message: "Network error or server unavailable"
-    };
-  }
-};
-export const makeBookingPaymentAPI = async (
-  bookingCode: string,
-  paymentData: any
-): Promise<IBookingResponse> => {
-  const url = `/api/Booking/payment/${bookingCode}`;
-  
-  const apiClient = await initApiClient();
-  try {
-    const response = await apiClient.post(url, paymentData);
-    
-    if (response && response.data) {
-      return {
-        success: true,
-        booking: response.data.booking,
-        message: response.data.message || "Payment made successfully"
-      };
-    } else {
-      console.error("🔴 Invalid payment response:", response);
-      return {
-        success: false,
-        message: "Failed to make payment"
-      };
-    }
-  } catch (error: any) {
-    console.error("🔴 Error making payment:", error);
-    
-    if (error.response) {
-      console.error("API Error Response:", error.response.data);
-      return {
-        success: false,
-        message: error.response.data.message || "Failed to make payment",
         errors: error.response.data.errors
       };
     }

@@ -16,7 +16,6 @@ import { useRouter } from "expo-router";
 import { useLocalSearchParams } from "expo-router";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { AxiosError } from "axios";
-
 // API Utilities
 import {
   getProviderDetailAPI,
@@ -84,6 +83,7 @@ const useForceUpdate = () => {
   }, []);
   return update;
 };
+
 const ProviderDetailScreen: React.FC = () => {
   // Hooks
   const { slug } = useLocalSearchParams();
@@ -107,6 +107,22 @@ const ProviderDetailScreen: React.FC = () => {
   const colors = Colors[validTheme];
   
   const forceUpdate = useForceUpdate();
+  
+  // Helper function to get image URL safely
+  const getImageUrl = (imageItem: any): string => {
+    if (!imageItem) return "https://via.placeholder.com/300";
+    if (typeof imageItem === 'string') return imageItem;
+    if (imageItem.imageURL) return imageItem.imageURL;
+    return "https://via.placeholder.com/300";
+  };
+
+  // Helper function to extract season name safely
+  const getSeasonName = (season: any): string => {
+    if (typeof season === 'string') return season;
+    if (season && typeof season === 'object' && 'seasonName' in season) return season.seasonName;
+    return 'Unknown Season';
+  };
+  
   // Helper function to format decor data for the DecorCard component
   const formatDecorForCard = (item: any): any => {
     return {
@@ -132,144 +148,140 @@ const ProviderDetailScreen: React.FC = () => {
     };
   };
   
-  // Check if the user is following this provider
- 
   // Navigate to messaging
-// Enhanced navigateToChat with contact addition
-const navigateToChat = async () => {
-  if (!provider?.id) return;
-  
-  // Show loading indicator if needed
-  // setLoading(true);
-  
-  try {
-    // Try to add contact - whether it succeeds or says "already exists" doesn't matter
-    const response = await addContactAPI(provider.id);
+  // Enhanced navigateToChat with contact addition
+  const navigateToChat = async () => {
+    if (!provider?.id) return;
     
-    // Log the result for debugging but don't show to user
-    console.log("Contact API response:", response);
-  } catch (error) {
-    // Just log any errors, don't show to user
-    console.log("Contact addition error:", error);
-  } finally {
-    // In all cases, navigate to chat
-    // setLoading(false);
-    
-    router.push({
-      pathname: "/chat",
-      params: {
-        receiverId: provider.id.toString(),
-        receiverName: provider.businessName || "Provider",
-      },
-    });
-  }
-};
-// Enhanced checkFollowStatus without modifying provider object
-const checkFollowStatus = useCallback(async () => {
-  if (!provider?.id) {
-    console.log("Cannot check follow status: Provider ID is missing");
-    return;
-  }
-
-  try {
-    console.log(`Checking follow status for provider ID: ${provider.id}`);
-    
-    // Get followings list directly - more reliable
-    const apiClient = await initApiClient();
-    const response = await apiClient.get("/api/follow/followings");
-    
-    let following = false;
-    
-    // Check for various possible response formats
-    if (response?.data?.data && Array.isArray(response.data.data)) {
-      // API returns {data: {data: []}} format
-      following = response.data.data.some(
-        (user: any) => user.accountId === provider.id || user.id === provider.id
-      );
-    } else if (response?.data && Array.isArray(response.data)) {
-      // API returns {data: []} format
-      following = response.data.some(
-        (user: any) => user.accountId === provider.id || user.id === provider.id
-      );
-    }
-    
-    console.log(`Determined follow status: ${following}`);
-    
-    // Update following state if it's different
-    if (isFollowing !== following) {
-      setIsFollowing(following);
-      // Force a re-render if needed
-      forceUpdate();
-    }
-  } catch (error) {
-    console.log("Error checking follow status:", error);
-    // Keep existing state
-  }
-}, [provider?.id, isFollowing, forceUpdate]);
-
-// Run checkFollowStatus only when provider changes
-useEffect(() => {
-  if (provider?.id) {
-    checkFollowStatus();
-  }
-}, [provider?.id, checkFollowStatus]);
-// Final fixed handleFollowToggle without alreadyNotFollowing reference
-const handleFollowToggle = async () => {
-  if (!provider?.id) return;
-
-  setFollowLoading(true);
-  try {
-    if (isFollowing) {
-      // Try to unfollow - this will succeed even if relationship doesn't exist
-      await unfollowUserAPI(provider.id);
+    try {
+      // Try to add contact - whether it succeeds or says "already exists" doesn't matter
+      const response = await addContactAPI(provider.id);
       
-      // Update UI state regardless of response details
-      setIsFollowing(false);
-      forceUpdate();
+      // Log the result for debugging but don't show to user
+      console.log("Contact API response:", response);
+    } catch (error) {
+      // Just log any errors, don't show to user
+      console.log("Contact addition error:", error);
+    } finally {
+      // In all cases, navigate to chat
+      router.push({
+        pathname: "/chat",
+        params: {
+          receiverId: provider.id.toString(),
+          receiverName: provider.businessName || "Provider",
+        },
+      });
+    }
+  };
+  
+  // Enhanced checkFollowStatus without modifying provider object
+  const checkFollowStatus = useCallback(async () => {
+    if (!provider?.id) {
+      console.log("Cannot check follow status: Provider ID is missing");
+      return;
+    }
+
+    try {
+      console.log(`Checking follow status for provider ID: ${provider.id}`);
       
-      // Update the follower count in the UI
-      if (provider.followersCount && provider.followersCount > 0) {
-        setProvider({
-          ...provider,
-          followersCount: provider.followersCount - 1
-        });
+      // Get followings list directly - more reliable
+      const apiClient = await initApiClient();
+      const response = await apiClient.get("/api/follow/followings");
+      
+      let following = false;
+      
+      // Check for various possible response formats
+      if (response?.data?.data && Array.isArray(response.data.data)) {
+        // API returns {data: {data: []}} format
+        following = response.data.data.some(
+          (user: any) => user.accountId === provider.id || user.id === provider.id
+        );
+      } else if (response?.data && Array.isArray(response.data)) {
+        // API returns {data: []} format
+        following = response.data.some(
+          (user: any) => user.accountId === provider.id || user.id === provider.id
+        );
       }
-    } else {
-      try {
-        // Try to follow
-        const response = await followUserAPI(provider.id);
+      
+      console.log(`Determined follow status: ${following}`);
+      
+      // Update following state if it's different
+      if (isFollowing !== following) {
+        setIsFollowing(following);
+        // Force a re-render if needed
+        forceUpdate();
+      }
+    } catch (error) {
+      console.log("Error checking follow status:", error);
+      // Keep existing state
+    }
+  }, [provider?.id, isFollowing, forceUpdate]);
+
+  // Run checkFollowStatus only when provider changes
+  useEffect(() => {
+    if (provider?.id) {
+      checkFollowStatus();
+    }
+  }, [provider?.id, checkFollowStatus]);
+  
+  // Final fixed handleFollowToggle without alreadyNotFollowing reference
+  const handleFollowToggle = async () => {
+    if (!provider?.id) return;
+
+    setFollowLoading(true);
+    try {
+      if (isFollowing) {
+        // Try to unfollow - this will succeed even if relationship doesn't exist
+        await unfollowUserAPI(provider.id);
         
-        // Success - update UI
-        setIsFollowing(true);
+        // Update UI state regardless of response details
+        setIsFollowing(false);
         forceUpdate();
         
-        // Update follower count only if not already following
-        if (!response?.alreadyFollowing) {
+        // Update the follower count in the UI
+        if (provider.followersCount && provider.followersCount > 0) {
           setProvider({
             ...provider,
-            followersCount: (provider.followersCount || 0) + 1
+            followersCount: provider.followersCount - 1
           });
         }
-      } catch (error: any) {
-        // Only special case is "already following"
-        if (error.message && error.message.includes("already following")) {
+      } else {
+        try {
+          // Try to follow
+          const response = await followUserAPI(provider.id);
+          
+          // Success - update UI
           setIsFollowing(true);
           forceUpdate();
-        } else {
-          throw error; // Rethrow other errors
+          
+          // Update follower count only if not already following
+          if (!response?.alreadyFollowing) {
+            setProvider({
+              ...provider,
+              followersCount: (provider.followersCount || 0) + 1
+            });
+          }
+        } catch (error: any) {
+          // Only special case is "already following"
+          if (error.message && error.message.includes("already following")) {
+            setIsFollowing(true);
+            forceUpdate();
+          } else {
+            throw error; // Rethrow other errors
+          }
         }
       }
+    } catch (error: any) {
+      // Only show alert for errors we couldn't handle
+      Alert.alert(
+        "Action Failed",
+        error.message || "Failed to update follow status. Please try again."
+      );
+    } finally {
+      setFollowLoading(false);
     }
-  } catch (error: any) {
-    // Only show alert for errors we couldn't handle
-    Alert.alert(
-      "Action Failed",
-      error.message || "Failed to update follow status. Please try again."
-    );
-  } finally {
-    setFollowLoading(false);
-  }
-};
+  };
+  
   const fetchProviderDetail = useCallback(async () => {
     // Validate slug
     if (!slug || typeof slug !== "string") {
@@ -429,47 +441,47 @@ const handleFollowToggle = async () => {
                   </View>
                 </View>
               </View>
-{/* Follow and Message Buttons */}
-<View style={styles.actionButtonsContainer}>
-  <TouchableOpacity
-    style={[
-      styles.followButton,
-      isFollowing ? styles.unfollowButton : {}, // Style change for unfollow
-      followLoading ? styles.disabledButton : {},
-    ]}
-    onPress={handleFollowToggle}
-    disabled={followLoading}
-  >
-    {followLoading ? (
-      <ActivityIndicator size="small" color="#fff" />
-    ) : (
-      <>
-        <Ionicons
-          name={isFollowing ? "person-remove" : "person-add"}
-          size={18}
-          color="#fff"
-          style={styles.actionButtonIcon}
-        />
-        <Text style={styles.actionButtonText}>
-          {isFollowing ? "Unfollow" : "Follow"}
-        </Text>
-      </>
-    )}
-  </TouchableOpacity>
+              {/* Follow and Message Buttons */}
+              <View style={styles.actionButtonsContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.followButton,
+                    isFollowing ? styles.unfollowButton : {}, // Style change for unfollow
+                    followLoading ? styles.disabledButton : {},
+                  ]}
+                  onPress={handleFollowToggle}
+                  disabled={followLoading}
+                >
+                  {followLoading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons
+                        name={isFollowing ? "person-remove" : "person-add"}
+                        size={18}
+                        color="#fff"
+                        style={styles.actionButtonIcon}
+                      />
+                      <Text style={styles.actionButtonText}>
+                        {isFollowing ? "Unfollow" : "Follow"}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
 
-  <TouchableOpacity
-    style={[styles.messageButton]}
-    onPress={navigateToChat}
-  >
-    <Ionicons
-      name="chatbubble-ellipses"
-      size={18}
-      color="#fff"
-      style={styles.actionButtonIcon}
-    />
-    <Text style={styles.actionButtonText}>Message</Text>
-  </TouchableOpacity>
-</View>
+                <TouchableOpacity
+                  style={[styles.messageButton]}
+                  onPress={navigateToChat}
+                >
+                  <Ionicons
+                    name="chatbubble-ellipses"
+                    size={18}
+                    color="#fff"
+                    style={styles.actionButtonIcon}
+                  />
+                  <Text style={styles.actionButtonText}>Message</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <View style={styles.bioContainer}>
@@ -542,23 +554,78 @@ const handleFollowToggle = async () => {
                 keyExtractor={(item) =>
                   item.id?.toString() || Math.random().toString()
                 }
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.decorCardWrapper}
-                    onPress={() =>
-                      router.push({
-                        pathname: "/decor/[id]",
-                        params: { id: item.id.toString() },
-                      })
-                    }
-                    activeOpacity={0.7}
-                  >
-                    <DecorCard decor={formatDecorForCard(item)} />
-                  </TouchableOpacity>
-                )}
+                renderItem={({ item }) => {
+                  // Extract province or sublocation for location display
+                  const location = item.province || item.sublocation || 'Unknown Province';
+                  
+                  return (
+                    <TouchableOpacity
+                      style={styles.decorCardWrapper}
+                      onPress={() =>
+                        router.push({
+                          pathname: "/decor/[id]",
+                          params: { id: item.id.toString() },
+                        })
+                      }
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.decorCard, { backgroundColor: colors.card }]}>
+                        {/* Card Image */}
+                        <View style={styles.cardImageContainer}>
+                          <Image
+                            source={{ 
+                              uri: Array.isArray(item.images) && item.images.length > 0
+                                ? getImageUrl(item.images[0])
+                                : "https://via.placeholder.com/300"
+                            }}
+                            style={styles.cardImage}
+                            resizeMode="cover"
+                          />
+                        </View>
+                        
+                        {/* Card Content */}
+                        <View style={styles.cardContent}>
+                          <Text 
+                            style={[styles.cardTitle, { color: colors.text }]}
+                            numberOfLines={1}
+                          >
+                            {item.style || 'Unnamed Style'}
+                          </Text>
+                          
+                          <View style={styles.locationRow}>
+                            <Ionicons name="location-outline" size={13} color="#888" />
+                            <Text 
+                              style={[styles.locationText, { color: '#888' }]}
+                              numberOfLines={1}
+                            >
+                              {location}
+                            </Text>
+                          </View>
+                          
+                          <View style={styles.seasonTags}>
+                            {Array.isArray(item.seasons) && item.seasons.slice(0, 2).map((season, index) => {
+                              const seasonName = getSeasonName(season);
+                              return (
+                                <View 
+                                  key={index} 
+                                  style={styles.seasonTag}
+                                >
+                                  <Text style={styles.seasonTagText}>
+                                    {seasonName}
+                                  </Text>
+                                </View>
+                              );
+                            })}
+                          </View>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                }}
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.horizontalDecorList}
+                initialNumToRender={3} // Render more items initially
               />
             </View>
           ) : (
@@ -723,11 +790,6 @@ const styles = StyleSheet.create({
     marginTop: 12,
     width: "100%",
   },
-  decorCardWrapper: {
-    width: SCREEN_WIDTH * 0.75,
-    maxWidth: 280,
-    marginRight: 12,
-  },
   followButton: {
     backgroundColor: PRIMARY_COLOR,
     paddingVertical: 8,
@@ -808,11 +870,6 @@ const styles = StyleSheet.create({
     paddingLeft: 16,
     paddingRight: 8,
   },
-  horizontalDecorCardWrapper: {
-    width: SCREEN_WIDTH * 0.8,
-    maxWidth: 300,
-    marginRight: 8,
-  },
   productsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -878,32 +935,69 @@ const styles = StyleSheet.create({
   decorServicesContainer: {
     marginBottom: 16,
   },
-  // Decor card styles
-  imageContainer: {
-    width: "100%",
-    height: 160,
-    backgroundColor: "#f0f0f0",
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  fullImage: {
-    width: "100%",
-    height: "100%",
+  
+  // Updated DecorCard styles to match DecorListScreen
+  decorCardWrapper: {
+    width: SCREEN_WIDTH * 0.46, // Make cards smaller to fit more on screen
+    maxWidth: 180,
+    marginRight: 8,
   },
   decorCard: {
-    width: SCREEN_WIDTH * 0.75,
-    maxWidth: 280,
-    height: 250, // Increased to accommodate the taller image
-    borderRadius: 12,
-    marginRight: 12,
-    overflow: "hidden",
+    width: '100%',
+    borderRadius: 8,
+    overflow: 'hidden',
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 2,
+    elevation: 2,
+    backgroundColor: 'white',
   },
+  cardImageContainer: {
+    position: 'relative',
+    width: '100%',
+    height: 120, // Make image height smaller
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  cardContent: {
+    padding: 10,
+    backgroundColor: '#f5f5f5', // Light gray background to match screenshot
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  locationText: {
+    fontSize: 12,
+    marginLeft: 4,
+  },
+  seasonTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  seasonTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 12,
+    marginRight: 4,
+    marginBottom: 4,
+    backgroundColor: '#E6F7FF',
+  },
+  seasonTagText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: PRIMARY_COLOR,
+  },
+  // Legacy styles kept for backward compatibility
   priceTag: {
     position: "absolute",
     top: 10,
@@ -918,44 +1012,5 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 14,
   },
-  decorCardInfo: {
-    padding: 12,
-    flex: 1,
-  },
-  decorCardTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 4,
-  },
-  decorCardLocation: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  decorCardLocationText: {
-    fontSize: 12,
-    marginLeft: 4,
-  },
-  decorCardSeasons: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 0.5,
-  },
-  seasonTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    marginRight: 6,
-  },
-  seasonTagText: {
-    fontSize: 10,
-    fontWeight: "500",
-  },
-  moreSeasons: {
-    fontSize: 10,
-    marginLeft: 2,
-  },
-});
-
+})
 export default ProviderDetailScreen;

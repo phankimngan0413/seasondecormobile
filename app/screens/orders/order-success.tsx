@@ -18,9 +18,13 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { getOrderByIdAPI, payOrderWithWalletAPI } from '@/utils/orderAPI';
 import { getWalletBalanceAPI } from "@/utils/walletAPI";
 
-const PRIMARY_COLOR = "#5fc1f1";
-const SUCCESS_COLOR = "#4CAF50";
-const PAYMENT_COLOR = "#FF9500";
+const PRIMARY_COLOR = "#3498db";      // Blue
+const PENDING_COLOR = "#f39c12";      // Orange
+const PAYMENT_COLOR = "#9b59b6";      // Purple
+const PROCESSING_COLOR = "#3498db";   // Blue
+const SHIPPING_COLOR = "#1abc9c";     // Teal
+const COMPLETED_COLOR = "#2ecc71";    // Green
+const CANCELLED_COLOR = "#e74c3c";    // Red
 
 const OrderSuccessScreen = () => {
   const { theme } = useTheme();
@@ -126,21 +130,35 @@ const OrderSuccessScreen = () => {
   const getStatusText = (status: number) => {
     const statusMap: Record<number, string> = {
       0: "Pending",
-      1: "Processing",
-      2: "Shipped",
-      3: "Delivered",
-      4: "Canceled"
+      1: "Awaiting Payment",
+      2: "Processing",
+      3: "Shipping",
+      4: "Completed",
+      5: "Cancelled"
     };
     return statusMap[status] || "Unknown";
   };
 
+  const getStatusIcon = (status: number) => {
+    const iconMap: Record<number, string> = {
+      0: "time-outline",           // Pending
+      1: "card-outline",           // Awaiting Payment
+      2: "construct-outline",      // Processing
+      3: "car-outline",            // Shipping
+      4: "checkmark-circle-outline", // Completed
+      5: "close-circle-outline"    // Cancelled
+    };
+    return iconMap[status] || "help-circle-outline";
+  };
+
   const getStatusColor = (status: number) => {
     const statusColorMap: Record<number, string> = {
-      0: "#FF9500", // Orange for pending
-      1: "#007AFF", // Blue for processing
-      2: "#5856D6", // Purple for shipped
-      3: "#4CAF50", // Green for delivered
-      4: "#FF3B30"  // Red for canceled
+      0: PENDING_COLOR,     // Pending
+      1: PAYMENT_COLOR,     // Awaiting Payment
+      2: PROCESSING_COLOR,  // Processing
+      3: SHIPPING_COLOR,    // Shipping
+      4: COMPLETED_COLOR,   // Completed
+      5: CANCELLED_COLOR    // Cancelled
     };
     return statusColorMap[status] || "#8E8E93"; // Gray for unknown
   };
@@ -153,34 +171,123 @@ const OrderSuccessScreen = () => {
       >
         <Ionicons name="close" size={24} color={colors.text} />
       </TouchableOpacity>
-      <Text style={[styles.headerTitle, { color: colors.text }]}>Order Confirmation</Text>
+      <Text style={[styles.headerTitle, { color: colors.text }]}>Order Details</Text>
       <View style={styles.spacer} />
     </View>
   );
 
-  const renderSuccessMessage = () => (
-    <View style={styles.successContainer}>
-      <View style={[styles.iconCircle, { backgroundColor: isPaid ? SUCCESS_COLOR : PAYMENT_COLOR }]}>
-        <Ionicons 
-          name={isPaid ? "checkmark" : "receipt-outline"} 
-          size={50} 
-          color="white" 
-        />
+  const renderOrderStatus = () => {
+    const status = orderData?.status || 0;
+    const statusColor = getStatusColor(status);
+    const statusIcon = getStatusIcon(status);
+    const statusText = getStatusText(status);
+    
+    let messageText = "";
+    
+    switch(status) {
+      case 0:
+        messageText = "Your order has been placed and is awaiting confirmation.";
+        break;
+      case 1:
+        messageText = "Please complete the payment to process your order.";
+        break;
+      case 2:
+        messageText = "Your order is being processed.";
+        break;
+      case 3:
+        messageText = "Your order is on the way!";
+        break;
+      case 4:
+        messageText = "Your order has been delivered successfully. Thank you for your purchase!";
+        break;
+      case 5:
+        messageText = "This order has been cancelled.";
+        break;
+      default:
+        messageText = "Thank you for your order.";
+    }
+    
+    return (
+      <View style={styles.successContainer}>
+        <View style={[styles.iconCircle, { backgroundColor: statusColor }]}>
+          <Ionicons name={statusIcon} size={40} color="white" />
+        </View>
+        
+        <Text style={[styles.successTitle, { color: statusColor }]}>
+          {statusText}
+        </Text>
+        
+        <Text style={[styles.successMessage, { color: colors.textSecondary }]}>
+          {messageText}
+        </Text>
+        
+        <View style={[styles.orderCodeContainer, { backgroundColor: colors.card }]}>
+          <Text style={[styles.orderCodeLabel, { color: colors.textSecondary }]}>Order Code:</Text>
+          <Text style={[styles.orderCode, { color: colors.text }]}>{orderData?.orderCode}</Text>
+        </View>
       </View>
-      <Text style={[styles.successTitle, { color: isPaid ? SUCCESS_COLOR : PAYMENT_COLOR }]}>
-        {isPaid ? "Order Successful!" : "Order Placed!"}
-      </Text>
-      <Text style={[styles.successMessage, { color: colors.textSecondary }]}>
-        {isPaid 
-          ? "Your order has been placed and paid successfully. Thank you for your purchase!" 
-          : "Your order has been placed successfully. Please complete the payment to process your order."}
-      </Text>
-      <View style={[styles.orderCodeContainer, { backgroundColor: colors.card }]}>
-        <Text style={[styles.orderCodeLabel, { color: colors.textSecondary }]}>Order Code:</Text>
-        <Text style={[styles.orderCode, { color: colors.text }]}>{orderData?.orderCode}</Text>
+    );
+  };
+
+  const renderOrderProgress = () => {
+    const status = orderData?.status || 0;
+    
+    // Skip rendering for cancelled orders
+    if (status === 5) return null;
+    
+    const steps = [
+      { label: "Pending", value: 0 },
+      { label: "Payment", value: 1 },
+      { label: "Processing", value: 2 },
+      { label: "Shipping", value: 3 },
+      { label: "Completed", value: 4 }
+    ];
+    
+    return (
+      <View style={[styles.progressContainer, { backgroundColor: colors.card }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Order Progress</Text>
+        
+        <View style={styles.stepperContainer}>
+          {steps.map((step, index) => {
+            const isActive = status >= step.value;
+            const isLast = index === steps.length - 1;
+            
+            return (
+              <View key={step.value} style={styles.stepItem}>
+                <View style={styles.stepContent}>
+                  <View style={[
+                    styles.stepCircle, 
+                    { 
+                      backgroundColor: isActive ? getStatusColor(step.value) : colors.border,
+                      borderColor: isActive ? getStatusColor(step.value) : colors.border
+                    }
+                  ]}>
+                    {isActive && <Ionicons name="checkmark" size={12} color="white" />}
+                  </View>
+                  <Text style={[
+                    styles.stepLabel, 
+                    { 
+                      color: isActive ? getStatusColor(step.value) : colors.textSecondary,
+                      fontWeight: isActive ? '600' : 'normal'
+                    }
+                  ]}>
+                    {step.label}
+                  </Text>
+                </View>
+                
+                {!isLast && (
+                  <View style={[
+                    styles.stepperLine, 
+                    { backgroundColor: status > step.value ? getStatusColor(step.value) : colors.border }
+                  ]} />
+                )}
+              </View>
+            );
+          })}
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   const renderOrderSummary = () => (
     <View style={[styles.summaryContainer, { backgroundColor: colors.card }]}>
@@ -195,8 +302,14 @@ const OrderSuccessScreen = () => {
         <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Status</Text>
         <View style={[
           styles.statusBadge, 
-          { backgroundColor: `${getStatusColor(orderData?.status)}30` }
+          { backgroundColor: `${getStatusColor(orderData?.status)}20` }
         ]}>
+          <Ionicons 
+            name={getStatusIcon(orderData?.status)} 
+            size={14} 
+            color={getStatusColor(orderData?.status)} 
+            style={styles.statusIcon} 
+          />
           <Text style={[
             styles.statusText, 
             { color: getStatusColor(orderData?.status) }
@@ -223,7 +336,7 @@ const OrderSuccessScreen = () => {
         </Text>
       </View>
 
-      {orderData?.status === 0 && (
+      {orderData?.status === 1 && (
         <View style={styles.paymentStatusContainer}>
           <View style={styles.walletBalanceRow}>
             <Text style={[styles.walletBalanceLabel, { color: colors.textSecondary }]}>
@@ -231,7 +344,7 @@ const OrderSuccessScreen = () => {
             </Text>
             <Text style={[
               styles.walletBalanceValue, 
-              { color: insufficientFunds ? '#FF3B30' : SUCCESS_COLOR }
+              { color: insufficientFunds ? CANCELLED_COLOR : COMPLETED_COLOR }
             ]}>
               {new Intl.NumberFormat('vi-VN', { 
                 style: 'currency', 
@@ -241,7 +354,7 @@ const OrderSuccessScreen = () => {
           </View>
           
           {insufficientFunds && (
-            <Text style={styles.insufficientFundsText}>
+            <Text style={[styles.insufficientFundsText, { color: CANCELLED_COLOR }]}>
               Insufficient balance. Please add funds to your wallet.
             </Text>
           )}
@@ -249,7 +362,7 @@ const OrderSuccessScreen = () => {
           <TouchableOpacity
             style={[
               styles.payNowButton,
-              { backgroundColor: insufficientFunds ? '#FF3B30' : PAYMENT_COLOR },
+              { backgroundColor: insufficientFunds ? CANCELLED_COLOR : PAYMENT_COLOR },
               paymentLoading && { opacity: 0.7 }
             ]}
             onPress={handlePayNow}
@@ -267,6 +380,55 @@ const OrderSuccessScreen = () => {
       )}
     </View>
   );
+
+  const renderActionButtons = () => {
+    const status = orderData?.status || 0;
+    
+    // Different actions based on status
+    return (
+      <View style={styles.actionButtonsContainer}>
+        {status === 0 && (
+          <TouchableOpacity 
+            style={[styles.actionButton, { backgroundColor: CANCELLED_COLOR }]}
+            onPress={() => Alert.alert(
+              "Cancel Order",
+              "Are you sure you want to cancel this order?",
+              [
+                { text: "No", style: "cancel" },
+                { text: "Yes", onPress: () => console.log("Cancel order", orderId) }
+              ]
+            )}
+          >
+            <Ionicons name="close-circle-outline" size={18} color="white" style={styles.actionButtonIcon} />
+            <Text style={styles.actionButtonText}>Cancel Order</Text>
+          </TouchableOpacity>
+        )}
+        
+        {status === 3 && (
+          <TouchableOpacity 
+            style={[styles.actionButton, { backgroundColor: SHIPPING_COLOR }]}
+            // onPress={() => router.push({
+            //   pathname: "/screens/orders/track-order",
+            //   params: { orderId: orderId }
+            // })}
+          >
+            <Ionicons name="location-outline" size={18} color="white" style={styles.actionButtonIcon} />
+            <Text style={styles.actionButtonText}>Track Shipment</Text>
+          </TouchableOpacity>
+        )}
+        
+        {status === 4 && (
+          <TouchableOpacity 
+            style={[styles.actionButton, { backgroundColor: PRIMARY_COLOR }]}
+            onPress={() => console.log("Write review")}
+          >
+            <Ionicons name="star-outline" size={18} color="white" style={styles.actionButtonIcon} />
+            <Text style={styles.actionButtonText}>Write a Review</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
 
   const renderProductsList = () => (
     <View style={[styles.productsContainer, { backgroundColor: colors.card }]}>
@@ -312,7 +474,7 @@ const OrderSuccessScreen = () => {
   const renderButtons = () => (
     <View style={styles.buttonsContainer}>
       <TouchableOpacity 
-        style={[styles.button, styles.primaryButton]} 
+        style={[styles.button, styles.primaryButton, { backgroundColor: PRIMARY_COLOR }]} 
         onPress={() => router.push("/product/productlist")}
       >
         <Text style={styles.primaryButtonText}>Continue Shopping</Text>
@@ -365,8 +527,10 @@ const OrderSuccessScreen = () => {
       {renderHeader()}
       
       <ScrollView showsVerticalScrollIndicator={false}>
-        {renderSuccessMessage()}
+        {renderOrderStatus()}
+        {renderOrderProgress()}
         {renderOrderSummary()}
+        {renderActionButtons()}
         {renderProductsList()}
         {renderShippingAddress()}
         {renderButtons()}
@@ -400,17 +564,16 @@ const styles = StyleSheet.create({
     width: 40 
   },
   
-  // Success Message
+  // Status Message
   successContainer: {
     alignItems: 'center',
     padding: 20,
-    paddingBottom: 30
+    paddingBottom: 25
   },
   iconCircle: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: SUCCESS_COLOR,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 15
@@ -418,7 +581,6 @@ const styles = StyleSheet.create({
   successTitle: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: SUCCESS_COLOR,
     marginBottom: 10
   },
   successMessage: {
@@ -432,7 +594,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 12,
     borderRadius: 8,
-    marginTop: 5
+    marginTop: 5,
+    width: '100%',
+    justifyContent: 'center'
   },
   orderCodeLabel: {
     marginRight: 8,
@@ -442,10 +606,51 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600'
   },
+
+  // Progress Stepper
+  progressContainer: {
+    margin: 15,
+    padding: 15,
+    borderRadius: 10
+  },
+  stepperContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10
+  },
+  stepItem: {
+    flex: 1,
+    alignItems: 'center'
+  },
+  stepContent: {
+    alignItems: 'center'
+  },
+  stepCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    marginBottom: 8
+  },
+  stepLabel: {
+    fontSize: 11,
+    textAlign: 'center'
+  },
+  stepperLine: {
+    position: 'absolute',
+    top: 12,
+    right: '50%',
+    left: '50%',
+    height: 2
+  },
   
   // Summary Section
   summaryContainer: {
     margin: 15,
+    marginTop: 0,
     padding: 15,
     borderRadius: 10
   },
@@ -476,12 +681,43 @@ const styles = StyleSheet.create({
     marginVertical: 12
   },
   statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12
   },
+  statusIcon: {
+    marginRight: 4
+  },
   statusText: {
     fontSize: 12,
+    fontWeight: '600'
+  },
+  
+  // Action Buttons
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 15,
+    marginVertical: 10
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    margin: 5,
+    flex: 1,
+  },
+  actionButtonIcon: {
+    marginRight: 6
+  },
+  actionButtonText: {
+    color: 'white',
     fontWeight: '600'
   },
   
@@ -506,11 +742,9 @@ const styles = StyleSheet.create({
   },
   insufficientFundsText: {
     fontSize: 12,
-    color: '#FF3B30',
     marginBottom: 10
   },
   payNowButton: {
-    backgroundColor: PAYMENT_COLOR,
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',

@@ -87,20 +87,36 @@ class SignalRService {
       console.log("Initializing SignalR connection");
       
       // Configure SignalR connection
-// Trên client
-this._connection = new signalR.HubConnectionBuilder()
-  .withUrl(`${BASE_URL}/chatHub`, {
-    skipNegotiation: Platform.OS === 'android',
-    transport: Platform.OS === 'android' 
-      ? signalR.HttpTransportType.WebSockets 
-      : undefined,
-    accessTokenFactory: () => {
-      console.log("Getting token for SignalR: ", token); // Log token
-      return token;
-    },
-  })
-  .configureLogging(signalR.LogLevel.Debug) // Tăng mức độ log
-  .build();
+      this._connection = new signalR.HubConnectionBuilder()
+      .withUrl(`${BASE_URL}/chatHub`, {
+        // Thử không bỏ qua negotiation
+        skipNegotiation: false,
+        // Sử dụng tất cả các transport có sẵn
+        transport: signalR.HttpTransportType.WebSockets | 
+                  signalR.HttpTransportType.LongPolling,
+        accessTokenFactory: () => {
+          console.log("Getting token for SignalR: ", token);
+          return token;
+        },
+      })
+      .withAutomaticReconnect([0, 2000, 10000, 30000]) // Cấu hình tự động kết nối lại
+      .configureLogging(signalR.LogLevel.Debug)
+      .build();
+    
+    // Thêm code kiểm tra kết nối sau khi khởi tạo
+    console.log(`SignalR attempting to connect to: ${BASE_URL}/chatHub`);
+    
+    // Trong trường hợp vẫn gặp lỗi, thêm event handler này để biết chi tiết lỗi
+    this._connection.onclose((error) => {
+      console.error("SignalR connection closed with error:", error);
+      console.error("Connection state:", this._connection?.state);
+      console.error("Connection base URL used:", BASE_URL);
+      this._connection = null;
+      
+      if (!this.isReconnecting && error) {
+        this.scheduleReconnect(token);
+      }
+    });
 
       // Handle received messages
       this._connection.on("ReceiveMessage", (message: Message) => {
