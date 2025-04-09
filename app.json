@@ -64,7 +64,8 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-font"
+      "expo-font",
+      "./withAndroidGradlew.js"
     ],
     "experiments": {
       "typedRoutes": true
