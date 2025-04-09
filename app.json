@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "seasondecormobileapp",
+    "name": "seasondecor",
     "slug": "seasondecormobileapp",
     "platforms": [
       "ios",
@@ -63,7 +63,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
