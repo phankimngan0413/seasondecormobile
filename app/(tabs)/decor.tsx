@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { 
   View, 
   Text, 
@@ -11,13 +11,15 @@ import {
   Dimensions,
   TextInput,
   StatusBar,
-  ScrollView
+  ScrollView,
+  RefreshControl
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { getDecorServicesAPI, IDecor } from "@/utils/decorserviceAPI";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
+import debounce from 'lodash/debounce';
 
 const { width } = Dimensions.get("window");
 const PRIMARY_COLOR = "#5fc1f1";
@@ -53,9 +55,11 @@ const DecorListScreen = () => {
   const [decorServices, setDecorServices] = useState<IDecor[]>([]);
   const [filteredServices, setFilteredServices] = useState<IDecor[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchInputText, setSearchInputText] = useState("");
   const router = useRouter();
 
   const { theme } = useTheme();
@@ -70,31 +74,102 @@ const DecorListScreen = () => {
     { name: "Winter", icon: "snow-outline" }
   ];
 
+  // Initial load
   useEffect(() => {
     fetchDecorServices();
   }, []);
 
+  // Refresh when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      console.log('🔍 DecorListScreen focused - checking if refresh needed');
+      // Only refresh if the screen has been out of focus for a while
+      // or if we haven't loaded data yet
+      const shouldRefresh = decorServices.length === 0;
+      
+      if (shouldRefresh) {
+        console.log('🔄 Refreshing data on focus');
+        fetchDecorServices();
+      } else {
+        console.log('⏩ Skipping refresh on focus - data already loaded');
+      }
+      
+      return () => {
+        // Cleanup if needed
+        console.log('⬅️ DecorListScreen unfocused');
+      };
+    }, [decorServices.length])
+  );
+
   // Apply filters whenever selectedSeason or searchQuery changes
   useEffect(() => {
+    console.log('Filters changed - reapplying filters');
     filterServices();
   }, [selectedSeason, searchQuery, decorServices]);
 
+  // Debounced search function
+  const debouncedSearch = useCallback(
+    debounce((text: string) => {
+      console.log('Searching for:', text);
+      setSearchQuery(text);
+    }, 300),
+    []
+  );
+
+  // Handle search input change with debounce
+  const handleSearchChange = (text: string) => {
+    setSearchInputText(text);
+    debouncedSearch(text);
+  };
+
+  // Clear search
+  const clearSearch = () => {
+    setSearchInputText("");
+    setSearchQuery("");
+  };
+
   const fetchDecorServices = async () => {
     try {
-      setLoading(true);
+      if (!refreshing) {
+        setLoading(true);
+      }
+      setError(null);
+      console.log('🔄 Fetching decor services...');
+      
+      // Add a small delay to make the refresh animation more visible
+      if (refreshing) {
+        await new Promise(resolve => setTimeout(resolve, 800));
+      }
+      
       const data = await getDecorServicesAPI();
+      
       if (Array.isArray(data)) {
+        console.log(`✅ Fetched ${data.length} decor services successfully`);
         setDecorServices(data);
         setFilteredServices(data);
       } else {
+        console.error('❌ Invalid data format:', data);
         setError("Invalid data format received.");
       }
     } catch (err: any) {
+      console.error('❌ Error fetching decor services:', err);
       setError(err.message || "Failed to fetch decor services.");
     } finally {
       setLoading(false);
+      setRefreshing(false);
+      console.log('🔄 Fetch operation complete');
     }
   };
+
+  // Handler for pull-to-refresh
+  const onRefresh = useCallback(() => {
+    console.log('Pull-to-refresh triggered');
+    setRefreshing(true);
+    // Reset filters on refresh to show all results
+    // setSelectedSeason(null);
+    // clearSearch();
+    fetchDecorServices();
+  }, []);
 
   const filterServices = () => {
     let results = [...decorServices];
@@ -120,6 +195,7 @@ const DecorListScreen = () => {
       );
     }
     
+    console.log(`Filtered to ${results.length} services`);
     setFilteredServices(results);
   };
 
@@ -135,6 +211,7 @@ const DecorListScreen = () => {
           params: { id: item.id.toString() },
         })}
         activeOpacity={0.7}
+        testID={`decor-card-${item.id}`}
       >
         {/* Card Image */}
         <View style={styles.cardImageContainer}>
@@ -147,11 +224,6 @@ const DecorListScreen = () => {
             style={styles.cardImage}
             resizeMode="cover"
           />
-          
-          {/* Price Badge - Fixed to use dummy price since we don't have real price in API */}
-          {/* <View style={styles.priceBadge}>
-            <Text style={styles.priceText}>{formatCurrency(2500000)}</Text>
-          </View> */}
         </View>
         
         {/* Card Content */}
@@ -199,20 +271,53 @@ const DecorListScreen = () => {
       </Text>
       <Text style={[styles.emptyText, { color: colors.textSecondary || '#666' }]}>
         {selectedSeason 
-          ? `No decor services available for ${selectedSeason} season` 
+          ? `No decor services available for ${selectedSeason} season${searchQuery ? ' matching your search' : ''}` 
           : "No decor services match your search criteria"}
       </Text>
-      <TouchableOpacity 
-        style={[styles.resetButton, { backgroundColor: PRIMARY_COLOR }]}
-        onPress={() => {
-          setSelectedSeason(null);
-          setSearchQuery("");
-        }}
-      >
-        <Text style={styles.resetButtonText}>Reset Filters</Text>
-      </TouchableOpacity>
+      <View style={styles.emptyActionButtons}>
+        <TouchableOpacity 
+          style={[styles.resetButton, { backgroundColor: PRIMARY_COLOR }]}
+          onPress={() => {
+            setSelectedSeason(null);
+            clearSearch();
+          }}
+        >
+          <Text style={styles.resetButtonText}>Reset Filters</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[styles.refreshButton, { backgroundColor: colors.card }]}
+          onPress={onRefresh}
+        >
+          <Ionicons name="refresh" size={16} color={PRIMARY_COLOR} style={{marginRight: 5}} />
+          <Text style={[styles.refreshButtonText, {color: PRIMARY_COLOR}]}>Refresh</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
+
+  // Loading state for initial load
+  if (loading && !refreshing) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar barStyle={validTheme === 'dark' ? 'light-content' : 'dark-content'} />
+        
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>
+            <Ionicons name="brush-outline" size={24} color={PRIMARY_COLOR} /> Decor Services
+          </Text>
+        </View>
+        
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={PRIMARY_COLOR} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary || '#666' }]}>
+            Loading decor services...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -232,11 +337,16 @@ const DecorListScreen = () => {
           placeholder="Search services..."
           placeholderTextColor={colors.textSecondary || '#666'}
           style={[styles.searchInput, { color: colors.text }]}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
+          value={searchInputText}
+          onChangeText={handleSearchChange}
+          returnKeyType="search"
+          clearButtonMode="while-editing"
+          autoCapitalize="none"
+          autoCorrect={false}
+          testID="search-input"
         />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery("")}>
+        {searchInputText.length > 0 && (
+          <TouchableOpacity onPress={clearSearch} testID="clear-search">
             <Ionicons name="close-circle" size={20} color={colors.textSecondary || '#666'} />
           </TouchableOpacity>
         )}
@@ -255,6 +365,7 @@ const DecorListScreen = () => {
               selectedSeason === null && styles.selectedSeasonTab
             ]}
             onPress={() => setSelectedSeason(null)}
+            testID="season-tab-all"
           >
             <Ionicons 
               name="apps-outline" 
@@ -279,6 +390,7 @@ const DecorListScreen = () => {
               onPress={() => setSelectedSeason(
                 selectedSeason === season.name ? null : season.name
               )}
+              testID={`season-tab-${season.name.toLowerCase()}`}
             >
               <Ionicons 
                 name={season.icon as any} 
@@ -296,21 +408,22 @@ const DecorListScreen = () => {
         </ScrollView>
       </View>
       
-      {/* Main Content */}
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={PRIMARY_COLOR} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary || '#666' }]}>
-            Loading decor services...
-          </Text>
+      {/* Status info - shows when pulling to refresh */}
+      {refreshing && (
+        <View style={styles.refreshingInfoContainer}>
+          <Text style={styles.refreshingInfoText}>Refreshing data...</Text>
         </View>
-      ) : error ? (
+      )}
+      
+      {/* Main Content */}
+      {error ? (
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle-outline" size={64} color="#FF4D4F" />
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity 
             style={[styles.retryButton, { backgroundColor: PRIMARY_COLOR }]}
             onPress={fetchDecorServices}
+            testID="retry-button"
           >
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
@@ -325,6 +438,19 @@ const DecorListScreen = () => {
           columnWrapperStyle={styles.row}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[PRIMARY_COLOR]}
+              tintColor={PRIMARY_COLOR}
+              title="Pull down to refresh..."
+              titleColor={colors.textSecondary || '#666'}
+              testID="refresh-control"
+            />
+          }
+          onEndReachedThreshold={0.5}
+          testID="decor-list"
         />
       )}
     </SafeAreaView>
@@ -520,6 +646,37 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  emptyActionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginLeft: 10,
+    borderWidth: 1,
+    borderColor: PRIMARY_COLOR,
+  },
+  refreshButtonText: {
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  refreshingInfoContainer: {
+    padding: 8,
+    backgroundColor: `${PRIMARY_COLOR}20`,
+    alignItems: 'center',
+    marginHorizontal: 16,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  refreshingInfoText: {
+    color: PRIMARY_COLOR,
+    fontWeight: '500',
   },
 });
 

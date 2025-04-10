@@ -53,13 +53,6 @@ const AddressListScreen: React.FC = () => {
   const fromBooking = params.fromBooking === "true";
   const currentAddressId = params.currentAddressId;
 
-  // Set initial selected address based on current address from checkout or booking
-  useEffect(() => {
-    if (currentAddressId) {
-      setSelectedAddressId(currentAddressId);
-    }
-  }, [currentAddressId]);
-
   // Fetch addresses with improved error handling
   const fetchAddresses = useCallback(async () => {
     try {
@@ -72,14 +65,19 @@ const AddressListScreen: React.FC = () => {
       
       setAddresses(validAddresses);
 
-      // If we don't have a selected address yet, select the default one
-      if (!selectedAddressId && validAddresses.length > 0) {
-        const defaultAddress = validAddresses.find(addr => addr.isDefault);
-        if (defaultAddress) {
-          setSelectedAddressId(defaultAddress.id);
+      // If currentAddressId is provided from params, use it
+      if (currentAddressId) {
+        // Check if the currentAddressId exists in the fetched addresses
+        const addressExists = validAddresses.some(addr => addr.id === currentAddressId);
+        if (addressExists) {
+          setSelectedAddressId(currentAddressId);
         } else {
-          setSelectedAddressId(validAddresses[0].id);
+          // If currentAddressId doesn't exist, fall back to default address
+          selectDefaultAddress(validAddresses);
         }
+      } else {
+        // If no currentAddressId, select default address
+        selectDefaultAddress(validAddresses);
       }
     } catch (err) {
       console.error("Error fetching addresses:", err);
@@ -89,58 +87,182 @@ const AddressListScreen: React.FC = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedAddressId]);
+  }, [currentAddressId]);
 
-  // Initial fetch on component mount
+  // Helper function to select default address
+  const selectDefaultAddress = (addressList: IAddress[]) => {
+    if (addressList.length > 0) {
+      const defaultAddress = addressList.find(addr => addr.isDefault);
+      if (defaultAddress) {
+        setSelectedAddressId(defaultAddress.id);
+      } else {
+        setSelectedAddressId(addressList[0].id);
+      }
+    } else {
+      setSelectedAddressId(undefined);
+    }
+  };
+
+  // Initial fetch on component mount and when navigation params change
   useEffect(() => {
+    console.log('Component mounted or params changed');
+    console.log('Current params - fromCheckout:', fromCheckout, 'fromBooking:', fromBooking);
+    console.log('Current address ID from params:', currentAddressId);
+    
+    // Safely access global state with proper TypeScript typing
+    const globalData = globalThis as unknown as CustomGlobal;
+    
+    // Clear any stale global state on mount
+    if (globalData.temporaryAddressReset !== true) {
+      console.log('Resetting global address state');
+      globalData.temporaryAddressReset = true;
+      // Don't actually clear here - we'll update it properly later
+    }
+    
     fetchAddresses();
-  }, [fetchAddresses]);
+  }, [fetchAddresses, currentAddressId, fromCheckout, fromBooking]);
+
+  // Define custom global interface for TypeScript
+  interface CustomGlobal {
+    addressSelection?: {
+      id: string;
+      details: IAddress;
+      timestamp: string;
+      fullName: string;
+      phone: string;
+      formattedAddress: string;
+    };
+    selectedAddressId?: string;
+    selectedAddressDetails?: IAddress;
+    addressTimestamp?: string;
+    temporaryAddressReset?: boolean;
+  }
+  
+  // Refresh addresses whenever screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      console.log('Screen focused - fetching addresses and checking currentAddressId:', currentAddressId);
+      fetchAddresses();
+      
+      // Safely access global state with proper TypeScript typing
+      const globalData = globalThis as unknown as CustomGlobal;
+      
+      // Explicitly check for any existing selection in global state
+      if (globalData.addressSelection && globalData.addressSelection.id) {
+        console.log('Found existing address selection in global state:', globalData.addressSelection.id);
+        setSelectedAddressId(globalData.addressSelection.id);
+      }
+      
+      return () => {
+        // Cleanup if needed
+        console.log('Screen unfocused');
+      };
+    }, [fetchAddresses, currentAddressId])
+  );
 
   // Handle confirming address selection and returning to checkout or booking
   const handleConfirmSelection = () => {
     if ((fromCheckout || fromBooking) && selectedAddressId) {
       console.log('Confirm Selection - Selected Address ID:', selectedAddressId);
       
-      // Create timestamp to ensure useEffect in previous screen is triggered
+      // Find the selected address object from the addresses array
+      const selectedAddress = addresses.find(addr => addr.id === selectedAddressId);
+      
+      if (!selectedAddress) {
+        Alert.alert("Error", "Selected address not found. Please try again.");
+        return;
+      }
+      
+      console.log('Selected Address Details:', selectedAddress);
+      
+      // Generate a unique timestamp to force update
       const timestamp = Date.now().toString();
       
-      try {
-        if (fromBooking) {
-          // Store selected address in global state to access it when returning to booking screen
-          global.selectedAddressId = selectedAddressId;
-          global.addressTimestamp = timestamp;
-          
-          // Simply go back to the previous screen instead of trying complex navigation
-          router.back();
-        } else if (fromCheckout) {
-          // Same approach for checkout
-          global.selectedAddressId = selectedAddressId;
-          global.addressTimestamp = timestamp;
-          
-          router.back();
-        }
-      } catch (error) {
-        console.error("Navigation error:", error);
-        
-        // Fallback approach - try alternative navigation if the first method fails
+      // Function to confirm and navigate back
+      const confirmAndNavigateBack = () => {
         try {
-          if (fromBooking) {
-            // Alternative: Use a simple URL string for navigation
-            router.push("/");
-          } else if (fromCheckout) {
-            router.push("/");
+          // Fix TypeScript 'any' type errors for global variables
+          // Use a type assertion to tell TypeScript about our global variables
+          interface CustomGlobal {
+            addressSelection?: {
+              id: string;
+              details: IAddress;
+              timestamp: string;
+              fullName: string;
+              phone: string;
+              formattedAddress: string;
+            };
+            selectedAddressId?: string;
+            selectedAddressDetails?: IAddress;
+            addressTimestamp?: string;
+            temporaryAddressReset?: boolean;
           }
-        } catch (fallbackError) {
-          console.error("Fallback navigation failed:", fallbackError);
           
-          // Last resort
+          // Cast globalThis to our custom interface
+          const globalData = globalThis as unknown as CustomGlobal;
+          
+          // Use more direct approach to store selected address
+          if (!globalData.addressSelection) {
+            globalData.addressSelection = {
+              id: selectedAddress.id,
+              details: selectedAddress,
+              timestamp: timestamp,
+              fullName: selectedAddress.fullName,
+              phone: selectedAddress.phone,
+              formattedAddress: formatAddress(selectedAddress)
+            };
+          } else {
+            globalData.addressSelection.id = selectedAddress.id;
+            globalData.addressSelection.details = selectedAddress;
+            globalData.addressSelection.timestamp = timestamp;
+            globalData.addressSelection.fullName = selectedAddress.fullName;
+            globalData.addressSelection.phone = selectedAddress.phone;
+            globalData.addressSelection.formattedAddress = formatAddress(selectedAddress);
+          }
+          
+          // For backward compatibility
+          globalData.selectedAddressId = selectedAddress.id;
+          globalData.selectedAddressDetails = selectedAddress;
+          globalData.addressTimestamp = timestamp;
+          
+          console.log('Address selection stored with timestamp:', timestamp);
+          
+          // Force immediate navigation back to ensure state is fresh
+          if (fromBooking) {
+            router.replace('/booking/[]');
+          } else if (fromCheckout) {
+            router.replace('/screens/checkout');
+          } else {
+            router.back();
+          }
+        } catch (error) {
+          console.error("Selection error:", error);
           Alert.alert(
-            "Navigation Error",
-            "Unable to return with selected address. Please try again.",
-            [{ text: "OK", onPress: () => router.replace("/") }]
+            "Selection Error",
+            "Unable to save selected address. Please try again.",
+            [{ text: "OK" }]
           );
         }
-      }
+      };
+      
+      // The address showing in the popup should match what was selected
+      Alert.alert(
+        "Address Selected",
+        `${selectedAddress.fullName}, ${formatAddress(selectedAddress)}`,
+        [
+          {
+            text: "Cancel",
+            style: "cancel"
+          },
+          {
+            text: "Confirm",
+            style: "default",
+            onPress: confirmAndNavigateBack
+          }
+        ]
+      );
+    } else {
+      Alert.alert("Error", "Please select an address first.");
     }
   };
 
@@ -151,6 +273,7 @@ const AddressListScreen: React.FC = () => {
 
   // Handle selecting an address
   const handleSelectAddress = (address: IAddress) => {
+    console.log('Address selected:', address.id);
     setSelectedAddressId(address.id);
   };
 
@@ -189,6 +312,13 @@ const AddressListScreen: React.FC = () => {
           onPress: async () => {
             try {
               await deleteAddressAPI(address.id);
+              
+              // If the deleted address is the currently selected one, reset selection
+              if (selectedAddressId === address.id) {
+                setSelectedAddressId(undefined);
+              }
+              
+              // Refresh the address list
               await fetchAddresses();
               Alert.alert("Success", "Address deleted successfully");
             } catch (error) {
@@ -343,6 +473,7 @@ const AddressListScreen: React.FC = () => {
           showsVerticalScrollIndicator={false}
           refreshing={refreshing}
           onRefresh={fetchAddresses}
+          extraData={selectedAddressId} // Re-render when selectedAddressId changes
         />
       ) : (
         <View style={styles.emptyContainer}>
@@ -363,11 +494,19 @@ const AddressListScreen: React.FC = () => {
       {(fromCheckout || fromBooking) && addresses.length > 0 && (
         <View style={styles.bottomButtonContainer}>
           <TouchableOpacity 
-            style={[styles.confirmButton, { backgroundColor: PRIMARY_COLOR }]}
+            style={[
+              styles.confirmButton, 
+              { 
+                backgroundColor: selectedAddressId ? PRIMARY_COLOR : '#cccccc' 
+              }
+            ]}
             onPress={handleConfirmSelection}
             disabled={!selectedAddressId}
+            testID="confirm-address-button"
           >
-            <Text style={styles.confirmButtonText}>Confirm Address Selection</Text>
+            <Text style={styles.confirmButtonText}>
+              {selectedAddressId ? 'Confirm Address Selection' : 'Please Select an Address'}
+            </Text>
             <Ionicons name="arrow-forward" size={20} color="#fff" />
           </TouchableOpacity>
         </View>
@@ -385,10 +524,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
-    paddingTop: 50, // Increased top padding to prevent text from being cut off
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 + 16 : 50, // Better platform handling
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
-    backgroundColor: 'white', // Ensure background color is s
+    backgroundColor: 'white',
   },
   backButton: {
     padding: 8,

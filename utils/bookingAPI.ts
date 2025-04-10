@@ -47,6 +47,11 @@ export interface IBooking {
     followersCount?: number;
     followingsCount?: number;
   };
+  timeSlots?: Array<{
+    id: number;
+    bookingId: number;
+    surveyDate: string;
+  }>;
 }
 
 // Define request interfaces
@@ -54,15 +59,17 @@ export interface IBookingRequest {
   decorServiceId: number;
   addressId: number;
   surveyDate: string;
-  surveyTime?: string;
+
 }
 
 // Define response interfaces
 export interface IBookingResponse {
+  
   success: boolean;
   booking?: IBooking;
   message?: string;
   errors?: string[];
+  data?: IBooking;
 }
 
 export interface IBookingListResponse {
@@ -212,10 +219,27 @@ export const createBookingAPI = async (
   
   const apiClient = await initApiClient();
   try {
-    const response: AxiosResponse<IBookingResponse> = await apiClient.post(url, bookingData);
+    const response: AxiosResponse = await apiClient.post(url, bookingData);
     
     if (response && response.data) {
-      return response.data;
+      // Check if the response has a success property
+      if (response.data.success !== undefined) {
+        // Standard wrapped response, return as is
+        return response.data;
+      } else if (response.data.id) {
+        // Direct booking object response, wrap it in proper structure
+        return {
+          success: true,
+          message: "Booking created successfully",
+          data: response.data
+        };
+      } else {
+        console.error("🔴 Invalid booking response:", response);
+        return {
+          success: false,
+          message: "Invalid response from server"
+        };
+      }
     } else {
       console.error("🔴 Invalid booking response:", response);
       return {

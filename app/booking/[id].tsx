@@ -21,18 +21,25 @@ import { getToken } from "@/services/auth";
 // Import custom date picker
 import CalendarPicker from "@/components/CalendarPicker";
 
-// Extend the global namespace to include your custom properties
-declare global {
-  var selectedAddressId: string | undefined;
-  var addressTimestamp: string | undefined;
-  var currentBookingState: {
+// Define custom global interface for TypeScript
+interface CustomGlobal {
+  addressSelection?: {
+    id: string;
+    details: IAddress;
+    timestamp: string;
+    fullName: string;
+    phone: string;
+    formattedAddress: string;
+  };
+  selectedAddressId?: string;
+  selectedAddressDetails?: IAddress;
+  addressTimestamp?: string;
+  currentBookingState?: {
     serviceId?: string;
     style?: string;
     price?: string;
-  } | undefined;
+  };
 }
-
-export {};
 
 const BookingScreen = () => {
   // Get service information from route params
@@ -52,6 +59,9 @@ const BookingScreen = () => {
   // Add error state to track any booking errors
   const [error, setError] = useState<string | null>(null);
   
+  // State to store the style name (for header)
+  const [serviceName, setServiceName] = useState<string>(style || "");
+  
   // Set minimum date to today for the calendar
   const minDate = new Date();
 
@@ -63,59 +73,42 @@ const BookingScreen = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [addressesRefreshKey, setAddressesRefreshKey] = useState(0); // Add a refresh key for addresses
-
-  useFocusEffect(
-    useCallback(() => {
-      // Always refresh the address list when the screen is focused
-      fetchAddresses();
-      
-      // Check if we have address data in global state (from address list)
-      if (global.selectedAddressId) {
-        setSelectedAddress(global.selectedAddressId);
-        
-        // Clear the global state to avoid confusion in future navigations
-        global.selectedAddressId = undefined;
-        global.addressTimestamp = undefined;
-      }
-      
-      // Clear errors when returning to the screen
-      setError(null);
-      
-      return () => {
-        // Clean up any subscriptions or pending operations when screen loses focus
+  const [lastAddressTimestamp, setLastAddressTimestamp] = useState<string>("");
+  // Add state to store service ID
+  const [serviceId, setServiceId] = useState<string>(id || "");
+  
+  // Keep track of service info on mount and when params change
+  useEffect(() => {
+    // Keep track of service information in global state
+    const globalData = globalThis as unknown as CustomGlobal;
+    
+    // Preserve service information if not already set in global state
+    if (!globalData.currentBookingState || !globalData.currentBookingState.style) {
+      globalData.currentBookingState = {
+        serviceId: id,
+        style: style
       };
-    }, [])
-  );
+    }
+    
+    // If we don't have style from params but have it in global state, use it
+    if ((!style || style === '') && globalData.currentBookingState && globalData.currentBookingState.style) {
+      // This will update UI to show the correct service name in the header
+      console.log("Using style from global state:", globalData.currentBookingState.style);
+      setServiceName(globalData.currentBookingState.style);
+    } else if (style) {
+      setServiceName(style);
+    }
+
+    // Make sure serviceId is set
+    if (id) {
+      setServiceId(id);
+    }
+  }, [id, style]);
   
   // Load address list when component mounts or when refresh key changes
   useEffect(() => {
     fetchAddresses();
   }, [addressesRefreshKey]);
-
-  // Add focus effect to detect returning from address list
-  useFocusEffect(
-    useCallback(() => {
-      console.log("BookingScreen focused");
-      
-      // Check if we have address data in global state (from address list)
-      if (global.selectedAddressId) {
-        console.log("Screen focused: Found address in global state:", global.selectedAddressId);
-        setSelectedAddress(global.selectedAddressId);
-        setError(null); // Clear any errors when a new address is selected
-        
-        // Clear the global state to avoid confusion in future navigations
-        global.selectedAddressId = undefined;
-        global.addressTimestamp = undefined;
-        
-        // Refresh the address list to get any new addresses
-        setAddressesRefreshKey(prev => prev + 1);
-      }
-      
-      return () => {
-        // Clean up any subscriptions or pending operations when screen loses focus
-      };
-    }, [])
-  );
 
   // Update selected address when the parameter changes (coming back from address list)
   useEffect(() => {
@@ -127,6 +120,79 @@ const BookingScreen = () => {
       setAddressesRefreshKey(prev => prev + 1);
     }
   }, [selectedAddressIdParam, timestamp]);
+
+  // Check for service name in global state when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      // Get global data
+      const globalData = globalThis as unknown as CustomGlobal;
+      
+      // Check if we have service info in global state
+      if (globalData.currentBookingState && globalData.currentBookingState.serviceId) {
+        console.log("Found service ID in global state:", globalData.currentBookingState.serviceId);
+        // Update service ID from global state
+        const serviceId = globalData.currentBookingState.serviceId;
+        // Save to local variable to use when calling API
+        setServiceId(serviceId);
+      }
+    }, [])
+  );
+  
+  // Check for address updates when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      console.log("BookingScreen focused - checking for address updates");
+      
+      // Safely access global state with proper typing
+      const globalData = globalThis as unknown as CustomGlobal;
+      
+      console.log("Global state:", 
+        "addressSelection:", globalData.addressSelection?.id,
+        "selectedAddressId:", globalData.selectedAddressId,
+        "timestamp:", globalData.addressTimestamp);
+      
+      // Check if there's a new address selection (using new approach first)
+      if (globalData.addressTimestamp && globalData.addressTimestamp !== lastAddressTimestamp) {
+        console.log("Detected new address selection with timestamp:", globalData.addressTimestamp);
+        
+        // Update timestamp to prevent duplicate processing
+        setLastAddressTimestamp(globalData.addressTimestamp);
+        
+        // Handle the updated address
+        if (globalData.addressSelection && globalData.addressSelection.id) {
+          console.log("Using addressSelection.id from global state:", globalData.addressSelection.id);
+          setSelectedAddress(globalData.addressSelection.id);
+          setError(null); // Clear any errors when a new address is selected
+        } 
+        else if (globalData.selectedAddressId) {
+          console.log("Using selectedAddressId from global state:", globalData.selectedAddressId);
+          setSelectedAddress(globalData.selectedAddressId);
+          setError(null); // Clear any errors when a new address is selected
+        }
+        
+        // Refresh the address list to get any new addresses
+        setAddressesRefreshKey(prev => prev + 1);
+      }
+      
+      return () => {
+        // Clean up if needed
+      };
+    }, [lastAddressTimestamp])
+  );
+
+  // Helper function to select default address
+  const selectDefaultAddress = (addressList: IAddress[]) => {
+    console.log("Selecting default address");
+    const defaultAddress = addressList.find(address => address.isDefault);
+    if (defaultAddress) {
+      console.log("Setting default address:", defaultAddress.id);
+      setSelectedAddress(defaultAddress.id);
+    } else if (addressList.length > 0) {
+      // If no default, select the first one
+      console.log("Setting first address:", addressList[0].id);
+      setSelectedAddress(addressList[0].id);
+    }
+  };
 
   // Fetch addresses
   const fetchAddresses = async () => {
@@ -145,44 +211,37 @@ const BookingScreen = () => {
       if (Array.isArray(fetchedAddresses) && fetchedAddresses.length > 0) {
         setAddresses(fetchedAddresses);
         
-        // If we got a selectedAddressId from params or global state, use that
-        if (selectedAddress) {
-          // Keep existing selection
-          
-          // But validate it exists in the new address list
-          const addressExists = fetchedAddresses.some(address => address.id === selectedAddress);
-          if (!addressExists) {
-            // If selected address no longer exists, select default or first
-            const defaultAddress = fetchedAddresses.find(address => address.isDefault);
-            if (defaultAddress) {
-              setSelectedAddress(defaultAddress.id);
-            } else {
-              setSelectedAddress(fetchedAddresses[0].id);
-            }
-          }
-        } 
-        else if (global.selectedAddressId) {
-          setSelectedAddress(global.selectedAddressId);
-          // Clear global state after using
-          global.selectedAddressId = undefined;
+        // Determine which address to select
+        const globalData = globalThis as unknown as CustomGlobal;
+        
+        if (globalData.addressSelection && globalData.addressSelection.id) {
+          console.log("Using addressSelection.id from global:", globalData.addressSelection.id);
+          setSelectedAddress(globalData.addressSelection.id);
+        }
+        else if (globalData.selectedAddressId) {
+          console.log("Using selectedAddressId from global:", globalData.selectedAddressId);
+          setSelectedAddress(globalData.selectedAddressId);
         }
         else if (selectedAddressIdParam) {
+          console.log("Using selectedAddressId from params:", selectedAddressIdParam);
           setSelectedAddress(selectedAddressIdParam);
         }
-        // Otherwise, default to default address or first address
-        else {
-          // Automatically select default address if available
-          const defaultAddress = fetchedAddresses.find(address => address.isDefault);
-          if (defaultAddress) {
-            setSelectedAddress(defaultAddress.id);
+        else if (selectedAddress) {
+          // Check if current selection still exists in the new address list
+          const addressExists = fetchedAddresses.some(address => address.id === selectedAddress);
+          if (addressExists) {
+            console.log("Keeping current selection:", selectedAddress);
           } else {
-            // If no default, select the first one
-            setSelectedAddress(fetchedAddresses[0].id);
+            // If selected address no longer exists, select default or first
+            selectDefaultAddress(fetchedAddresses);
           }
         }
+        else {
+          // No selection yet, select default or first
+          selectDefaultAddress(fetchedAddresses);
+        }
       } else if (Array.isArray(fetchedAddresses) && fetchedAddresses.length === 0) {
-        // No addresses available, but we won't show an alert
-        // The user will see the "Add Shipping Address" button in the UI
+        // No addresses available
         setAddresses([]);
         setSelectedAddress(null);
       }
@@ -213,12 +272,64 @@ const BookingScreen = () => {
     setShowDatePicker(false);
   };
 
+  // Save service info when navigating to address screen
+  const handleSelectAddress = () => {
+    // Reset error when selecting a new address
+    setError(null);
+    
+    // Save current state to global variables for retrieval when returning
+    const globalData = globalThis as unknown as CustomGlobal;
+    globalData.currentBookingState = {
+      serviceId: serviceId || id,
+      style: serviceName // Use serviceName instead of style
+    };
+    
+    // Clear any old address selection to prevent confusion
+    globalData.selectedAddressId = undefined;
+    globalData.addressSelection = undefined;
+    
+    // Navigate to address list using simple path
+    router.push({
+      pathname: "/screens/address/address-list",
+      params: { 
+        fromBooking: "true", 
+        currentAddressId: selectedAddress || "",
+        id: id || "",
+        style: serviceName || "", // Use serviceName
+        // Add a timestamp to ensure params change triggers useEffect
+        timestamp: Date.now().toString()
+      }
+    });
+  };
+
   // Handle booking
   const handleBooking = async () => {
     // Clear all previous errors
     setError(null);
     
-    // Form validation
+    // Get the current service ID from state or global state
+    const currentServiceId = serviceId || 
+      (globalThis as unknown as CustomGlobal).currentBookingState?.serviceId || 
+      id;
+    
+    console.log("Using service ID for booking:", currentServiceId);
+    
+    // Validate service ID
+    if (!currentServiceId) {
+      console.error("Invalid service ID: service ID is missing");
+      setError("Invalid service ID. Please try selecting the service again.");
+      return;
+    }
+    
+    // Convert to number and check if it's valid
+    const numericServiceId = Number(currentServiceId);
+    if (isNaN(numericServiceId)) {
+      console.error("Invalid service ID:", currentServiceId);
+      setError("Invalid service ID. Please try selecting the service again.");
+      return;
+    }
+    
+    // Validate address
     if (!selectedAddress) {
       setError("Please add a shipping address before proceeding");
       // Navigate to add address screen
@@ -226,7 +337,7 @@ const BookingScreen = () => {
       return;
     }
     
-    // Get current date and time
+    // Get current date for validation
     const now = new Date();
     
     // Create a date object that combines selected date and current time
@@ -247,50 +358,42 @@ const BookingScreen = () => {
     try {
       setLoading(true);
   
-      // Booking data - Convert data types to numbers
+      // Prepare booking data - make sure all fields are properly set
       const bookingData: IBookingRequest = {
-        decorServiceId: Number(id),
+        decorServiceId: numericServiceId,
         addressId: Number(selectedAddress),
-        surveyDate: surveyDate.toISOString().split('T')[0] // Format YYYY-MM-DD
+        surveyDate: surveyDate.toISOString().split('T')[0],
       };
-  
+      
       console.log("Sending booking data:", bookingData);
   
       // Call booking API
       const response = await createBookingAPI(bookingData);
-  
+      console.log("Full response:", JSON.stringify(response));
+console.log("response.success:", response.success);
+console.log("response.data:", response.data);
+console.log("typeof response:", typeof response);
       // Handle response
-      if (response.success && response.booking) {
+      if (response.success && response.data) {
         // Refresh addresses to get any potential new addresses
         await fetchAddresses();
         
         Alert.alert(
-          "Booking Successful", 
-          `Booking ID: ${response.booking.id}. We will contact you shortly`,
+          "✅ Booking Successful",
+          `Booking Details:
+          
+        - ID: ${response.data.id}
+        - Code: ${response.data.bookingCode || 'N/A'}
+        ${response.data.decorService ? `• Service: ${response.data.decorService.style}` : ''}
+        ${response.data.timeSlots && response.data.timeSlots.length > 0 ? 
+          `• Date: ${new Date(response.data.timeSlots[0].surveyDate).toLocaleDateString()}` : ''}
+        
+        Thank you for your booking!`,
           [
             {
-              text: "Home",
+              text: "Return to Home",
               onPress: () => router.push("/"),
               style: "default"
-            },
-            {
-              text: "View Details",
-              onPress: () => {
-                try {
-                  if (response.booking && response.booking.id) {
-                    // Use simple navigation without complex objects
-                    router.push(`/booking/${response.booking.id}`);
-                  } else {
-                    // Fallback if booking id is not available
-                    console.log("Booking ID not available");
-                    router.push("/");
-                  }
-                } catch (error) {
-                  console.error("Navigation error:", error);
-                  // Safe fallback
-                  router.push("/");
-                }
-              }
             }
           ]
         );
@@ -328,28 +431,6 @@ const BookingScreen = () => {
     } finally {
       setLoading(false);
     }
-  };
-  
-  const handleSelectAddress = () => {
-    // Reset error when selecting a new address
-    setError(null);
-    
-    // Save current state to global variables for retrieval when returning
-    global.currentBookingState = {
-      serviceId: id,
-      style
-    };
-    
-    // Navigate to address list using simple path
-    router.push({
-      pathname: "/screens/address/address-list",
-      params: { 
-        fromBooking: "true", 
-        currentAddressId: selectedAddress || "",
-        id: id || "",
-        style: style || ""
-      }
-    });
   };
 
   // Get the selected address object
@@ -422,6 +503,7 @@ const BookingScreen = () => {
             }
           ]} 
           onPress={handleSelectAddress}
+          testID="selected-address-container"
         >
           <View style={styles.addressIconContainer}>
             <Ionicons 
@@ -434,6 +516,9 @@ const BookingScreen = () => {
             <Text style={[styles.addressName, { color: colors.text }]}>{selectedAddressObj.fullName}</Text>
             <Text style={[styles.addressPhone, { color: colors.textSecondary }]}>{selectedAddressObj.phone}</Text>
             <Text style={[styles.addressFull, { color: colors.textSecondary }]}>{fullAddress}</Text>
+            
+            {/* Display the address ID for debugging */}
+            <Text style={[styles.addressDebug, { color: colors.textSecondary }]}>ID: {selectedAddressObj.id}</Text>
           </View>
           <Ionicons name="chevron-forward" size={24} color={hasAddressError ? colors.error : colors.textSecondary} />
         </TouchableOpacity>
@@ -473,7 +558,7 @@ const BookingScreen = () => {
             />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>
-            Book Service: {style}
+            Book Service: {serviceName}
           </Text>
           <View style={styles.spacer} />
         </View>
@@ -629,6 +714,11 @@ const styles = StyleSheet.create({
   },
   addressFull: {
     fontSize: 14,
+  },
+  addressDebug: {
+    fontSize: 10,
+    marginTop: 4,
+    opacity: 0.5,
   },
   noAddressText: {
     fontSize: 16,

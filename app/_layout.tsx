@@ -3,7 +3,7 @@ import { Stack } from "expo-router/stack";
 import { useTheme } from "@/constants/ThemeContext";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
-import { TouchableOpacity, View, BackHandler, Platform } from "react-native";
+import { TouchableOpacity, View, BackHandler, Platform, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
@@ -59,6 +59,11 @@ function ThemedStack() {
     return null;
   }
 
+  // Function to navigate to home screen
+  const navigateToHome = () => {
+    router.push("/");
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: theme === "dark" ? "#151718" : "#ffffff" }}>
       <StatusBar hidden={false} style={theme === "dark" ? "light" : "dark"} />
@@ -69,10 +74,17 @@ function ThemedStack() {
             backgroundColor: theme === "dark" ? "#151718" : "#ffffff"
           },
           headerTintColor: theme === "dark" ? "#ffffff" : "#000000",
-          headerTitle: "Seasonal Home Decor", // Simple text title instead of search bar
-          headerTitleStyle: {
-            fontWeight: 'bold',
-          },
+          headerTitle: () => (
+            <TouchableOpacity onPress={navigateToHome}>
+              <Text style={{ 
+                fontWeight: 'bold',
+                fontSize: 18,
+                color: theme === "dark" ? "#ffffff" : "#000000"
+              }}>
+                Seasonal Home Decor
+              </Text>
+            </TouchableOpacity>
+          ),
           headerLeft: () => null, // This should remove the back button for all screens
           headerRight: () =>
             !hideHeader ? (

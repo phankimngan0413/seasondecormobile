@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { getAddressesAPI } from '@/utils/AddressAPI';
 import { getCartAPI } from '@/utils/cartAPI';
 import { getUserIdFromToken } from '@/services/auth';
@@ -24,6 +24,21 @@ import { createOrderAPI, payOrderWithWalletAPI } from '@/utils/orderAPI';
 import { getWalletBalanceAPI } from "@/utils/walletAPI";
 
 const PRIMARY_COLOR = "#5fc1f1";
+
+// Define custom global interface for TypeScript
+interface CustomGlobal {
+  addressSelection?: {
+    id: string;
+    details: IAddress;
+    timestamp: string;
+    fullName: string;
+    phone: string;
+    formattedAddress: string;
+  };
+  selectedAddressId?: string;
+  selectedAddressDetails?: IAddress;
+  addressTimestamp?: string;
+}
 
 const CheckoutScreen = () => {
   const { theme } = useTheme();
@@ -42,10 +57,83 @@ const CheckoutScreen = () => {
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [walletLoading, setWalletLoading] = useState(true);
   const [insufficientFunds, setInsufficientFunds] = useState(false);
+  // Add state to track if we need to refresh
+  const [lastAddressTimestamp, setLastAddressTimestamp] = useState<string>("");
 
+  // Load initial data
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Check for address updates when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      console.log("CheckoutScreen focused - checking for address updates");
+      
+      // Safely access global state
+      const globalData = globalThis as unknown as CustomGlobal;
+      
+      // Check if there's a new address selection
+      if (globalData.addressTimestamp && globalData.addressTimestamp !== lastAddressTimestamp) {
+        console.log("Detected new address selection with timestamp:", globalData.addressTimestamp);
+        
+        // Update timestamp to prevent duplicate processing
+        setLastAddressTimestamp(globalData.addressTimestamp);
+        
+        // Handle the selected address
+        handleGlobalAddressUpdate(globalData);
+      }
+      
+      return () => {
+        // Clean up if needed
+      };
+    }, [lastAddressTimestamp])
+  );
+
+  // Function to handle address updates from global state
+  const handleGlobalAddressUpdate = (globalData: CustomGlobal) => {
+    // Check if we have detailed address info in the newer format
+    if (globalData.addressSelection && globalData.addressSelection.details) {
+      console.log("Using addressSelection.details from global state");
+      setAddress(globalData.addressSelection.details);
+    } 
+    // Fallback to older format
+    else if (globalData.selectedAddressDetails) {
+      console.log("Using selectedAddressDetails from global state");
+      setAddress(globalData.selectedAddressDetails);
+    } 
+    // If we only have an ID, find the address in our loaded addresses
+    else if (globalData.selectedAddressId) {
+      console.log("Looking up address by ID from global state:", globalData.selectedAddressId);
+      const selectedAddress = addresses.find(addr => addr.id === globalData.selectedAddressId);
+      if (selectedAddress) {
+        setAddress(selectedAddress);
+      } else {
+        // If we can't find it in our current list, refresh all addresses
+        refreshAddresses(globalData.selectedAddressId);
+      }
+    }
+  };
+
+  // Function to refresh addresses and select by ID
+  const refreshAddresses = async (addressIdToSelect?: string) => {
+    try {
+      console.log("Refreshing addresses list");
+      const addressData = await getAddressesAPI();
+      const validAddresses = Array.isArray(addressData) ? addressData : [];
+      setAddresses(validAddresses);
+
+      if (addressIdToSelect) {
+        const selectedAddress = validAddresses.find(addr => addr.id === addressIdToSelect);
+        if (selectedAddress) {
+          console.log("Found and selected address by ID:", addressIdToSelect);
+          setAddress(selectedAddress);
+        }
+      }
+    } catch (err) {
+      console.error("Error refreshing addresses:", err);
+    }
+  };
 
   const fetchWalletBalance = async () => {
     try {
@@ -80,8 +168,18 @@ const CheckoutScreen = () => {
       const validAddresses = Array.isArray(addressData) ? addressData : [];
       setAddresses(validAddresses);
 
-      const defaultAddress = validAddresses.find(addr => addr.isDefault);
-      setAddress(defaultAddress || validAddresses[0]);
+      // Check if there's a selected address in global state first
+      const globalData = globalThis as unknown as CustomGlobal;
+      
+      if (globalData.selectedAddressId || 
+          (globalData.addressSelection && globalData.addressSelection.id)) {
+        // Use the handleGlobalAddressUpdate function to set the address
+        handleGlobalAddressUpdate(globalData);
+      } else {
+        // Fall back to default address selection
+        const defaultAddress = validAddresses.find(addr => addr.isDefault);
+        setAddress(defaultAddress || validAddresses[0] || null);
+      }
 
       const cartData = await getCartAPI(userId);
       if (cartData?.cartItems && cartData.cartItems.length > 0) {
@@ -206,6 +304,7 @@ const CheckoutScreen = () => {
       <TouchableOpacity 
         style={[styles.addressContainer, { backgroundColor: colors.card }]} 
         onPress={handleSelectAddress}
+        testID="selected-address-container"
       >
         <View style={styles.addressIconContainer}>
           <Ionicons name="location" size={24} color={PRIMARY_COLOR} />
