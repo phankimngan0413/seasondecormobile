@@ -84,40 +84,32 @@ class SignalRService {
         this.reconnectTimer = null;
       }
 
-      console.log("Initializing SignalR connection");
+      console.log("Initializing SignalR");
+      
+      // Make sure token is properly formatted
+      const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
       
       // Configure SignalR connection
-      this._connection = new signalR.HubConnectionBuilder()
-      .withUrl(`${BASE_URL}/chatHub`, {
-        // Thử không bỏ qua negotiation
-        skipNegotiation: false,
-        // Sử dụng tất cả các transport có sẵn
-        transport: signalR.HttpTransportType.WebSockets | 
-                  signalR.HttpTransportType.LongPolling,
-        accessTokenFactory: () => {
-          console.log("Getting token for SignalR: ", token);
-          return token;
-        },
-      })
-      .withAutomaticReconnect([0, 2000, 10000, 30000]) // Cấu hình tự động kết nối lại
-      .configureLogging(signalR.LogLevel.Debug)
-      .build();
-    
-    // Thêm code kiểm tra kết nối sau khi khởi tạo
-    console.log(`SignalR attempting to connect to: ${BASE_URL}/chatHub`);
-    
-    // Trong trường hợp vẫn gặp lỗi, thêm event handler này để biết chi tiết lỗi
-    this._connection.onclose((error) => {
-      console.error("SignalR connection closed with error:", error);
-      console.error("Connection state:", this._connection?.state);
-      console.error("Connection base URL used:", BASE_URL);
-      this._connection = null;
-      
-      if (!this.isReconnecting && error) {
-        this.scheduleReconnect(token);
-      }
-    });
-
+     // Trong phương thức startConnection
+this._connection = new signalR.HubConnectionBuilder()
+.withUrl(`${BASE_URL}/chatHub`, {
+  skipNegotiation: false,
+  transport: signalR.HttpTransportType.WebSockets,
+  accessTokenFactory: () => {
+    // Thêm tiền tố "Bearer " trước token
+    const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    console.log("Getting token for SignalR: ", formattedToken);
+    return formattedToken;
+  },
+  // Thử thêm headers
+  headers: {
+    "Authorization": `Bearer ${token}`,
+    "Content-Type": "application/json"
+  }
+})
+.withAutomaticReconnect([0, 2000, 10000, 30000])
+.configureLogging(signalR.LogLevel.Debug)
+.build();
       // Handle received messages
       this._connection.on("ReceiveMessage", (message: Message) => {
         console.log("SignalR message received:", message.id);
@@ -145,18 +137,26 @@ class SignalRService {
         this.reconnectAttempts = 0;
       });
 
-      // Handle connection closure
+      // Handle connection closure - only define once
       this._connection.onclose((error) => {
-        console.log("SignalR connection closed:", error);
+        console.error("SignalR connection closed with error:", error);
+        console.error("Connection state:", this._connection?.state);
+        console.error("Connection base URL used:", BASE_URL);
+        
         this._connection = null;
         
         if (!this.isReconnecting && error) {
-          this.scheduleReconnect(token);
+          this.scheduleReconnect(formattedToken);
         }
       });
 
-      // Start connection
-      await this._connection.start();
+      // Start connection with timeout
+      const connectionPromise = this._connection.start();
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Connection timeout after 15 seconds")), 15000);
+      });
+      
+      await Promise.race([connectionPromise, timeoutPromise]);
       console.log("SignalR connected successfully");
       this.reconnectAttempts = 0;
 
@@ -307,6 +307,43 @@ class SignalRService {
     }
   }
  
+  // Check auth status and handle logout
+  public async checkAuthStatus(): Promise<boolean> {
+    try {
+      const token = await getToken();
+      if (!token) {
+        console.log("No token found, user is not authenticated");
+        return false;
+      }
+      
+      // Try to parse token to check if it's valid
+      try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        
+        const payload = JSON.parse(jsonPayload);
+        const now = Math.floor(Date.now() / 1000);
+        
+        // Check if token is expired
+        if (payload.exp && payload.exp < now) {
+          console.log("Token is expired");
+          return false;
+        }
+        
+        return true;
+      } catch (e) {
+        console.error("Error parsing token:", e);
+        return false;
+      }
+    } catch (error) {
+      console.error("Error checking auth status:", error);
+      return false;
+    }
+  }
 }
 
+// Create and export singleton instance
 export const signalRService = new SignalRService();

@@ -71,23 +71,23 @@ const OrderListScreen = () => {
       setLoading(true);
       console.log("Fetching orders...");
       
-      // Gọi API
+      // Call API
       const response = await getOrderListAPI();
       console.log("API response received");
       
-      // Xử lý dữ liệu từ API - kiểm tra cấu trúc response
+      // Process data from API - check response structure
       if (response) {
-        // Trường hợp 1: API trả về mảng trực tiếp (như log hiện tại)
+        // Case 1: API returns array directly (as current log)
         if (Array.isArray(response)) {
           console.log(`Found ${response.length} orders from API (array)`);
           setOrders(response);
         } 
-        // Trường hợp 2: API trả về cấu trúc {success, message, errors, data}
+        // Case 2: API returns structure {success, message, errors, data}
         else if (response.success === true && Array.isArray(response.data)) {
           console.log(`Found ${response.data.length} orders from API (object)`);
           setOrders(response.data);
         }
-        // Trường hợp không xác định được cấu trúc
+        // Case: Unknown structure
         else {
           console.log("Unknown response structure:", response);
           setError("Invalid response format");
@@ -107,7 +107,7 @@ const OrderListScreen = () => {
   const getStatusColor = (status: number): string => {
     switch (status) {
       case 0: return PENDING_COLOR;     // Pending
-      case 1: return PAYMENT_COLOR;     // OrderPayment
+      case 1: return PAYMENT_COLOR;     // Payment
       case 2: return PROCESSING_COLOR;  // Processing
       case 3: return SHIPPING_COLOR;    // Shipping
       case 4: return COMPLETED_COLOR;   // Completed
@@ -119,7 +119,7 @@ const OrderListScreen = () => {
   const getStatusText = (status: number): string => {
     const statusMap: Record<number, string> = {
       0: "Pending",
-      1: "Awaiting Payment",
+      1: "Payment",
       2: "Processing",
       3: "Shipping",
       4: "Completed",
@@ -131,7 +131,7 @@ const OrderListScreen = () => {
   const getStatusIcon = (status: number): string => {
     const iconMap: Record<number, string> = {
       0: "time-outline",           // Pending
-      1: "card-outline",           // Awaiting Payment
+      1: "card-outline",           // Payment
       2: "construct-outline",      // Processing
       3: "car-outline",            // Shipping
       4: "checkmark-circle-outline", // Completed
@@ -154,11 +154,11 @@ const OrderListScreen = () => {
   const renderHeader = () => (
     <View style={[styles.header, { borderBottomColor: colors.border }]}>
       <TouchableOpacity 
-        style={styles.backButton} 
-        onPress={() => router.back()}
-      >
-        <Ionicons name="arrow-back" size={24} color={colors.text} />
-      </TouchableOpacity>
+  style={styles.backButton} 
+  onPress={() => router.push("/(tabs)/profile")}
+>
+  <Ionicons name="arrow-back" size={24} color={colors.text} />
+</TouchableOpacity>
       
       <Text style={[styles.headerTitle, { color: colors.text }]}>
         My Orders
@@ -284,19 +284,25 @@ const OrderListScreen = () => {
         <View style={styles.orderFooter}>
           {/* Action buttons based on status */}
           {item.status === 0 && (
-            <TouchableOpacity style={[styles.actionButton, { backgroundColor: PAYMENT_COLOR }]}>
+            <TouchableOpacity 
+              style={[styles.actionButton, { backgroundColor: PAYMENT_COLOR }]}
+              onPress={() => router.push({
+                pathname: "/screens/orders/order-success",
+                params: { orderId: item.id }
+              })}
+            >
               <Text style={styles.actionButtonText}>Pay Now</Text>
             </TouchableOpacity>
           )}
           
-          {item.status === 1 && (
-            <TouchableOpacity style={[styles.actionButton, { backgroundColor: PAYMENT_COLOR }]}>
-              <Text style={styles.actionButtonText}>Complete Payment</Text>
-            </TouchableOpacity>
-          )}
-          
           {item.status === 3 && (
-            <TouchableOpacity style={[styles.actionButton, { backgroundColor: COMPLETED_COLOR }]}>
+            <TouchableOpacity 
+              style={[styles.actionButton, { backgroundColor: SHIPPING_COLOR }]}
+              onPress={() => router.push({
+                pathname: "/screens/orders/order-success",
+                params: { orderId: item.id }
+              })}
+            >
               <Text style={styles.actionButtonText}>Track Order</Text>
             </TouchableOpacity>
           )}
@@ -308,14 +314,20 @@ const OrderListScreen = () => {
           )}
           
           {/* Cancel button for orders that can be cancelled */}
-          {(item.status === 0 || item.status === 1 || item.status === 2) && (
+          {(item.status === 0 || item.status === 2) && (
             <TouchableOpacity style={[styles.cancelButton, { borderColor: CANCELLED_COLOR }]}>
               <Text style={[styles.cancelButtonText, { color: CANCELLED_COLOR }]}>Cancel</Text>
             </TouchableOpacity>
           )}
           
           {/* View details button for all orders */}
-          <TouchableOpacity style={[styles.detailsButton, { borderColor: PRIMARY_COLOR }]}>
+          <TouchableOpacity 
+            style={[styles.detailsButton, { borderColor: PRIMARY_COLOR }]}
+            onPress={() => router.push({
+              pathname: "/screens/orders/order-success",
+              params: { orderId: item.id }
+            })}
+          >
             <Text style={[styles.detailsButtonText, { color: PRIMARY_COLOR }]}>View Details</Text>
           </TouchableOpacity>
         </View>

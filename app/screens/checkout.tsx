@@ -185,6 +185,9 @@ const CheckoutScreen = () => {
       if (cartData?.cartItems && cartData.cartItems.length > 0) {
         setProducts(cartData.cartItems);
         setCartId(cartData.id);
+        
+        // Log the products for debugging
+        console.log("Cart items for checkout:", cartData.cartItems);
       } else {
         setError("Your cart is empty");
       }
@@ -263,7 +266,8 @@ const CheckoutScreen = () => {
     });
   };
 
-  const subtotal = products.reduce((sum, product) => sum + (product.unitPrice * product.quantity), 0);
+  // Fix: Calculate subtotal directly from unitPrice without multiplying by quantity again
+  const subtotal = products.reduce((sum, product) => sum + product.unitPrice, 0);
   const total = subtotal;
 
   // Check if wallet balance is sufficient
@@ -326,7 +330,12 @@ const CheckoutScreen = () => {
           <Image source={{ uri: product.image || 'https://via.placeholder.com/100' }} style={styles.productImage} />
           <View style={styles.productInfo}>
             <Text style={[styles.productName, { color: colors.text }]}>{product.productName}</Text>
-            <Text style={[styles.productPrice, { color: PRIMARY_COLOR }]}>${product.unitPrice.toLocaleString()}</Text>
+            <Text style={[styles.productPrice, { color: PRIMARY_COLOR }]}>
+              {new Intl.NumberFormat('vi-VN', { 
+                style: 'currency', 
+                currency: 'VND' 
+              }).format(product.unitPrice)}
+            </Text>
             <Text style={[styles.productQuantity, { color: colors.textSecondary }]}>x{product.quantity}</Text>
           </View>
         </View>
@@ -338,11 +347,21 @@ const CheckoutScreen = () => {
     <View style={[styles.priceBreakdownSection, { backgroundColor: colors.card }]}>
       <View style={styles.priceRow}>
         <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>Subtotal</Text>
-        <Text style={[styles.priceValue, { color: colors.text }]}>${subtotal.toLocaleString()}</Text>
+        <Text style={[styles.priceValue, { color: colors.text }]}>
+          {new Intl.NumberFormat('vi-VN', { 
+            style: 'currency', 
+            currency: 'VND' 
+          }).format(subtotal)}
+        </Text>
       </View>
       <View style={[styles.totalRow, { borderTopColor: colors.border }]} >
         <Text style={[styles.totalLabel, { color: colors.text }]}>Total Payment</Text>
-        <Text style={[styles.totalValue, { color: PRIMARY_COLOR }]}>${total.toLocaleString()}</Text>
+        <Text style={[styles.totalValue, { color: PRIMARY_COLOR }]}>
+          {new Intl.NumberFormat('vi-VN', { 
+            style: 'currency', 
+            currency: 'VND' 
+          }).format(total)}
+        </Text>
       </View>
     </View>
   );

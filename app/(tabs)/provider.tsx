@@ -120,16 +120,26 @@ const ProviderScreen = () => {
                   {item.businessName}
                 </Text>
                 
-                {item.providerVerified && (
-                  <View style={styles.verifiedBadge}>
-                    <Ionicons name="checkmark-circle" size={14} color="#34C759" />
-                    <Text style={styles.verifiedText}>Verified</Text>
-                  </View>
-                )}
+                <View style={styles.badgeContainer}>
+                  {item.providerVerified && (
+                    <View style={styles.verifiedBadge}>
+                      <Ionicons name="checkmark-circle" size={14} color="#34C759" />
+                      <Text style={styles.verifiedText}>Verified</Text>
+                    </View>
+                  )}
+                  
+                  <TouchableOpacity 
+                    style={[styles.viewButton, { backgroundColor: PRIMARY_COLOR }]}
+                    onPress={() => handleProviderClick(item.slug)}
+                  >
+                    <Text style={styles.viewButtonText}>View Details</Text>
+                  </TouchableOpacity>
+                </View>
                 
                 <View style={styles.locationContainer}>
                   <Ionicons name="location-outline" size={14} color={colors.textSecondary || '#666'} />
-                  <Text style={[styles.locationText, { color: colors.textSecondary || '#666' }]}>
+                  <Text style={[styles.locationText, { color: colors.textSecondary || '#666' }]}
+                    numberOfLines={1}>
                     {item.address?.split(',').pop()?.trim() || 'Location not available'}
                   </Text>
                 </View>
@@ -144,37 +154,6 @@ const ProviderScreen = () => {
             >
               {item.bio || 'No description available'}
             </Text>
-            
-            <View style={styles.cardFooter}>
-              <View style={styles.statsContainer}>
-                <View style={styles.statItem}>
-                  <Text style={[styles.statValue, { color: colors.text }]}>
-                    {item.followersCount || 0}
-                  </Text>
-                  <Text style={[styles.statLabel, { color: colors.textSecondary || '#666' }]}>
-                    Followers
-                  </Text>
-                </View>
-                
-                <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-                
-               {/* Just show followers, remove the services section */}
-<View style={styles.statItem}>
-  <Text style={[styles.statValue, { color: colors.text }]}>
-    {item.followingsCount || 0}
-  </Text>
-  <Text style={[styles.statLabel, { color: colors.textSecondary || '#666' }]}>
-    Followings
-  </Text>
-</View>
-</View>           
-              <TouchableOpacity 
-                style={[styles.viewButton, { backgroundColor: PRIMARY_COLOR }]}
-                onPress={() => handleProviderClick(item.slug)}
-              >
-                <Text style={styles.viewButtonText}>View Profile</Text>
-              </TouchableOpacity>
-            </View>
           </TouchableOpacity>
         )}
         contentContainerStyle={styles.listContainer}
@@ -285,12 +264,17 @@ const styles = StyleSheet.create({
   businessName: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 2,
+    marginBottom: 4,
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
   },
   verifiedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
   },
   verifiedText: {
     fontSize: 12,
@@ -304,6 +288,7 @@ const styles = StyleSheet.create({
   locationText: {
     fontSize: 13,
     marginLeft: 4,
+    flex: 1,
   },
   divider: {
     height: 1,
@@ -313,41 +298,15 @@ const styles = StyleSheet.create({
   bioText: {
     fontSize: 14,
     lineHeight: 20,
-    marginBottom: 12,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statItem: {
-    alignItems: 'center',
-    paddingHorizontal: 12,
-  },
-  statValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  statLabel: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  statDivider: {
-    width: 1,
-    height: 24,
   },
   viewButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
   },
   viewButtonText: {
     color: 'white',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
   },
 });

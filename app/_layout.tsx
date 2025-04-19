@@ -27,7 +27,7 @@ function ThemedStack() {
   const pathname = usePathname();
 
   // Check if current page is login or signup to hide header
-  const hideHeader = ["/login", "/signup", "/chat/[userId]", "/cart","/screens/checkout","/screens/address/address-list","/screens/address/add-address","/screens/payment/transactions","/screens/orders/order-success","/screens/Orders","/screens/Following","/screens/Bookings"].includes(pathname);
+  const hideHeader = ["/login", "/signup", "/chat/[userId]", "/cart","/screens/checkout","/screens/address/address-list","/screens/address/add-address","/screens/payment/transactions","/screens/orders/order-success","/screens/Orders","/screens/Following","/screens/Bookings","/screens/Favorites"].includes(pathname);
 
   // Handle Android back button
   useEffect(() => {
@@ -154,6 +154,21 @@ function ThemedStack() {
           name="decor/[id]" 
           options={{ 
             title: "Chi tiết dịch vụ",
+            headerLeft: () => (
+              <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 10 }}>
+                <Ionicons
+                  name="arrow-back"
+                  size={24}
+                  color={theme === "dark" ? "white" : "black"}
+                />
+              </TouchableOpacity>
+            )
+          }} 
+        />
+         <Stack.Screen 
+          name="booking/[id]" 
+          options={{ 
+            title: "Dịch vụ",
             headerLeft: () => (
               <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 10 }}>
                 <Ionicons

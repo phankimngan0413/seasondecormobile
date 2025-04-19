@@ -19,7 +19,8 @@ import { Colors } from '@/constants/Colors';
 import { 
   getPaginatedBookingsForCustomerAPI,
   requestCancelBookingAPI,
-  confirmBookingAPI
+  confirmBookingAPI,
+  IBookingFilterOptions
 } from '@/utils/bookingAPI';
 
 const PRIMARY_COLOR = "#5fc1f1";
@@ -209,27 +210,12 @@ interface FilterOption {
   value: string | undefined;
 }
 
-// Define API response type
-interface APIResponse {
-  items?: IBooking[];
-  totalCount?: number;
-  pageIndex?: number;
-  pageSize?: number;
-  totalPages?: number;
-  data?: {
-    data?: IBooking[];
-    totalCount?: number;
-    totalPages?: number;
-  };
-}
-
 const BookingListScreen: React.FC = () => {
   const { theme } = useTheme();
   const colors = Colors[theme as "light" | "dark"];
   const router = useRouter();
 
   const [bookings, setBookings] = useState<IBooking[]>([]);
-  const [allBookings, setAllBookings] = useState<IBooking[]>([]); // Store all bookings for filtering
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
@@ -250,43 +236,27 @@ const BookingListScreen: React.FC = () => {
   useEffect(() => {
     console.log('🔄 useEffect triggered - currentPage:', currentPage, 'selectedCategory:', selectedCategory);
     fetchBookings();
-  }, [currentPage]);
+  }, [currentPage, selectedCategory]); // Fetch bookings when page or category changes
 
-  // Separate useEffect for filtering
-  useEffect(() => {
-    console.log('🔄 Filter changed - selectedCategory:', selectedCategory);
-    if (allBookings.length > 0) {
-      applyFilters();
-    }
-  }, [selectedCategory]);
-
-  // Helper function to determine category from status code
-  const getCategoryFromStatus = (status: number): StatusCategory => {
-    if (status <= 1) return 'initial';
-    if (status >= 2 && status <= 4) return 'agreement';
-    if (status >= 5 && status <= 9) return 'construction';
-    if (status === 10) return 'completed';
-    if (status >= 11) return 'cancelled';
-    return 'unknown';
-  };
-
-  // Apply filters to allBookings
-  const applyFilters = () => {
-    console.log('📘 Applying filters with category:', selectedCategory);
+  // Helper function to determine if a booking belongs to the selected category
+  const bookingMatchesCategory = (booking: IBooking, category?: string): boolean => {
+    if (!category) return true; // All bookings match "All" category
     
-    if (!selectedCategory) {
-      // If no category is selected, show all bookings
-      console.log('📘 No category selected, showing all bookings:', allBookings.length);
-      setBookings([...allBookings]);
-    } else {
-      // If a category is selected, filter bookings
-      const filtered = allBookings.filter(item => {
-        const category = getCategoryFromStatus(item.status);
-        return category === selectedCategory;
-      });
-      
-      console.log(`📘 After category filtering: ${filtered.length} items`);
-      setBookings(filtered);
+    const status = booking.status;
+    
+    switch(category) {
+      case 'initial':
+        return status <= 1;
+      case 'agreement':
+        return status >= 2 && status <= 4;
+      case 'construction':
+        return status >= 5 && status <= 9;
+      case 'completed':
+        return status === 10;
+      case 'cancelled':
+        return status >= 11;
+      default:
+        return true;
     }
   };
 
@@ -298,8 +268,6 @@ const BookingListScreen: React.FC = () => {
         console.log('📘 Refreshing, resetting to page 1');
         setCurrentPage(1);
         setRefreshing(true);
-        // Also clear allBookings when refreshing
-        setAllBookings([]);
       } else if (!refreshing) {
         console.log('📘 Setting loading state to true');
         setLoading(true);
@@ -307,51 +275,53 @@ const BookingListScreen: React.FC = () => {
       
       setError('');
       
-      console.log('📘 API Request Params:', {
-        pageIndex: refresh ? 1 : currentPage,
-        pageSize: 10,
-        sortBy: 'createdAt',
-        descending: true
-      });
+      // Create the API options object with PascalCase parameter names
+      const apiOptions: IBookingFilterOptions = {
+        PageIndex: refresh ? 1 : currentPage,
+        PageSize: 10,
+        SortBy: "createdAt",
+        Descending: true
+      };
+
+      // Let's not filter on the server side for now, we'll filter client-side instead
+      // This avoids potential API parameter type issues
       
-      const response = await getPaginatedBookingsForCustomerAPI({
-        pageIndex: refresh ? 1 : currentPage,
-        pageSize: 10,
-        sortBy: 'createdAt',
-        descending: true
-      });
+      console.log('📘 API Request Params:', apiOptions);
       
-      console.log('📘 API Response received');
+      const response = await getPaginatedBookingsForCustomerAPI(apiOptions);
+      
+      console.log('📘 API Response structure:', Object.keys(response));
       
       // Handle the nested data structure correctly
       let responseItems: IBooking[] = [];
       let totalItemCount = 0;
-      let totalPagesCount = 1;
       
-      // Extract data using the exact structure from your API
-      if (response && response.data && response.data.data && Array.isArray(response.data.data)) {
-        // This matches your actual nested API response structure:
-        // { success: true, message: "...", errors: [], data: { data: [...], totalCount: 2 } }
-        responseItems = response.data.data;
-        totalItemCount = response.data.totalCount || 0;
-        console.log(`📘 Using nested data.data structure, found ${responseItems.length} items`);
+      // Extract data using the correct structure from your API
+      if (response && response.data) {
+        if (Array.isArray(response.data)) {
+          // Direct array in data property
+          responseItems = response.data;
+          console.log(`📘 Found items directly in response.data array: ${responseItems.length} items`);
+        } else if (response.data.data && Array.isArray(response.data.data)) {
+          // Nested data.data structure
+          responseItems = response.data.data;
+          console.log(`📘 Found items in nested response.data.data array: ${responseItems.length} items`);
+        }
+        
+        // Check for totalCount in different possible locations
+        if (response.totalCount !== undefined) {
+          totalItemCount = response.totalCount;
+        } else if (response.data.totalCount !== undefined) {
+          totalItemCount = response.data.totalCount;
+        }
       } else if (response && response.items && Array.isArray(response.items)) {
         // Alternative format with items array
         responseItems = response.items;
         totalItemCount = response.totalCount || 0;
-        console.log(`📘 Using items array structure, found ${responseItems.length} items`);
+        console.log(`📘 Found items in response.items array: ${responseItems.length} items`);
       }
       
       console.log(`📘 Found ${responseItems.length} booking items, total count: ${totalItemCount}`);
-      
-      // Update allBookings state - append or replace depending on refresh
-      if (refresh) {
-        // For refresh, replace all data
-        setAllBookings(responseItems);
-      } else {
-        // For pagination, append new data
-        setAllBookings(prev => [...prev, ...responseItems]);
-      }
       
       // Log each booking item details for debugging
       responseItems.forEach((item, index) => {
@@ -359,22 +329,14 @@ const BookingListScreen: React.FC = () => {
         console.log(`📘 Booking ${index + 1}: ID ${id}, Code ${item.bookingCode}, Status ${item.status} (${mapStatusCodeToString(item.status)})`);
       });
       
-      // Now apply filters after updating allBookings
-      if (refresh) {
-        // For refresh, directly set bookings to filtered result
-        if (!selectedCategory) {
-          setBookings(responseItems);
-        } else {
-          const filtered = responseItems.filter(item => {
-            const category = getCategoryFromStatus(item.status);
-            return category === selectedCategory;
-          });
-          setBookings(filtered);
-        }
-      } else {
-        // For pagination, apply filters to the combined set
-        applyFilters();
-      }
+      // Apply client-side category filtering
+      const filteredItems = selectedCategory 
+        ? responseItems.filter(item => bookingMatchesCategory(item, selectedCategory))
+        : responseItems;
+        
+      console.log(`📘 After category filtering: ${filteredItems.length} items`);
+      
+      setBookings(filteredItems);
       
       // Calculate total pages based on totalCount
       const estimatedTotalPages = Math.max(1, Math.ceil(totalItemCount / 10));
@@ -512,7 +474,12 @@ const BookingListScreen: React.FC = () => {
         <Ionicons name="arrow-back" size={24} color={colors.text} />
       </TouchableOpacity>
       <Text style={[styles.headerTitle, { color: colors.text }]}>My Bookings</Text>
-      <View style={styles.spacer} />
+      <TouchableOpacity
+        style={styles.quotationButton}
+        onPress={() => router.push('/quotation/list')}
+      >
+        <Ionicons name="document-text-outline" size={24} color={colors.text} />
+      </TouchableOpacity>
     </View>
   );
 
@@ -543,6 +510,7 @@ const BookingListScreen: React.FC = () => {
       </ScrollView>
     </View>
   );
+  
   const renderBookingItem = ({ item }: { item: IBooking }): React.ReactElement => {
     const statusCode = item.status;
     const statusText = mapStatusCodeToString(statusCode);
@@ -735,30 +703,40 @@ const BookingListScreen: React.FC = () => {
     );
   }
 
+  
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={theme === 'dark' ? 'light-content' : 'dark-content'} />
-      {renderHeader()}
-      {renderFilterTabs()}
-      
-      <FlatList
-        data={bookings}
-        renderItem={renderBookingItem}
-        keyExtractor={(item) => `${item.id || item.bookingId}`}
-        contentContainerStyle={styles.listContainer}
-        ListEmptyComponent={renderEmpty}
-        ListFooterComponent={renderFooter}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={[PRIMARY_COLOR]}
-            tintColor={PRIMARY_COLOR}
-          />
-        }
-        onEndReached={loadMoreBookings}
-        onEndReachedThreshold={0.5}
-      />
+    <StatusBar barStyle={theme === 'dark' ? 'light-content' : 'dark-content'} />
+    {renderHeader()}
+    {renderFilterTabs()}
+    
+    <FlatList
+      data={bookings}
+      renderItem={renderBookingItem}
+      keyExtractor={(item) => `${item.id || item.bookingId}`}
+      contentContainerStyle={styles.listContainer}
+      ListEmptyComponent={renderEmpty}
+      ListFooterComponent={renderFooter}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          colors={[PRIMARY_COLOR]}
+          tintColor={PRIMARY_COLOR}
+        />
+      }
+      onEndReached={loadMoreBookings}
+      onEndReachedThreshold={0.5}
+    />
+    
+    {/* Updated floating buttons container */}
+    <View style={styles.floatingButtonsRow}>
+      <TouchableOpacity
+        style={[styles.floatingButton, styles.quotationFloatingButton]}
+        onPress={() => router.push('/quotation/list')}
+      >
+        <Ionicons name="document-text" size={24} color="#FFFFFF" />
+      </TouchableOpacity>
       
       <TouchableOpacity
         style={styles.floatingButton}
@@ -766,10 +744,10 @@ const BookingListScreen: React.FC = () => {
       >
         <Ionicons name="add" size={24} color="#FFFFFF" />
       </TouchableOpacity>
-    </SafeAreaView>
+    </View>
+  </SafeAreaView>
   );
 };
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -782,6 +760,43 @@ const styles = StyleSheet.create({
     padding: 15,
     borderBottomWidth: 1,
   },
+  quotationButton: {
+    padding: 8,
+  },
+  floatingButtonsRow: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    flexDirection: 'row', // Arrange buttons horizontally
+    justifyContent: 'flex-end', // Align to the right
+    alignItems: 'center',
+    gap: 16, // Space between buttons
+  },
+  floatingButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: PRIMARY_COLOR,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+  },
+  quotationFloatingButton: {
+    backgroundColor: '#34c759', // Different color for the quotation button
+  },
+  // Add these new styles
+  floatingButtonsContainer: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    alignItems: 'center',
+  },
+
+
   backButton: {
     padding: 8,
   },
@@ -982,20 +997,6 @@ const styles = StyleSheet.create({
     padding: 15,
     alignItems: 'center',
   },
-  floatingButton: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: PRIMARY_COLOR,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-  },})
+  
+});
   export default BookingListScreen;

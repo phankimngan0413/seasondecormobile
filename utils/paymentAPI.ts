@@ -8,11 +8,17 @@ export interface TopUpRequest {
   customerId: number;
 }
 
-export interface TopUpResponse {
-  success: boolean;
+// Define response type for the API
+interface TopUpResponse {
+  success?: boolean;
   message?: string;
-  transactionId?: string;
-  errors?: string[];
+  customerId?: number;
+  paymentUrl?: string;
+  data?: {
+    paymentUrl?: string;
+    customerId?: number;
+    [key: string]: any;
+  } | string;
 }
 
 /**
@@ -21,7 +27,7 @@ export interface TopUpResponse {
  * @returns Promise with the transaction result
  */
 export const topUpWalletAPI = async (amount: number): Promise<TopUpResponse> => {
-  const url = "/api/Payment/top-up";
+  const url = "/api/Payment/top-up-mobile";
   
 
   const apiClient = await initApiClient();
@@ -92,7 +98,6 @@ export const topUpWalletAPI = async (amount: number): Promise<TopUpResponse> => 
       return {
         success: false,
         message: apiError.response?.data?.message || "Failed to connect to payment service",
-        errors: apiError.response?.data?.errors
       };
     }
   } catch (error: any) {

@@ -8,7 +8,9 @@ import {
   Alert,
   Platform,
   KeyboardAvoidingView,
-  ActivityIndicator
+  ActivityIndicator,
+  TextInput,
+  Dimensions
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import Ionicons from "react-native-vector-icons/Ionicons";
@@ -18,8 +20,12 @@ import { createBookingAPI, IBookingRequest } from "@/utils/bookingAPI";
 import { getAddressesAPI, IAddress } from "@/utils/AddressAPI";
 import { getToken } from "@/services/auth";
 
+
 // Import custom date picker
 import CalendarPicker from "@/components/CalendarPicker";
+
+// Get screen dimensions for responsive design
+const { width } = Dimensions.get('window');
 
 // Define custom global interface for TypeScript
 interface CustomGlobal {
@@ -76,6 +82,11 @@ const BookingScreen = () => {
   const [lastAddressTimestamp, setLastAddressTimestamp] = useState<string>("");
   // Add state to store service ID
   const [serviceId, setServiceId] = useState<string>(id || "");
+  const [isFavorite, setIsFavorite] = useState(false);
+const [favoriteLoading, setFavoriteLoading] = useState(false);
+  // New state variables for the additional fields
+  const [note, setNote] = useState<string>("");
+  const [expectedCompletion, setExpectedCompletion] = useState<string>("");
   
   // Keep track of service info on mount and when params change
   useEffect(() => {
@@ -363,6 +374,8 @@ const BookingScreen = () => {
         decorServiceId: numericServiceId,
         addressId: Number(selectedAddress),
         surveyDate: surveyDate.toISOString().split('T')[0],
+        note: note.trim() !== "" ? note : undefined,
+        expectedCompletion: expectedCompletion.trim() !== "" ? expectedCompletion : undefined
       };
       
       console.log("Sending booking data:", bookingData);
@@ -370,9 +383,9 @@ const BookingScreen = () => {
       // Call booking API
       const response = await createBookingAPI(bookingData);
       console.log("Full response:", JSON.stringify(response));
-console.log("response.success:", response.success);
-console.log("response.data:", response.data);
-console.log("typeof response:", typeof response);
+      console.log("response.success:", response.success);
+      console.log("response.data:", response.data);
+      console.log("typeof response:", typeof response);
       // Handle response
       if (response.success && response.data) {
         // Refresh addresses to get any potential new addresses
@@ -458,7 +471,7 @@ console.log("typeof response:", typeof response);
     return errorMessage.toLowerCase().includes("address");
   };
 
-  // Render address section similar to checkout
+  // Render address section with enhanced design
   const renderAddressSection = () => {
     if (addressesLoading) {
       return (
@@ -480,11 +493,13 @@ console.log("typeof response:", typeof response);
           style={[styles.addressContainer, { backgroundColor: colors.card }]} 
           onPress={() => router.push("/screens/address/add-address")}
         >
-          <View style={styles.addressIconContainer}>
+          <View style={[styles.addressIconContainer, { backgroundColor: `${colors.primary}15` }]}>
             <Ionicons name="location" size={24} color={colors.primary} />
           </View>
           <Text style={[styles.noAddressText, { color: colors.text }]}>Add Shipping Address</Text>
-          <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
+          <View style={styles.iconWrapper}>
+            <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
+          </View>
         </TouchableOpacity>
       );
     }
@@ -498,14 +513,15 @@ console.log("typeof response:", typeof response);
             styles.addressContainer, 
             { 
               backgroundColor: colors.card,
-              borderColor: hasAddressError ? colors.error : colors.border,
-              borderWidth: hasAddressError ? 1 : 0
+              borderColor: hasAddressError ? colors.error : 'transparent',
+              borderWidth: hasAddressError ? 2 : 0,
+              elevation: hasAddressError ? 0 : 2,
             }
           ]} 
           onPress={handleSelectAddress}
           testID="selected-address-container"
         >
-          <View style={styles.addressIconContainer}>
+          <View style={[styles.addressIconContainer, { backgroundColor: `${colors.primary}15` }]}>
             <Ionicons 
               name="location" 
               size={24} 
@@ -517,16 +533,22 @@ console.log("typeof response:", typeof response);
             <Text style={[styles.addressPhone, { color: colors.textSecondary }]}>{selectedAddressObj.phone}</Text>
             <Text style={[styles.addressFull, { color: colors.textSecondary }]}>{fullAddress}</Text>
             
-            {/* Display the address ID for debugging */}
+            {/* Display the address ID in small font for debugging */}
             <Text style={[styles.addressDebug, { color: colors.textSecondary }]}>ID: {selectedAddressObj.id}</Text>
           </View>
-          <Ionicons name="chevron-forward" size={24} color={hasAddressError ? colors.error : colors.textSecondary} />
+          <View style={styles.iconWrapper}>
+            <Ionicons 
+              name="chevron-forward" 
+              size={24} 
+              color={hasAddressError ? colors.error : colors.textSecondary} 
+            />
+          </View>
         </TouchableOpacity>
         
         {/* If there's an address-specific error, add the Choose Different Address button */}
         {hasAddressError && (
           <TouchableOpacity 
-            style={styles.chooseAddressButton} 
+            style={[styles.chooseAddressButton, { backgroundColor: colors.error }]} 
             onPress={handleSelectAddress}
           >
             <Ionicons name="swap-horizontal" size={18} color="#fff" style={{ marginRight: 5 }} />
@@ -549,102 +571,205 @@ console.log("typeof response:", typeof response);
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View style={[styles.header, { borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <View style={[styles.header, { 
+          borderBottomColor: colors.border,
+          backgroundColor: colors.card,
+          shadowColor: colors.text,
+        }]}>
+          {/* <TouchableOpacity 
+            onPress={() => router.back()} 
+            style={[styles.backButton, { backgroundColor: `${colors.primary}10` }]}
+          >
             <Ionicons 
               name="arrow-back" 
               size={24} 
-              color={colors.text} 
+              color={colors.primary} 
             />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>
-            Book Service: {serviceName}
-          </Text>
+          </TouchableOpacity> */}
+          <View style={styles.headerTitleContainer}>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>
+              Book Service
+            </Text>
+            <Text style={[styles.headerSubtitle, { color: colors.primary }]}>
+              {serviceName}
+            </Text>
+          </View>
           <View style={styles.spacer} />
         </View>
 
-        {/* Address Section */}
-        <View style={styles.sectionTitle}>
-          <Text style={[styles.sectionTitleText, { color: colors.text }]}>Shipping Address</Text>
-        </View>
-        {renderAddressSection()}
-
-        {/* Booking Form - Only Date Picker */}
-        <View style={styles.sectionTitle}>
-          <Text style={[styles.sectionTitleText, { color: colors.text }]}>Booking Details</Text>
-        </View>
-        <View style={[styles.formContainer, { backgroundColor: colors.card }]}>
-          {/* Survey Date */}
-          <View style={styles.formGroup}>
-            <Text style={[styles.label, { color: colors.text }]}>
-              <Ionicons name="calendar-outline" size={18} color={colors.primary} /> 
-              {" "}Survey Date
-            </Text>
-            <TouchableOpacity 
-              style={[styles.dateInput, { borderColor: colors.border }]}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <Text style={[styles.dateText, { color: colors.text }]}>
-                {surveyDate.toLocaleDateString()}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Custom Calendar Picker */}
-            <CalendarPicker
-              selectedDate={surveyDate}
-              onSelectDate={onDateChange}
-              isVisible={showDatePicker}
-              onClose={() => setShowDatePicker(false)}
-            />
-          </View>
-        </View>
-        
-        {/* Display any errors */}
-        {error && (
-          <View style={styles.errorContainer}>
-            <Ionicons name="alert-circle" size={20} color="#dc3545" style={styles.errorIcon} />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        )}
-
-        {/* Add Address Note if no address is available */}
-        {!selectedAddress && !addressesLoading && (
-          <View style={[styles.noteContainer, { backgroundColor: `${colors.primary}10` }]}>
-            <Ionicons name="information-circle-outline" size={20} color={colors.primary} style={{ marginRight: 8 }} />
-            <Text style={[styles.noteText, { color: colors.text }]}>
-              Please add a shipping address to continue with your booking
-            </Text>
-          </View>
-        )}
-
-        {/* Book Service Button */}
-        <TouchableOpacity 
-          style={[
-            styles.bookButton, 
-            { 
-              backgroundColor: loading || !selectedAddress ? colors.card : colors.primary,
-              opacity: loading || !selectedAddress ? 0.5 : 1
-            }
-          ]}
-          onPress={handleBooking}
-          disabled={loading || !selectedAddress}
-        >
-          {loading ? (
-            <View style={styles.loadingButton}>
-              <ActivityIndicator size="small" color="#fff" />
-              <Text style={styles.bookButtonText}>
-                Processing...
+        {/* Main content wrapper */}
+        <View style={styles.contentWrapper}>
+          {/* Address Section */}
+          <View style={styles.sectionContainer}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="location-outline" size={20} color={colors.primary} />
+              <Text style={[styles.sectionTitleText, { color: colors.text }]}>
+                Shipping Address
               </Text>
             </View>
-          ) : (
-            <>
-              <Ionicons name="checkmark-circle" size={22} color="#fff" />
-              <Text style={styles.bookButtonText}>
-                {!selectedAddress ? "Add Address" : "Confirm Booking"}
+            {renderAddressSection()}
+          </View>
+
+          {/* Booking Form - With improved UI */}
+          <View style={styles.sectionContainer}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+              <Text style={[styles.sectionTitleText, { color: colors.text }]}>
+                Booking Details
               </Text>
-            </>
+            </View>
+            
+            <View style={[styles.formContainer, { 
+              backgroundColor: colors.card,
+              shadowColor: colors.text,
+            }]}>
+              {/* Survey Date */}
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { color: colors.text }]}>
+                  <Ionicons name="calendar-outline" size={18} color={colors.primary} /> 
+                  {" "}Survey Date
+                </Text>
+                <TouchableOpacity 
+                  style={[styles.dateInput, { 
+                    borderColor: colors.border,
+                    backgroundColor: `${colors.primary}10`,
+                  }]}
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <Ionicons 
+                    name="calendar" 
+                    size={20} 
+                    color={colors.primary} 
+                    style={styles.inputIcon}
+                  />
+                  <Text style={[styles.dateText, { color: colors.text }]}>
+                    {surveyDate.toLocaleDateString()}
+                  </Text>
+                  <Ionicons 
+                    name="chevron-down" 
+                    size={20} 
+                    color={colors.primary} 
+                  />
+                </TouchableOpacity>
+
+                {/* Custom Calendar Picker */}
+                <CalendarPicker
+                  selectedDate={surveyDate}
+                  onSelectDate={onDateChange}
+                  isVisible={showDatePicker}
+                  onClose={() => setShowDatePicker(false)}
+                />
+              </View>
+              
+              {/* Expected Completion */}
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { color: colors.text }]}>
+                  <Ionicons name="time-outline" size={18} color={colors.primary} /> 
+                  {" "}Expected Completion
+                </Text>
+                <View style={[styles.textInputWrapper, { 
+                  borderColor: colors.border,
+                  backgroundColor: `${colors.primary}10`,
+                }]}>
+                  <Ionicons 
+                    name="calendar-outline" 
+                    size={20} 
+                    color={colors.primary} 
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={[styles.textInput, { 
+                      color: colors.text,
+                    }]}
+                    placeholder="When do you expect this to be completed?"
+                    placeholderTextColor={colors.textSecondary}
+                    value={expectedCompletion}
+                    onChangeText={setExpectedCompletion}
+                  />
+                </View>
+              </View>
+              
+              {/* Notes */}
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { color: colors.text }]}>
+                  <Ionicons name="document-text-outline" size={18} color={colors.primary} /> 
+                  {" "}Additional Notes
+                </Text>
+                <View style={[styles.textAreaWrapper, { 
+                  borderColor: colors.border,
+                  backgroundColor: `${colors.primary}10`,
+                }]}>
+                  <Ionicons 
+                    name="create-outline" 
+                    size={20} 
+                    color={colors.primary} 
+                    style={[styles.inputIcon, { alignSelf: 'flex-start', marginTop: 12 }]}
+                  />
+                  <TextInput
+                    style={[styles.textAreaInput, { 
+                      color: colors.text,
+                    }]}
+                    placeholder="Add any specific requirements or notes"
+                    placeholderTextColor={colors.textSecondary}
+                    value={note}
+                    onChangeText={setNote}
+                    multiline={true}
+                    numberOfLines={4}
+                    textAlignVertical="top"
+                  />
+                </View>
+              </View>
+            </View>
+          </View>
+          
+          {/* Display any errors */}
+          {error && (
+            <View style={[styles.errorContainer, { borderLeftColor: colors.error }]}>
+              <Ionicons name="alert-circle" size={20} color={colors.error} style={styles.errorIcon} />
+              <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+            </View>
           )}
-        </TouchableOpacity>
+
+          {/* Add Address Note if no address is available */}
+          {!selectedAddress && !addressesLoading && (
+            <View style={[styles.noteContainer, { backgroundColor: `${colors.primary}10` }]}>
+              <Ionicons name="information-circle-outline" size={20} color={colors.primary} style={{ marginRight: 8 }} />
+              <Text style={[styles.noteText, { color: colors.text }]}>
+                Please add a shipping address to continue with your booking
+              </Text>
+            </View>
+          )}
+
+          {/* Book Service Button */}
+          <TouchableOpacity 
+            style={[
+              styles.bookButton, 
+              { 
+                backgroundColor: loading || !selectedAddress ? colors.textSecondary : colors.primary,
+                opacity: loading || !selectedAddress ? 0.7 : 1,
+                elevation: loading || !selectedAddress ? 0 : 4,
+              }
+            ]}
+            onPress={handleBooking}
+            disabled={loading || !selectedAddress}
+          >
+            {loading ? (
+              <View style={styles.loadingButton}>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={styles.bookButtonText}>
+                  Processing...
+                </Text>
+              </View>
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle" size={22} color="#fff" />
+                <Text style={styles.bookButtonText}>
+                  {!selectedAddress ? "Add Address" : "Confirm Booking"}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -659,45 +784,75 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: 30,
   },
+  // Enhanced header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 10,
   },
   backButton: {
     padding: 8,
+    borderRadius: 20,
+  },
+  headerTitleContainer: {
+    flex: 1,
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    flex: 1,
     textAlign: 'center',
+  },
+  headerSubtitle: {
+    fontSize: 15,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginTop: 4,
   },
   spacer: {
     width: 40,
   },
-  // Section title
-  sectionTitle: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+  contentWrapper: {
+    padding: 16,
+  },
+  // Section styling
+  sectionContainer: {
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   sectionTitleText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
+    marginLeft: 8,
   },
-  // Address Section styled like checkout
+  // Enhanced address container
   addressContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-    marginHorizontal: 16,
-    marginBottom: 10,
-    borderRadius: 8,
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   addressIconContainer: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 15,
   },
   addressDetails: {
@@ -706,7 +861,7 @@ const styles = StyleSheet.create({
   addressName: {
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   addressPhone: {
     fontSize: 14,
@@ -724,59 +879,103 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     flex: 1,
-    marginLeft: 8,
   },
   loadingText: {
     marginLeft: 12,
     fontSize: 14,
   },
+  iconWrapper: {
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  
   // Form styles
   formContainer: {
-    marginHorizontal: 16,
-    marginBottom: 16,
     borderRadius: 12,
     padding: 16,
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
   formGroup: {
-    marginBottom: 16,
+    marginBottom: 18,
   },
   label: {
     fontSize: 16,
     fontWeight: '500',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   dateInput: {
-    borderWidth: 1,
-    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 12,
+    borderWidth: 0,
     padding: 12,
+    height: 50,
   },
   dateText: {
     fontSize: 16,
+    flex: 1,
     textAlign: 'center',
   },
+  // Enhanced text input styles
+  textInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 0,
+    padding: 4,
+    paddingHorizontal: 12,
+  },
+  textInput: {
+    flex: 1,
+    fontSize: 16,
+    padding: 8,
+    height: 46,
+  },
+  textAreaWrapper: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    borderWidth: 0,
+    padding: 8,
+    paddingHorizontal: 12,
+  },
+  textAreaInput: {
+    flex: 1,
+    fontSize: 16,
+    padding: 8,
+    minHeight: 120,
+    textAlignVertical: 'top',
+  },
+  inputIcon: {
+    marginRight: 8,
+  },
+  
+  // Enhanced button styles
   bookButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    margin: 16,
+    marginVertical: 24,
+    marginHorizontal: 16,
     padding: 16,
     borderRadius: 12,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
   },
   chooseAddressButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginHorizontal: 16,
-    marginBottom: 12,
-    marginTop: 4,
+    marginTop: -4,
+    marginBottom: 16,
     padding: 10,
-    borderRadius: 6,
-    backgroundColor: '#F44336',
+    borderRadius: 8,
   },
   chooseAddressButtonText: {
     color: '#fff',
@@ -789,20 +988,20 @@ const styles = StyleSheet.create({
   },
   bookButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
     marginLeft: 8,
   },
+  
+  // Enhanced status messages
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     backgroundColor: '#ffebee',
-    marginHorizontal: 16,
     marginBottom: 16,
-    padding: 12,
+    padding: 14,
     borderRadius: 8,
     borderLeftWidth: 4,
-    borderLeftColor: '#dc3545',
   },
   errorIcon: {
     marginRight: 8,
@@ -810,14 +1009,13 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 14,
-    color: '#dc3545',
     flex: 1,
   },
   noteContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    margin: 16,
-    padding: 12,
+    marginBottom: 16,
+    padding: 14,
     borderRadius: 8,
   },
   noteText: {
@@ -825,5 +1023,4 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
-
 export default BookingScreen;

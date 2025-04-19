@@ -1,7 +1,10 @@
 import { initApiClient } from "@/config/axiosConfig";
 import { getToken, getUserIdFromToken } from "@/services/auth";
 
+// ============================
 // Favorite Product API
+// ============================
+
 export const getFavoriteProductListAPI = async () => {
   const apiClient = await initApiClient();
   const token = await getToken();
@@ -40,10 +43,15 @@ export const addFavoriteProductAPI = async (productId: number) => {
     return response.data;
   } catch (error: any) {
     console.error("🔴 Add Favorite Product API Error:", error.response?.data);
+    
+    // Kiểm tra nếu là lỗi "đã tồn tại trong danh sách yêu thích"
+    if (error.response?.data?.message?.includes("already in favorite")) {
+      throw new Error("Product is already in favorite list.");
+    }
+    
     throw new Error(error.response?.data?.message || "Failed to add favorite product.");
   }
 };
-
 export const removeFavoriteProductAPI = async (productId: number) => {
   const apiClient = await initApiClient();
   const token = await getToken();
@@ -65,7 +73,10 @@ export const removeFavoriteProductAPI = async (productId: number) => {
   }
 };
 
+// ============================
 // Favorite Service API
+// ============================
+
 export const getFavoriteServiceListAPI = async () => {
   const apiClient = await initApiClient();
   const token = await getToken();

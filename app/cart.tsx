@@ -17,7 +17,7 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
 import CustomButton from "@/components/ui/Button/Button";
-import { getCartAPI, removeProductFromCartAPI } from "@/utils/cartAPI";
+import { getCartAPI, removeProductFromCartAPI, updateQuantityAPI } from "@/utils/cartAPI";
 import { getUserIdFromToken } from "@/services/auth";
 import { useRouter } from "expo-router";
 
@@ -43,6 +43,7 @@ const CartScreen = () => {
   const [totalPrice, setTotalPrice] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [removingItemId, setRemovingItemId] = useState<number | null>(null);
+  const [updatingItemId, setUpdatingItemId] = useState<number | null>(null);
   
   // Animations
   const slideAnimation = useRef(new Animated.Value(0)).current;
@@ -65,34 +66,78 @@ const CartScreen = () => {
       })
     ]).start();
   }, []);
-
-  const fetchCartItems = async () => {
-    try {
-      setLoading(true);
-      setError("");
-      
-      const userId = await getUserIdFromToken();
-      if (!userId) {
-        setError("Please log in to view your cart");
-        setLoading(false);
-        return;
-      }
-
-      const cartData = await getCartAPI(userId);
-
-      if (cartData?.cartItems) {
-        setCartItems(cartData.cartItems || []);
-        calculateTotal(cartData.cartItems || []);
-      } else {
-        setCartItems([]);
-      }
-    } catch (err: any) {
-      setError(err.message || "Failed to load your cart items");
-    } finally {
+// Modified fetchCartItems function to use API total directly
+const fetchCartItems = async () => {
+  try {
+    setLoading(true);
+    setError("");
+    
+    const userId = await getUserIdFromToken();
+    if (!userId) {
+      setError("Please log in to view your cart");
       setLoading(false);
-      setRefreshing(false);
+      return;
     }
-  };
+
+    const cartData = await getCartAPI(userId);
+    console.log("Cart data from API:", cartData);
+
+    if (cartData?.cartItems) {
+      setCartItems(cartData.cartItems || []);
+      
+      // Use totalPrice directly from the API
+      if (cartData.totalPrice !== undefined) {
+        setTotalPrice(cartData.totalPrice);
+        console.log("Using API totalPrice:", cartData.totalPrice);
+      }
+    } else {
+      setCartItems([]);
+      setTotalPrice(0);
+    }
+  } catch (err: any) {
+    setError(err.message || "Failed to load your cart items");
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+};
+
+// Handle quantity change using API's response total
+const handleQuantityChange = async (productId: number, newQuantity: number) => {
+  if (newQuantity < 1) return;
+  
+  try {
+    setUpdatingItemId(productId);
+    
+    const userId = await getUserIdFromToken();
+    if (!userId) {
+      Alert.alert("Sign In Required", "Please sign in to manage your cart");
+      return;
+    }
+    
+    // Call API to update quantity
+    const response = await updateQuantityAPI(userId, productId, newQuantity);
+    
+    // Update the UI with the response from the API
+    if (response) {
+      if (response.cartItems) {
+        setCartItems(response.cartItems);
+      }
+      
+      if (response.totalPrice !== undefined) {
+        setTotalPrice(response.totalPrice);
+        console.log("Updated totalPrice from API:", response.totalPrice);
+      }
+    }
+    
+  } catch (error: any) {
+    console.error("Error updating quantity:", error);
+    // If API update fails, refresh cart to sync with server
+    fetchCartItems();
+  } finally {
+    setUpdatingItemId(null);
+  }
+};
 
   const calculateTotal = (items: CartItem[]) => {
     const total = items.reduce((sum, item) => {
@@ -105,23 +150,6 @@ const CartScreen = () => {
   const handleRefresh = () => {
     setRefreshing(true);
     fetchCartItems();
-  };
-
-  const handleQuantityChange = (productId: number, newQuantity: number) => {
-    if (newQuantity < 1) return;
-    
-    const updatedItems = cartItems.map(item => {
-      if (item.productId === productId) {
-        return { ...item, quantity: newQuantity };
-      }
-      return item;
-    });
-    
-    setCartItems(updatedItems);
-    calculateTotal(updatedItems);
-    
-    // Here you would typically call an API to update the quantity
-    // For now we're just updating the local state
   };
 
   const handleDeleteCartItem = async (productId: number) => {
@@ -180,6 +208,7 @@ const CartScreen = () => {
 
   const renderCartItem = ({ item, index }: { item: CartItem; index: number }) => {
     const isRemoving = removingItemId === item.productId;
+    const isUpdating = updatingItemId === item.productId;
     const itemAnimatedStyle = {
       transform: [
         { 
@@ -237,27 +266,50 @@ const CartScreen = () => {
           {/* Quantity Controls */}
           <View style={styles.quantityContainer}>
             <TouchableOpacity 
-              style={[styles.quantityButton, { borderColor: colors.border }]}
+              style={[
+                styles.quantityButton, 
+                { 
+                  borderColor: colors.border,
+                  opacity: isUpdating ? 0.5 : 1 
+                }
+              ]}
               onPress={() => handleQuantityChange(item.productId, item.quantity - 1)}
+              disabled={isUpdating || isRemoving}
             >
               <Ionicons name="remove" size={16} color={colors.text} />
             </TouchableOpacity>
             
-            <Text style={[styles.quantityText, { color: colors.text }]}>
-              {item.quantity}
-            </Text>
+            <View style={styles.quantityTextContainer}>
+              {isUpdating ? (
+                <ActivityIndicator size="small" color={colors.primary} style={styles.quantityLoader} />
+              ) : (
+                <Text style={[styles.quantityText, { color: colors.text }]}>
+                  {item.quantity}
+                </Text>
+              )}
+            </View>
             
             <TouchableOpacity 
-              style={[styles.quantityButton, { borderColor: colors.border }]}
+              style={[
+                styles.quantityButton, 
+                { 
+                  borderColor: colors.border,
+                  opacity: isUpdating ? 0.5 : 1 
+                }
+              ]}
               onPress={() => handleQuantityChange(item.productId, item.quantity + 1)}
+              disabled={isUpdating || isRemoving}
             >
               <Ionicons name="add" size={16} color={colors.text} />
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.removeButton}
+              style={[
+                styles.removeButton,
+                { opacity: isRemoving || isUpdating ? 0.7 : 1 }
+              ]}
               onPress={() => handleDeleteCartItem(item.productId)}
-              disabled={isRemoving}
+              disabled={isRemoving || isUpdating}
             >
               {isRemoving ? (
                 <ActivityIndicator size="small" color="#fff" />
@@ -490,11 +542,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  quantityTextContainer: {
+    minWidth: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 8,
+  },
   quantityText: {
     fontSize: 14,
     fontWeight: '500',
-    minWidth: 30,
     textAlign: 'center',
+  },
+  quantityLoader: {
     marginHorizontal: 8,
   },
   removeButton: {

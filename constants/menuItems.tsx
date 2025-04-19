@@ -5,6 +5,7 @@ export const menuItems: { icon: keyof typeof Ionicons.glyphMap; label: string; r
   { icon: "location-outline", label: "Address", route: "/screens/Addresses" },
   { icon: "book-outline", label: "Bookings", route: "/screens/Bookings" },
   { icon: "cart-outline", label: "Orders", route: "/screens/Orders" },
-  { icon: "cube-outline", label: "Membership", route: "/screens/Membership" },
+  { icon: "heart-outline", label: "Favorites", route: "/screens/Favorites" },
   { icon: "heart-outline", label: "Following", route: "/screens/Following" },
+  { icon: "star-outline", label: "Reviews", route: "/screens/Reviews" },
 ];

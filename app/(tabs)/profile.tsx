@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Image,
   TouchableOpacity,
   StatusBar,
+  RefreshControl,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -37,44 +38,52 @@ export default function ProfileScreen() {
 
   const [profile, setProfile] = useState<{ email: string; name: string; avatar: string | null } | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchProfile() {
-      try {
-        setLoading(true);
-        setError(null);
+  const fetchProfile = useCallback(async () => {
+    try {
+      if (!refreshing) setLoading(true);
+      setError(null);
 
-        const token = await getToken();
-        if (!token) {
-          router.replace("/(auth)/login");
-          return;
-        }
-
-        const decoded: DecodedToken = jwtDecode(token);
-
-        // Fetch account details, including the avatar image
-        const accountData = await getAccountDetails();
-        setProfile({
-          email: decoded.email,
-          name: decoded.unique_name,
-          avatar: accountData.avatar || null,
-        });
-      } catch (error) {
-        setError("Failed to load profile. Please try again.");
-      } finally {
-        setLoading(false);
+      const token = await getToken();
+      if (!token) {
+        router.replace("/(auth)/login");
+        return;
       }
+
+      const decoded: DecodedToken = jwtDecode(token);
+
+      // Fetch account details, including the avatar image
+      const accountData = await getAccountDetails();
+      setProfile({
+        email: decoded.email,
+        name: decoded.unique_name,
+        avatar: accountData.avatar || null,
+      });
+    } catch (error) {
+      setError("Failed to load profile. Please try again.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
+  }, [refreshing]);
+
+  useEffect(() => {
     fetchProfile();
   }, []);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchProfile();
+  }, [fetchProfile]);
 
   const handleLogout = async () => {
     await removeToken();
     router.replace("/(auth)/login");
   };
 
-  if (loading) {
+  if (loading && !refreshing) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -107,6 +116,16 @@ export default function ProfileScreen() {
         <ScrollView 
           contentContainerStyle={styles.scrollContainer}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.primary]} // Android
+              tintColor={colors.primary} // iOS
+              title="Pull to refresh" // iOS
+              titleColor={colors.text} // iOS
+            />
+          }
         >
           <LinearGradient
             colors={[colors.primary, colors.secondary || '#2980b9']}
@@ -174,10 +193,13 @@ export default function ProfileScreen() {
             <ProfileMenu />
           </View>
 
-          {/* Order Tracking Section
+          {/* Order Tracking Section */}
           <View style={[styles.orderTrackingContainer, { backgroundColor: colors.card }]}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Order Tracking</Text>
-            <TouchableOpacity style={styles.trackingItem}>
+            <TouchableOpacity 
+              style={styles.trackingItem}
+              onPress={() => router.push("/screens/Orders")}
+            >
               <View style={styles.trackingIconContainer}>
                 <Ionicons name="cube-outline" size={24} color={colors.primary} />
               </View>
@@ -187,7 +209,7 @@ export default function ProfileScreen() {
               </View>
               <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
-          </View> */}
+          </View>
 
           {/* Logout Button */}
           <View style={styles.logoutContainer}>

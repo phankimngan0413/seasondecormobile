@@ -17,7 +17,8 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
 import CustomButton from "@/components/ui/Button/Button";
-
+import { addFavoriteServiceAPI } from "@/utils/favoriteAPI";
+import { getUserIdFromToken } from "@/services/auth";
 const { width } = Dimensions.get("window");
 
 // Define proper interfaces based on actual API response
@@ -85,11 +86,53 @@ const DecorDetailScreen = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [showFullSublocation, setShowFullSublocation] = useState(false);
-  
+  const [isFavorite, setIsFavorite] = useState(false);
+const [favoriteLoading, setFavoriteLoading] = useState(false);
   const { theme } = useTheme();
   const validTheme = theme as "light" | "dark";
   const colors = Colors[validTheme];
-
+  const handleAddToFavorite = async () => {
+    if (!decorDetail) return;
+  
+    try {
+      setFavoriteLoading(true);
+      const userId = await getUserIdFromToken();
+      if (!userId) {
+        Alert.alert("Information", "Please log in to save this service.");
+        return;
+      }
+  
+      await addFavoriteServiceAPI(Number(decorDetail.id));
+      
+      // Cập nhật trạng thái UI
+      setIsFavorite(true);
+      
+      // Hiển thị thông báo thành công
+      Alert.alert(
+        "Information", 
+        "This service has been added to your favorites list."
+      );
+    } catch (error: any) {
+      console.error("Error saving service:", error);
+      
+      // Kiểm tra nếu lỗi là "đã tồn tại trong danh sách yêu thích"
+      if (error.message && error.message.includes("already in favorite")) {
+        // Cập nhật UI để hiển thị trạng thái đã yêu thích
+        setIsFavorite(true);
+        Alert.alert(
+          "Information", 
+          "This service is already in your favorites list."
+        );
+      } else {
+        Alert.alert(
+          "Information", 
+          "This service is already in your favorites list."
+        );
+      }
+    } finally {
+      setFavoriteLoading(false);
+    }
+  };
   const PRIMARY_COLOR = colors.primary || "#5fc1f1";
 
   useEffect(() => {
@@ -320,51 +363,58 @@ const DecorDetailScreen = () => {
             <Text style={styles.statusText}>{decorDetail.status === 0 ? 'Active' : 'Pending'}</Text>
           </View>
         </View>
+{/* Basic Info Card - Touchable */}
+<TouchableOpacity 
+  activeOpacity={0.8}
+  onPress={handleBooking}
+  style={[styles.card, styles.cardTouchable, { backgroundColor: colors.card, borderColor: colors.border }]}
+>
+  {/* Thêm nút yêu thích ở góc phải */}
+  <TouchableOpacity 
+    style={[styles.cardFavoriteButton, { 
+      backgroundColor: isFavorite ? colors.primary : `${colors.primary}10` 
+    }]}
+    onPress={(e) => {
+      e.stopPropagation(); // Ngăn không cho sự kiện lan ra nút cha
+      handleAddToFavorite();
+    }}
+    disabled={favoriteLoading}
+  >
+    {favoriteLoading ? (
+      <ActivityIndicator size="small" color={isFavorite ? "#fff" : colors.primary} />
+    ) : (
+      <Ionicons 
+        name={isFavorite ? "heart" : "heart-outline"} 
+        size={22} 
+        color={isFavorite ? "#fff" : colors.primary} 
+      />
+    )}
+  </TouchableOpacity>
 
-        {/* Basic Info Card - Touchable */}
-        <TouchableOpacity 
-          activeOpacity={0.8}
-          onPress={handleBooking}
-          style={[styles.card, styles.cardTouchable, { backgroundColor: colors.card, borderColor: colors.border }]}
-        >
-          <Text style={[styles.title, { color: colors.text }]}>{decorDetail.style}</Text>
-          
-          {/* <View style={styles.priceRow}>
-            <Ionicons name="pricetag-outline" size={18} color={PRIMARY_COLOR} />
-            <Text style={[styles.priceText, { color: PRIMARY_COLOR }]}>
-              {decorDetail.basePrice?.toLocaleString()} ₫
-            </Text>
-          </View> */}
-          
-          <View style={styles.infoRow}>
-            <Ionicons name="calendar-outline" size={18} color={PRIMARY_COLOR} />
-            <Text style={[styles.infoText, { color: colors.text }]}>
-              Start Date: {formatDate(decorDetail.startDate || "")}
-            </Text>
-          </View>
-          
-          {/* <View style={styles.infoRow}>
-            <Ionicons name="location-outline" size={18} color={PRIMARY_COLOR} />
-            <Text style={[styles.infoText, { color: colors.text }]}>
-              {decorDetail.province || "Location not specified"}
-            </Text>
-          </View> */}
-          
-          <View style={styles.infoRow}>
-            <Ionicons name="layers-outline" size={18} color={PRIMARY_COLOR} />
-            <Text style={[styles.infoText, { color: colors.text }]}>
-              {decorDetail.categoryName || "Category not specified"}
-            </Text>
-          </View>
-          
-          {/* Booking call-to-action in the info card */}
-          <View style={styles.bookNowRow}>
-            <Ionicons name="calendar-outline" size={18} color={PRIMARY_COLOR} />
-            <Text style={[styles.bookNowText, { color: PRIMARY_COLOR }]}>
-              Tap to book this service
-            </Text>
-          </View>
-        </TouchableOpacity>
+  <Text style={[styles.title, { color: colors.text }]}>{decorDetail.style}</Text>
+  
+  <View style={styles.infoRow}>
+    <Ionicons name="calendar-outline" size={18} color={PRIMARY_COLOR} />
+    <Text style={[styles.infoText, { color: colors.text }]}>
+      Start Date: {formatDate(decorDetail.startDate || "")}
+    </Text>
+  </View>
+  
+  <View style={styles.infoRow}>
+    <Ionicons name="layers-outline" size={18} color={PRIMARY_COLOR} />
+    <Text style={[styles.infoText, { color: colors.text }]}>
+      {decorDetail.categoryName || "Category not specified"}
+    </Text>
+  </View>
+  
+  {/* Booking call-to-action in the info card */}
+  <View style={styles.bookNowRow}>
+    <Ionicons name="calendar-outline" size={18} color={PRIMARY_COLOR} />
+    <Text style={[styles.bookNowText, { color: PRIMARY_COLOR }]}>
+      Tap to book this service
+    </Text>
+  </View>
+</TouchableOpacity>
 
         {/* Description Card */}
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -849,7 +899,18 @@ const styles = StyleSheet.create({
   bookingButton: {
     paddingVertical: 16,
     borderRadius: 12,
-  }
+  },
+  cardFavoriteButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 18,
+    zIndex: 10,
+  },
 });
 
 export default DecorDetailScreen

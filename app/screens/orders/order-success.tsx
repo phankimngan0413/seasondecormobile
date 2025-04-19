@@ -21,7 +21,6 @@ import { getWalletBalanceAPI } from "@/utils/walletAPI";
 const PRIMARY_COLOR = "#3498db";      // Blue
 const PENDING_COLOR = "#f39c12";      // Orange
 const PAYMENT_COLOR = "#9b59b6";      // Purple
-const PROCESSING_COLOR = "#3498db";   // Blue
 const SHIPPING_COLOR = "#1abc9c";     // Teal
 const COMPLETED_COLOR = "#2ecc71";    // Green
 const CANCELLED_COLOR = "#e74c3c";    // Red
@@ -127,38 +126,38 @@ const OrderSuccessScreen = () => {
     return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
   };
 
+  // Updated status mapping to match your requirements
   const getStatusText = (status: number) => {
     const statusMap: Record<number, string> = {
-      0: "Pending",
-      1: "Awaiting Payment",
-      2: "Processing",
-      3: "Shipping",
-      4: "Completed",
-      5: "Cancelled"
+      0: "Pending",          // Pending
+      1: "Payment Complete", // Payment completed
+      2: "Processing",       // Processing
+      3: "Shipping",         // Shipping
+      4: "Completed",        // Completed
+      5: "Cancelled"         // Cancelled
     };
     return statusMap[status] || "Unknown";
   };
 
   const getStatusIcon = (status: number) => {
     const iconMap: Record<number, string> = {
-      0: "time-outline",           // Pending
-      1: "card-outline",           // Awaiting Payment
-      2: "construct-outline",      // Processing
-      3: "car-outline",            // Shipping
-      4: "checkmark-circle-outline", // Completed
-      5: "close-circle-outline"    // Cancelled
+      0: "time-outline",              // Pending
+      1: "checkmark-circle-outline",  // Payment complete
+      2: "construct-outline",         // Processing
+      3: "car-outline",               // Shipping
+      4: "checkmark-circle-outline",  // Completed
+      5: "close-circle-outline"       // Cancelled
     };
     return iconMap[status] || "help-circle-outline";
   };
 
   const getStatusColor = (status: number) => {
     const statusColorMap: Record<number, string> = {
-      0: PENDING_COLOR,     // Pending
-      1: PAYMENT_COLOR,     // Awaiting Payment
-      2: PROCESSING_COLOR,  // Processing
-      3: SHIPPING_COLOR,    // Shipping
-      4: COMPLETED_COLOR,   // Completed
-      5: CANCELLED_COLOR    // Cancelled
+      0: PENDING_COLOR,      // Pending (Orange)
+      1: PAYMENT_COLOR,      // Payment Complete (Purple)
+      3: SHIPPING_COLOR,     // Shipping (Teal)
+      4: COMPLETED_COLOR,    // Completed (Green)
+      5: CANCELLED_COLOR     // Cancelled (Red)
     };
     return statusColorMap[status] || "#8E8E93"; // Gray for unknown
   };
@@ -186,10 +185,10 @@ const OrderSuccessScreen = () => {
     
     switch(status) {
       case 0:
-        messageText = "Your order has been placed and is awaiting confirmation.";
+        messageText = "Your order is pending payment.";
         break;
       case 1:
-        messageText = "Please complete the payment to process your order.";
+        messageText = "Your payment has been processed successfully. Your order is being prepared.";
         break;
       case 2:
         messageText = "Your order is being processed.";
@@ -235,11 +234,11 @@ const OrderSuccessScreen = () => {
     // Skip rendering for cancelled orders
     if (status === 5) return null;
     
+    // Define steps for the progress indicator
     const steps = [
       { label: "Pending", value: 0 },
       { label: "Payment", value: 1 },
-      { label: "Processing", value: 2 },
-      { label: "Shipping", value: 3 },
+      { label: "Shipping", value: 3 }, // Changed to value 3 for shipping
       { label: "Completed", value: 4 }
     ];
     
@@ -249,11 +248,13 @@ const OrderSuccessScreen = () => {
         
         <View style={styles.stepperContainer}>
           {steps.map((step, index) => {
-            const isActive = status >= step.value;
+            // For completed orders (status 4), all steps should be active
+            let isActive = status === 4 ? true : status >= step.value;
+            
             const isLast = index === steps.length - 1;
             
             return (
-              <View key={step.value} style={styles.stepItem}>
+              <View key={index} style={styles.stepItem}>
                 <View style={styles.stepContent}>
                   <View style={[
                     styles.stepCircle, 
@@ -278,7 +279,8 @@ const OrderSuccessScreen = () => {
                 {!isLast && (
                   <View style={[
                     styles.stepperLine, 
-                    { backgroundColor: status > step.value ? getStatusColor(step.value) : colors.border }
+                    { backgroundColor: isActive && status === 4 ? getStatusColor(step.value) : 
+                                       status > step.value ? getStatusColor(step.value) : colors.border }
                   ]} />
                 )}
               </View>
@@ -336,7 +338,8 @@ const OrderSuccessScreen = () => {
         </Text>
       </View>
 
-      {orderData?.status === 1 && (
+      {/* Only show payment section if status is 0 (Pending) */}
+      {orderData?.status === 0 && (
         <View style={styles.paymentStatusContainer}>
           <View style={styles.walletBalanceRow}>
             <Text style={[styles.walletBalanceLabel, { color: colors.textSecondary }]}>
@@ -406,26 +409,32 @@ const OrderSuccessScreen = () => {
         
         {status === 3 && (
           <TouchableOpacity 
-            style={[styles.actionButton, { backgroundColor: SHIPPING_COLOR }]}
+            // style={[styles.actionButton, { backgroundColor: SHIPPING_COLOR }]}
             // onPress={() => router.push({
             //   pathname: "/screens/orders/track-order",
             //   params: { orderId: orderId }
             // })}
           >
-            <Ionicons name="location-outline" size={18} color="white" style={styles.actionButtonIcon} />
-            <Text style={styles.actionButtonText}>Track Shipment</Text>
+            {/* <Ionicons name="location-outline" size={18} color="white" style={styles.actionButtonIcon} /> */}
+            {/* <Text style={styles.actionButtonText}>Track Shipment</Text> */}
           </TouchableOpacity>
         )}
         
         {status === 4 && (
-          <TouchableOpacity 
-            style={[styles.actionButton, { backgroundColor: PRIMARY_COLOR }]}
-            onPress={() => console.log("Write review")}
-          >
-            <Ionicons name="star-outline" size={18} color="white" style={styles.actionButtonIcon} />
-            <Text style={styles.actionButtonText}>Write a Review</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity 
+          style={[styles.actionButton, { backgroundColor: PRIMARY_COLOR }]}
+          onPress={() => router.push({
+            pathname: "/screens/review/product-review",
+            params: { 
+              orderId: orderId,
+              productId: orderData?.orderDetails[0]?.productId // Passing the first product by default
+            }
+          })}
+        >
+          <Ionicons name="star-outline" size={18} color="white" style={styles.actionButtonIcon} />
+          <Text style={styles.actionButtonText}>Write a Review</Text>
+        </TouchableOpacity>
+      )}
       </View>
     );
   };

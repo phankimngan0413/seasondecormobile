@@ -195,3 +195,156 @@ export const registerCustomerAPI = async (
     return Promise.reject(new Error("Network error, please try again."));
   }
 };
+export const verifyEmailAPI = async (email: string, otp: string): Promise<any> => {
+  const url = "/api/Auth/verify-email";
+
+  const apiClient = await initApiClient();
+  console.log("🟡 API Endpoint:", apiClient.defaults.baseURL + url);
+
+  try {
+    const response: IBackendRes<any> = await apiClient.post(url, {
+      email,
+      OTP: otp // Đổi tên trường từ verificationCode sang OTP theo yêu cầu API
+    });
+
+    console.log("🟢 Full API Response:", response);
+
+    // ✅ Kiểm tra nếu API không phản hồi đúng định dạng
+    if (!response || typeof response.success === "undefined") {
+      console.error("🔴 API Response không hợp lệ:", response);
+      return Promise.reject(new Error("Invalid response from server."));
+    }
+
+    // ✅ Kiểm tra nếu API trả về lỗi
+    if (!response.success) {
+      console.error("🔴 Verification failed:", response);
+      return Promise.reject(new Error(response.errors?.join(", ") || "Verification failed."));
+    }
+
+    // ✅ Trả về dữ liệu
+    return response.data;
+  } catch (error: any) {
+    console.error("🔴 Email Verification API Error:", error.response?.data || error);
+
+    // ✅ Nếu lỗi là mất kết nối
+    if (error.message?.includes("Network Error")) {
+      return Promise.reject(new Error("⚠️ Cannot connect to server. Please check your internet connection."));
+    }
+
+    // ✅ Nếu lỗi là do API trả về mã 400
+    if (error.response?.status === 400) {
+      const errorData = error.response?.data;
+      
+      // Xử lý lỗi validation cụ thể từ API
+      if (errorData?.errors) {
+        const errorMessages = [];
+        for (const field in errorData.errors) {
+          errorMessages.push(...errorData.errors[field]);
+        }
+        if (errorMessages.length > 0) {
+          return Promise.reject(new Error(errorMessages.join(", ")));
+        }
+      }
+      
+      return Promise.reject(new Error("Invalid verification code."));
+    }
+
+    // ✅ Nếu lỗi do mất kết nối hoặc lỗi server
+    return Promise.reject(new Error("Network error, please try again."));
+  }
+};
+export const resendVerificationCodeAPI = async (email: string): Promise<any> => {
+  const url = "/api/Auth/resend-verification";
+
+  const apiClient = await initApiClient();
+  console.log("🟡 API Endpoint:", apiClient.defaults.baseURL + url);
+
+  try {
+    const response: IBackendRes<any> = await apiClient.post(url, {
+      email
+    });
+
+    console.log("🟢 Full API Response:", response);
+
+    // ✅ Kiểm tra nếu API không phản hồi đúng định dạng
+    if (!response || typeof response.success === "undefined") {
+      console.error("🔴 API Response không hợp lệ:", response);
+      return Promise.reject(new Error("Invalid response from server."));
+    }
+
+    // ✅ Kiểm tra nếu API trả về lỗi
+    if (!response.success) {
+      console.error("🔴 Resend verification failed:", response);
+      return Promise.reject(new Error(response.errors?.join(", ") || "Failed to resend verification code."));
+    }
+
+    // ✅ Trả về dữ liệu
+    return response.data;
+  } catch (error: any) {
+    console.error("🔴 Resend Verification API Error:", error);
+
+    // ✅ Nếu lỗi là mất kết nối
+    if (error.message.includes("Network Error")) {
+      return Promise.reject(new Error("⚠️ Cannot connect to server. Please check your internet connection."));
+    }
+
+    // ✅ Nếu lỗi là do API trả về mã 400
+    if (error.response?.status === 400) {
+      const errorMsg = error.response?.data?.errors ? 
+        error.response.data.errors.join(", ") : 
+        "Invalid email address.";
+      return Promise.reject(new Error(errorMsg));
+    }
+
+    // ✅ Nếu lỗi do mất kết nối hoặc lỗi server
+    return Promise.reject(new Error("Network error, please try again."));
+  }
+};
+export const verifyOtpAPI = async (email: string, otp: string): Promise<any> => {
+  const url = "/api/Auth/verify-otp";
+
+  const apiClient = await initApiClient();
+  console.log("🟡 API Endpoint:", apiClient.defaults.baseURL + url);
+
+  try {
+    const response: IBackendRes<any> = await apiClient.post(url, {
+      email,
+      otp
+    });
+
+    console.log("🟢 Full API Response:", response);
+
+    // ✅ Kiểm tra nếu API không phản hồi đúng định dạng
+    if (!response || typeof response.success === "undefined") {
+      console.error("🔴 API Response không hợp lệ:", response);
+      return Promise.reject(new Error("Invalid response from server."));
+    }
+
+    // ✅ Kiểm tra nếu API trả về lỗi
+    if (!response.success) {
+      console.error("🔴 OTP verification failed:", response);
+      return Promise.reject(new Error(response.errors?.join(", ") || "OTP verification failed."));
+    }
+
+    // ✅ Trả về dữ liệu
+    return response.data;
+  } catch (error: any) {
+    console.error("🔴 OTP Verification API Error:", error);
+
+    // ✅ Nếu lỗi là mất kết nối
+    if (error.message.includes("Network Error")) {
+      return Promise.reject(new Error("⚠️ Cannot connect to server. Please check your internet connection."));
+    }
+
+    // ✅ Nếu lỗi là do API trả về mã 400 (OTP không hợp lệ)
+    if (error.response?.status === 400) {
+      const errorMsg = error.response?.data?.errors ? 
+        error.response.data.errors.join(", ") : 
+        "The OTP field is required.";
+      return Promise.reject(new Error(errorMsg));
+    }
+
+    // ✅ Nếu lỗi do mất kết nối hoặc lỗi server
+    return Promise.reject(new Error("Network error, please try again."));
+  }
+};

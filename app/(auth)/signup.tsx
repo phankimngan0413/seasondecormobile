@@ -16,9 +16,10 @@ import * as yup from "yup";
 import { useRouter } from "expo-router";
 import { registerCustomerAPI } from "@/utils/authAPI";
 import { Ionicons } from "@expo/vector-icons";
-import CalendarPicker from "@/components/CalendarPicker"; // Import the CalendarPicker component
+import CalendarPicker from "@/components/CalendarPicker";
 import { Colors } from "@/constants/Colors";
-import InputField from "@/components/InputField"; // Import the enhanced InputField
+import InputField from "@/components/InputField";
+import VerificationModal from "@/components/VerificationModal"; // Import the new verification component
 
 // Define the form data type
 type FormData = {
@@ -76,6 +77,10 @@ const SignUpScreen = () => {
   const [showGenderDropdown, setShowGenderDropdown] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  
+  // New state for verification modal
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [registrationComplete, setRegistrationComplete] = useState(false);
 
   // Generate a slug from first and last name
   const generateSlug = (firstName: string, lastName: string): string => {
@@ -140,7 +145,7 @@ const SignUpScreen = () => {
       // Generate slug from name
       const slug = generateSlug(validData.firstName, validData.lastName);
       
-      // Use the new API
+      // Register the user
       await registerCustomerAPI(
         validData.email,
         validData.password,
@@ -151,12 +156,10 @@ const SignUpScreen = () => {
         validData.gender === "Male"
       );
       
-      // Show success message
-      Alert.alert(
-        "Registration Successful",
-        "Your account has been created successfully. Please check your email for verification.",
-        [{ text: "OK", onPress: () => router.replace("/(auth)/login") }]
-      );
+      // After successful registration, show verification modal
+      setRegistrationComplete(true);
+      setShowVerificationModal(true);
+      
     } catch (error: any) {
       const errorMessage = error.message || "Registration failed. Please try again.";
       Alert.alert("Registration Failed", errorMessage);
@@ -164,6 +167,18 @@ const SignUpScreen = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Handle successful verification
+  const handleVerificationSuccess = () => {
+    setShowVerificationModal(false);
+    
+    // Show success message
+    Alert.alert(
+      "Registration Successful",
+      "Your account has been verified successfully.",
+      [{ text: "OK", onPress: () => router.replace("/(auth)/login") }]
+    );
   };
 
   return (
@@ -179,7 +194,6 @@ const SignUpScreen = () => {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            
             
             <Text style={[styles.title, { color: colors.text }]}>
               Create Your Account
@@ -397,12 +411,26 @@ const SignUpScreen = () => {
             isVisible={showDatePicker}
             onClose={() => setShowDatePicker(false)}
           />
+
+          {/* Verification Code Modal */}
+          <VerificationModal
+            isVisible={showVerificationModal}
+            onClose={() => {
+              if (registrationComplete) {
+                // If registration is complete but user closes verification,
+                // take them to login screen
+                router.replace("/(auth)/login");
+              }
+              setShowVerificationModal(false);
+            }}
+            email={email}
+            onVerificationSuccess={handleVerificationSuccess}
+          />
         </View>
       </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   );
 };
-
 const styles = StyleSheet.create({
   container: { 
     flex: 1 

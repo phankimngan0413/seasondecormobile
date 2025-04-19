@@ -18,6 +18,11 @@ export interface IDecor {
   provider?: IProvider;
   categoryName?: string;
   sublocation?: string;
+  serviceName?: string; // Có thể sẽ lấy từ categoryName hoặc style
+  price?: number; // Có thể sẽ lấy từ basePrice
+  imageUrls?: string[]; // Map từ images
+  rate?: number;
+  totalRating?: number;
 }
 
 // Then use type guards in your component to handle both possibilities

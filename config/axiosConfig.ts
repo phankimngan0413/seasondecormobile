@@ -5,7 +5,7 @@ import { Platform } from "react-native";
 import { getUniqueId } from "react-native-device-info";
 
 // API URL configurations
-const SEASON_DECOR_API = "http://season-decor.somee.com";
+// const SEASON_DECOR_API = "http://season-decor.somee.com";
 const TUNNEL_API = process.env.REACT_APP_API_URL;
 const LAN_IP = process.env.REACT_APP_LAN_IP || "http://10.0.2.2:5297";
 const EMULATOR_IP = process.env.REACT_APP_EMULATOR_IP || "http://10.0.2.2:5297";
@@ -28,18 +28,18 @@ const isEmulator = async (): Promise<boolean> => {
 // Set up the base URL for API requests
 const setupBaseUrl = async (): Promise<string> => {
   // Trong môi trường production, luôn sử dụng Season Decor API
-  if (isProduction) {
-    console.log("🌐 Production mode: Using Season Decor API:", SEASON_DECOR_API);
-    return SEASON_DECOR_API;
-  }
+  // if (isProduction) {
+  //   console.log("🌐 Production mode: Using Season Decor API:", SEASON_DECOR_API);
+  //   return SEASON_DECOR_API;
+  // }
   
-  // Trong môi trường development, có thể chuyển đổi
-  const useSeasonDecorApi = true;
+  // // Trong môi trường development, có thể chuyển đổi
+  // const useSeasonDecorApi = true;
   
-  if (useSeasonDecorApi) {
-    console.log("🌐 Development mode: Using Season Decor API:", SEASON_DECOR_API);
-    return SEASON_DECOR_API;
-  }
+  // if (useSeasonDecorApi) {
+  //   console.log("🌐 Development mode: Using Season Decor API:", SEASON_DECOR_API);
+  //   return SEASON_DECOR_API;
+  // }
   
   // Logic cho development environment
   let BASE_URL = LAN_IP;

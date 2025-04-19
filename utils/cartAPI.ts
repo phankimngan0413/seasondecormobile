@@ -100,3 +100,41 @@ export const removeProductFromCartAPI = async (userId: number, productId: number
     // Validate the response structure
     
 };
+// Update Product Quantity in Cart API
+export const updateQuantityAPI = async (userId: number, productId: number, quantity: number) => {
+  const apiClient = await initApiClient();
+  const token = await getToken();
+  
+  if (!token) {
+    throw new Error("Unauthorized: Please log in.");
+  }
+  
+  try {
+    console.log(`Updating quantity for product ID ${productId} in cart for user ID ${userId} to ${quantity}`);
+    
+    const response = await apiClient.put(
+      `/api/Cart/updateQuantity/${userId}`,
+      null, // No request body
+      {
+        params: {
+          productId: productId,
+          quantity: quantity
+        },
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    );
+    
+    console.log("🟢 Quantity Updated:", response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error("🔴 Update Quantity API Error:", error.response?.data);
+    
+    // More detailed error logging
+    if (error.response) {
+      console.error("Status code:", error.response.status);
+      console.error("Response data:", JSON.stringify(error.response.data, null, 2));
+    }
+    
+    throw new Error("Failed to update product quantity. Please try again.");
+  }
+};

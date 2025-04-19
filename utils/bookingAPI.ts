@@ -21,6 +21,8 @@ export interface IBooking {
   totalPrice?: number;
   cost?: number;
   serviceItems?: string;
+  note?: string;                 // Added note field
+  expectedCompletion?: string;   // Added expectedCompletion field
   decorService?: {
     id: number;
     style: string;
@@ -54,17 +56,17 @@ export interface IBooking {
   }>;
 }
 
-// Define request interfaces
+// Updated request interface with new fields
 export interface IBookingRequest {
   decorServiceId: number;
   addressId: number;
   surveyDate: string;
-
+  note?: string;               // Added note field (optional)
+  expectedCompletion?: string; // Added expectedCompletion field (optional)
 }
 
 // Define response interfaces
 export interface IBookingResponse {
-  
   success: boolean;
   booking?: IBooking;
   message?: string;
@@ -78,6 +80,7 @@ export interface IBookingListResponse {
   totalCount: number;
   message?: string;
 }
+
 export interface IPaginatedBookingsResponse {
   success?: boolean;
   message?: string;
@@ -96,21 +99,15 @@ export interface IPaginatedBookingsResponse {
   totalPages?: number; // Kept for backward compatibility
 }
 
-
 export interface IBookingFilterOptions {
-  status?: string;
-  decorServiceId?: number;
-  pageIndex?: number;
-  pageSize?: number;
-  sortBy?: string;
-  descending?: boolean;
+  Status?: number; // Changed to match API parameter (PascalCase)
+  DecorServiceId?: number; // Changed to match API parameter (PascalCase)
+  PageIndex?: number; // Changed to match API parameter (PascalCase)
+  PageSize?: number; // Changed to match API parameter (PascalCase)
+  SortBy?: string; // Changed to match API parameter (PascalCase)
+  Descending?: boolean; // Changed to match API parameter (PascalCase)
 }
 
-/**
- * Lấy danh sách booking phân trang với các tùy chọn lọc
- * @param options - Các tùy chọn lọc và phân trang
- * @returns Promise với danh sách booking phân trang
- */
 /**
  * Lấy danh sách booking phân trang với các tùy chọn lọc
  * @param options - Các tùy chọn lọc và phân trang
@@ -122,32 +119,33 @@ export const getPaginatedBookingsForCustomerAPI = async (
   console.log('🔍 getPaginatedBookingsForCustomerAPI - Starting API call with options:', JSON.stringify(options, null, 2));
   
   const {
-    status,
-    decorServiceId,
-    pageIndex = 1,
-    pageSize = 10,
-    sortBy = "createdAt",
-    descending = true
+    Status,
+    DecorServiceId,
+    PageIndex = 1,
+    PageSize = 10,
+    SortBy = "createdAt",
+    Descending = true
   } = options;
 
   const url = "/api/Booking/getPaginatedBookingsForCustomer";
   console.log(`🔍 API URL: ${url}`);
   
+  // Use parameters directly from options without transformation
   const params: Record<string, any> = {
-    PageIndex: pageIndex,
-    PageSize: pageSize,
-    SortBy: sortBy,
-    Descending: descending
+    PageIndex,
+    PageSize,
+    SortBy,
+    Descending
   };
 
   // Thêm các tham số tùy chọn
-  if (status) {
-    params.Status = status;
-    console.log(`🔍 Filtering by status: ${status}`);
+  if (Status !== undefined) {
+    params.Status = Status;
+    console.log(`🔍 Filtering by Status: ${Status}`);
   }
-  if (decorServiceId) {
-    params.DecorServiceId = decorServiceId;
-    console.log(`🔍 Filtering by decorServiceId: ${decorServiceId}`);
+  if (DecorServiceId !== undefined) {
+    params.DecorServiceId = DecorServiceId;
+    console.log(`🔍 Filtering by DecorServiceId: ${DecorServiceId}`);
   }
   
   console.log('🔍 Request parameters:', JSON.stringify(params, null, 2));
@@ -160,26 +158,6 @@ export const getPaginatedBookingsForCustomerAPI = async (
     console.log('🔍 API response headers:', JSON.stringify(response.headers, null, 2));
     
     if (response && response.data) {
-      
-      // Check data structure to determine response format
-      if (response.data.items) {
-      } else if (response.data.data && response.data.data.data) {
-      }
-      
-      // Log the total count and total pages
-      if (response.data.totalCount) {
-      } else if (response.data.data && response.data.data.totalCount) {
-      }
-      
-      if (response.data.totalPages) {
-      } else if (response.data.data && response.data.data.totalPages) {
-      }
-      
-      // Sample the first item if available
-      if (response.data.items && response.data.items.length > 0) {
-      } else if (response.data.data && response.data.data.data && response.data.data.data.length > 0) {
-      }
-      
       console.log('🔍 API call successful, returning data');
       return response.data;
     } else {
@@ -188,20 +166,19 @@ export const getPaginatedBookingsForCustomerAPI = async (
       return {
         items: [],
         totalCount: 0,
-        pageIndex: pageIndex,
-        pageSize: pageSize,
+        pageIndex: PageIndex,
+        pageSize: PageSize,
         totalPages: 0
       };
     }
   } catch (error: any) {
     console.error("🔴 Error fetching paginated bookings:", error);
 
-
     return {
       items: [],
       totalCount: 0,
-      pageIndex: pageIndex,
-      pageSize: pageSize,
+      pageIndex: PageIndex,
+      pageSize: PageSize,
       totalPages: 0
     };
   }
@@ -287,6 +264,7 @@ export const createBookingAPI = async (
     };
   }
 };
+
 export const requestCancelBookingAPI = async (
   bookingCode: string
 ): Promise<IBookingResponse> => {
