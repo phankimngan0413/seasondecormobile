@@ -20,7 +20,7 @@ import CustomButton from "@/components/ui/Button/Button";
 import { getCartAPI, removeProductFromCartAPI, updateQuantityAPI } from "@/utils/cartAPI";
 import { getUserIdFromToken } from "@/services/auth";
 import { useRouter } from "expo-router";
-
+import { useCart } from "@/constants/CartContext";
 const { width } = Dimensions.get("window");
 const PRIMARY_COLOR = "#5fc1f1";
 
@@ -44,7 +44,7 @@ const CartScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [removingItemId, setRemovingItemId] = useState<number | null>(null);
   const [updatingItemId, setUpdatingItemId] = useState<number | null>(null);
-  
+  const { refreshCartCount } = useCart();
   // Animations
   const slideAnimation = useRef(new Animated.Value(0)).current;
   const fadeAnimation = useRef(new Animated.Value(0)).current;
@@ -94,6 +94,9 @@ const fetchCartItems = async () => {
       setCartItems([]);
       setTotalPrice(0);
     }
+    
+    // Gọi refreshCartCount để cập nhật số lượng sản phẩm trong giỏ hàng
+     refreshCartCount();
   } catch (err: any) {
     setError(err.message || "Failed to load your cart items");
   } finally {
@@ -101,8 +104,40 @@ const fetchCartItems = async () => {
     setRefreshing(false);
   }
 };
+const handleDeleteCartItem = async (productId: number) => {
+  try {
+    setRemovingItemId(productId);
+    
+    const userId = await getUserIdFromToken();
+    if (!userId) {
+      Alert.alert("Sign In Required", "Please sign in to manage your cart");
+      return;
+    }
+    
+    // Animate the item out before removing it
+    const itemToRemove = cartItems.find(item => item.productId === productId);
+    if (itemToRemove) {
+      // Optimistically update UI first for better UX
+      const updatedItems = cartItems.filter(item => item.productId !== productId);
+      setCartItems(updatedItems);
+      calculateTotal(updatedItems);
+    }
 
-// Handle quantity change using API's response total
+    // Call API to remove the item
+    await removeProductFromCartAPI(userId, productId);
+    
+    // Cập nhật số lượng sản phẩm trong giỏ hàng
+    await refreshCartCount();    
+  } catch (error: any) {
+    console.error("Error removing product:", error);
+    // Don't show error alert, just log it
+    
+    // Still refresh cart to ensure UI is in sync with server
+    fetchCartItems();
+  } finally {
+    setRemovingItemId(null);
+  }
+};
 const handleQuantityChange = async (productId: number, newQuantity: number) => {
   if (newQuantity < 1) return;
   
@@ -130,6 +165,8 @@ const handleQuantityChange = async (productId: number, newQuantity: number) => {
       }
     }
     
+    // Cập nhật số lượng sản phẩm trong giỏ hàng
+    await refreshCartCount();    
   } catch (error: any) {
     console.error("Error updating quantity:", error);
     // If API update fails, refresh cart to sync with server
@@ -138,6 +175,8 @@ const handleQuantityChange = async (productId: number, newQuantity: number) => {
     setUpdatingItemId(null);
   }
 };
+
+
 
   const calculateTotal = (items: CartItem[]) => {
     const total = items.reduce((sum, item) => {
@@ -152,41 +191,6 @@ const handleQuantityChange = async (productId: number, newQuantity: number) => {
     fetchCartItems();
   };
 
-  const handleDeleteCartItem = async (productId: number) => {
-    try {
-      setRemovingItemId(productId);
-      
-      const userId = await getUserIdFromToken();
-      if (!userId) {
-        Alert.alert("Sign In Required", "Please sign in to manage your cart");
-        return;
-      }
-      
-      // Animate the item out before removing it
-      const itemToRemove = cartItems.find(item => item.productId === productId);
-      if (itemToRemove) {
-        // Optimistically update UI first for better UX
-        const updatedItems = cartItems.filter(item => item.productId !== productId);
-        setCartItems(updatedItems);
-        calculateTotal(updatedItems);
-      }
-  
-      // Call API to remove the item
-      await removeProductFromCartAPI(userId, productId);
-      
-      // No need to show any success message or check response structure
-      // The UI is already updated optimistically
-      
-    } catch (error: any) {
-      console.error("Error removing product:", error);
-      // Don't show error alert, just log it
-      
-      // Still refresh cart to ensure UI is in sync with server
-      fetchCartItems();
-    } finally {
-      setRemovingItemId(null);
-    }
-  };
   
   const navigateToCheckout = () => {
     if (cartItems.length === 0) {

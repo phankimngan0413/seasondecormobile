@@ -240,15 +240,39 @@ const AddFundsScreen = () => {
           thirdPartyCookiesEnabled={true}
           originWhitelist={['*', 'com.baymaxphan.seasondecormobileapp://*']}  // Allow app scheme
           onShouldStartLoadWithRequest={(request) => {
-            // Log tất cả các yêu cầu để debug
+            // Log all requests for debugging
             console.log("WebView request:", request.url);
             
-            // Kiểm tra nếu URL là đường dẫn mobileReturn
+            // FIRST: Check for app scheme URLs before anything else
+            if (request.url.startsWith('com.baymaxphan.seasondecormobileapp')) {
+              console.log("Intercepted app scheme URL:", request.url);
+              
+              // If it's a success URL, handle it immediately
+              if (request.url.includes('/success') || request.url.includes('success')) {
+                console.log("Detected success URL from app scheme - handling redirect");
+                
+                // Mark payment as successful if not already done
+                handlePaymentSuccess();
+                
+                // Use requestAnimationFrame for smoother transition
+                requestAnimationFrame(() => {
+                  setShowWebView(false);
+                  router.push("/screens/payment/success");
+                });
+                
+                // Prevent WebView from trying to load this URL
+                return false;
+              }
+              // Always return false for app scheme URLs to prevent errors
+              return false;
+            }
+            
+            // SECOND: Check for mobile return URLs
             if (request.url.includes('/api/Payment/mobileReturn')) {
               console.log("Detected mobileReturn URL:", request.url);
               
               try {
-                // Đọc tham số từ URL
+                // Parse URL parameters
                 const urlParts = request.url.split('?');
                 if (urlParts.length > 1) {
                   const queryString = urlParts[1];
@@ -259,41 +283,25 @@ const AddFundsScreen = () => {
                   console.log("Payment response code:", responseCode);
                   console.log("Transaction status:", transactionStatus);
                   
-                  // Nếu thanh toán thành công
+                  // If payment successful
                   if (responseCode === '00' && transactionStatus === '00') {
                     console.log("Payment successful based on URL parameters");
                     
-                    // Đánh dấu thành công
+                    // Mark payment as successful
                     handlePaymentSuccess();
                     
-                    // Để backend xử lý API, trả về true để tiếp tục tải
+                    // Navigate to success after a short delay to allow backend processing
+                    setTimeout(() => {
+                      setShowWebView(false);
+                      router.push("/screens/payment/success");
+                    }, 1000);
+                    
+                    // Let the backend process the API call first
                     return true;
                   }
                 }
               } catch (error) {
                 console.error("Error parsing URL parameters:", error);
-              }
-            }
-            
-            // Xử lý đặc biệt cho app scheme URLs
-            if (request.url.startsWith('com.baymaxphan.seasondecormobileapp://')) {
-              console.log("Intercepted app scheme URL:", request.url);
-              
-              // Đây là URL chuyển hướng từ backend
-              if (request.url.includes('/success') || request.url.includes('success')) {
-                console.log("Detected success URL from backend - handling redirect");
-                
-                // Đánh dấu thành công (nếu chưa)
-                handlePaymentSuccess();
-                
-                // Đóng WebView và chuyển hướng trong ứng dụng
-                setTimeout(() => {
-                  setShowWebView(false);
-                  router.push("/screens/payment/success");
-                }, 500);
-                
-                // Không để WebView tải URL không hợp lệ
-                return false;
               }
             }
             

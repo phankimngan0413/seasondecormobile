@@ -49,6 +49,8 @@ export default function HomeScreen() {
   };
 
   const fetchProducts = async () => {
+    setLoading(true);
+    setError("");
     try {
       const data = await getProductsAPI();
       setProducts(data);
@@ -73,7 +75,23 @@ export default function HomeScreen() {
   }, [selectedTab]);
 
   if (loading) return <ActivityIndicator size="large" color={colors.primary} />;
-  if (error) return <Text style={[styles.errorText, { color: colors.error || "red" }]}>{error}</Text>;
+  
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={[styles.errorText, { color: colors.error || "red" }]}>
+          {error}
+        </Text>
+        <TouchableOpacity
+          style={[styles.reloadButton, { backgroundColor: colors.primary }]}
+          onPress={fetchProducts}
+        >
+          <Ionicons name="reload" size={18} color="#fff" style={styles.reloadIcon} />
+          <Text style={styles.reloadButtonText}>Reload</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <FlatList
@@ -382,10 +400,31 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#fff",
   },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
   errorText: {
     fontSize: 16,
     textAlign: "center",
-    marginTop: 20,
+    marginBottom: 20,
+  },
+  reloadButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  reloadIcon: {
+    marginRight: 8,
+  },
+  reloadButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
   },
   tabContainer: {
     flexDirection: "row",

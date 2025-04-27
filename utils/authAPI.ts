@@ -348,3 +348,114 @@ export const verifyOtpAPI = async (email: string, otp: string): Promise<any> => 
     return Promise.reject(new Error("Network error, please try again."));
   }
 };
+
+export const forgotPasswordAPI = async (email: string): Promise<any> => {
+  const url = "/api/Auth/forgot-password";
+
+  const apiClient = await initApiClient();
+  console.log("🟡 API Endpoint:", apiClient.defaults.baseURL + url);
+
+  try {
+    const response: IBackendRes<any> = await apiClient.post(url, {
+      email
+    });
+
+    console.log("🟢 Full API Response:", response);
+
+    // ✅ Kiểm tra nếu API không phản hồi đúng định dạng
+    if (!response || typeof response.success === "undefined") {
+      console.error("🔴 API Response không hợp lệ:", response);
+      return Promise.reject(new Error("Invalid response from server."));
+    }
+
+    // ✅ Kiểm tra nếu API trả về lỗi
+    if (!response.success) {
+      console.error("🔴 Forgot password request failed:", response);
+      return Promise.reject(new Error(response.errors?.join(", ") || "Failed to send password reset email."));
+    }
+
+    // ✅ Trả về dữ liệu
+    return response.data;
+  } catch (error: any) {
+    console.error("🔴 Forgot Password API Error:", error);
+
+    // ✅ Nếu lỗi là mất kết nối
+    if (error.message.includes("Network Error")) {
+      return Promise.reject(new Error("⚠️ Cannot connect to server. Please check your internet connection."));
+    }
+
+    // ✅ Nếu lỗi là do API trả về mã 400
+    if (error.response?.status === 400) {
+      const errorMsg = error.response?.data?.errors ? 
+        error.response.data.errors.join(", ") : 
+        "Invalid email address.";
+      return Promise.reject(new Error(errorMsg));
+    }
+
+    // ✅ Nếu lỗi do mất kết nối hoặc lỗi server
+    return Promise.reject(new Error("Network error, please try again."));
+  }
+};
+
+export const resetPasswordAPI = async (otp: string, newPassword: string): Promise<any> => {
+  const url = "/api/Auth/reset-password";
+
+  const apiClient = await initApiClient();
+  console.log("🟡 API Endpoint:", apiClient.defaults.baseURL + url);
+
+  try {
+    const response: IBackendRes<any> = await apiClient.post(url, {
+      otp,
+      newPassword
+    });
+
+    console.log("🟢 Full API Response:", response);
+
+    // ✅ Kiểm tra nếu API không phản hồi đúng định dạng
+    if (!response || typeof response.success === "undefined") {
+      console.error("🔴 API Response không hợp lệ:", response);
+      return Promise.reject(new Error("Invalid response from server."));
+    }
+
+    // ✅ Kiểm tra nếu API trả về lỗi
+    if (!response.success) {
+      console.error("🔴 Reset password failed:", response);
+      return Promise.reject(new Error(response.errors?.join(", ") || "Failed to reset password."));
+    }
+
+    // ✅ Trả về thông tin login nếu có
+    if (response.token) {
+      console.log("🔵 API Token:", response.token);
+      return { token: response.token, requiresTwoFactor: false };
+    }
+
+    // ✅ Trả về thành công nếu không có token
+    return response.data;
+  } catch (error: any) {
+    console.error("🔴 Reset Password API Error:", error);
+
+    // ✅ Nếu lỗi là mất kết nối
+    if (error.message.includes("Network Error")) {
+      return Promise.reject(new Error("⚠️ Cannot connect to server. Please check your internet connection."));
+    }
+
+    // ✅ Nếu lỗi là do API trả về mã 400 (OTP không hợp lệ hoặc mật khẩu không đạt yêu cầu)
+    if (error.response?.status === 400) {
+      const errorData = error.response?.data;
+      if (errorData?.errors) {
+        const errorMessages = [];
+        for (const field in errorData.errors) {
+          errorMessages.push(...errorData.errors[field]);
+        }
+        if (errorMessages.length > 0) {
+          return Promise.reject(new Error(errorMessages.join(", ")));
+        }
+      }
+      
+      return Promise.reject(new Error("Invalid OTP or password requirements not met."));
+    }
+
+    // ✅ Nếu lỗi do mất kết nối hoặc lỗi server
+    return Promise.reject(new Error("Network error, please try again."));
+  }
+};

@@ -107,6 +107,20 @@ export interface IBookingFilterOptions {
   SortBy?: string; // Changed to match API parameter (PascalCase)
   Descending?: boolean; // Changed to match API parameter (PascalCase)
 }
+export interface ICancelType {
+  id: number;
+  type: string;
+  name?: string; // Optional for backward compatibility
+  description?: string;
+  isActive?: boolean;
+}
+
+export interface ICancelTypeResponse {
+  success: boolean;
+  message?: string;
+  errors?: string[];
+  data?: ICancelType[];
+}
 
 /**
  * Lấy danh sách booking phân trang với các tùy chọn lọc
@@ -264,17 +278,28 @@ export const createBookingAPI = async (
     };
   }
 };
-
 export const requestCancelBookingAPI = async (
-  bookingCode: string
+  bookingCode: string,
+  cancelTypeId: number,
+  cancelReason: string
 ): Promise<IBookingResponse> => {
   const url = `/api/Booking/requestCancel/${bookingCode}`;
   
+  const payload = {
+    cancelTypeId,
+    cancelReason
+  };
+  
+  console.log(`🔍 Sending cancellation request to ${url} with payload:`, payload);
+  
   const apiClient = await initApiClient();
   try {
-    const response: AxiosResponse<IBookingResponse> = await apiClient.put(url);
+    const response: AxiosResponse = await apiClient.put(url, payload);
+    
+    console.log(`🔍 Cancellation API response:`, response.data);
     
     if (response && response.data) {
+      // The API seems to return a success response with a message
       return response.data;
     } else {
       console.error("🔴 Invalid cancellation request response:", response);
@@ -286,27 +311,20 @@ export const requestCancelBookingAPI = async (
   } catch (error: any) {
     console.error("🔴 Error requesting cancellation:", error);
     
-    if (error.response) {
+    // Check for error response with message
+    if (error.response && error.response.data) {
       console.error("API Error Response:", error.response.data);
-      return {
-        success: false,
-        message: error.response.data.message || "Failed to request cancellation",
-        errors: error.response.data.errors
-      };
+      // Return the exact error from the server
+      return error.response.data;
     }
     
+    // Return a generic error for network issues
     return {
       success: false,
       message: "Network error or server unavailable"
     };
   }
 };
-
-/**
- * Confirm a booking
- * @param bookingCode Booking code to confirm
- * @returns Promise with confirmation result
- */
 export const confirmBookingAPI = async (
   bookingCode: string
 ): Promise<IBookingResponse> => {
@@ -384,6 +402,70 @@ export const makeBookingDepositAPI = async (
     return {
       success: false,
       message: "Network error or server unavailable"
+    };
+  }
+};
+/**
+ * Fetch all available cancellation types
+ * @returns Promise with cancellation types
+ */
+export const getAllCancelTypesAPI = async (): Promise<ICancelTypeResponse> => {
+  const url = "/api/CancelType/getAllCancelType";
+  
+  const apiClient = await initApiClient();
+  try {
+    console.log('🔍 Sending request to fetch cancel types');
+    const response = await apiClient.get(url);
+    
+    console.log('🔍 Cancel types API response:', JSON.stringify(response.data, null, 2));
+    
+    // Check if response has the expected structure
+    if (response && response.data) {
+      // Handle different possible response structures
+      if (response.data.success !== undefined) {
+        // Standard wrapped response structure
+        return response.data;
+      } else if (Array.isArray(response.data)) {
+        // Direct array response
+        return {
+          success: true,
+          data: response.data
+        };
+      } else if (response.data.data && Array.isArray(response.data.data)) {
+        // Nested data property with array
+        return {
+          success: true,
+          data: response.data.data
+        };
+      } else {
+        console.error("🔴 Unexpected cancel types response format:", response.data);
+        return {
+          success: false,
+          message: "Unexpected response format from server"
+        };
+      }
+    } else {
+      console.error("🔴 Invalid cancel types response:", response);
+      return {
+        success: false,
+        message: "Failed to retrieve cancellation types"
+      };
+    }
+  } catch (error: any) {
+    console.error("🔴 Error fetching cancellation types:", error);
+    
+    if (error.response) {
+      console.error("API Error Response:", error.response.data);
+      return {
+        success: false,
+        message: error.response.data?.message || "Failed to retrieve cancellation types",
+        errors: error.response.data?.errors
+      };
+    }
+    
+    return {
+      success: false,
+      message: error.message || "Network error or server unavailable"
     };
   }
 };

@@ -1,172 +1,201 @@
 import { initApiClient } from "@/config/axiosConfig";
 import { getToken, getUserIdFromToken } from "@/services/auth";
 
-// Get Paginated Quotations API
-export const getPaginatedQuotationsAPI = async (
-  quotationCode?: string,
-  status?: number,
-  pageIndex: number = 0,
-  pageSize: number = 10
-) => {
-  const apiClient = await initApiClient();
-  const token = await getToken();
-
-  if (!token) {
-    throw new Error("Unauthorized: Please log in.");
-  }
-
+/**
+ * Get paginated quotations for the current customer
+ */
+// Updated API function that works without parameters
+export const getPaginatedQuotationsForCustomerAPI = async () => {
   try {
-    // Build query parameters
-    const params: any = {
-      pageIndex,
-      pageSize
-    };
+    console.log('🔍 Initializing API client');
+    const apiClient = await initApiClient();
     
-    // Add optional parameters if provided
-    if (quotationCode) params.quotationCode = quotationCode;
-    if (status !== undefined) params.status = status;
+    console.log('🔍 Getting authentication token');
+    const token = await getToken();
 
+    if (!token) {
+      console.error('🔍 No token available');
+      throw new Error("Unauthorized: Please log in.");
+    }
+
+    console.log('🔍 Token available, proceeding with request');
+    
+    // Make the request without any parameters since that works
     const response = await apiClient.get(
       "/api/Quotation/getPaginatedQuotationsForCustomer",
-      { 
-        params,
-        headers: { Authorization: `Bearer ${token}` }
-      }
+      { headers: { Authorization: `Bearer ${token}` } }
     );
 
     console.log("🟢 Paginated Quotations Retrieved:", response.data);
-    return response.data;
+    return response.data || { success: false, data: [], message: "No data received from API" };
   } catch (error: any) {
-    console.error("🔴 Get Paginated Quotations API Error:", error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || "Failed to retrieve quotations.");
+    console.error("🔴 Get Paginated Quotations API Error:", error);
+    
+    return { 
+      success: false, 
+      data: [], 
+      message: error.response?.data?.message || "Failed to retrieve quotations." 
+    };
   }
 };
-
-// Get Quotation Details API
-export const getQuotationDetailsAPI = async (quotationId: number) => {
-  const apiClient = await initApiClient();
-  const token = await getToken();
-
-  if (!token) {
-    throw new Error("Unauthorized: Please log in.");
-  }
-
+export const getQuotationDetailByCustomerAPI = async (quotationCode: string) => {
   try {
+    console.log('🔍 Getting quotation details for code:', quotationCode);
+    const apiClient = await initApiClient();
+    const token = await getToken();
+
+    if (!token) {
+      console.log('🔍 No token available');
+      throw new Error("Unauthorized: Please log in.");
+    }
+
+    // Make the API request - check if this path matches your API documentation
     const response = await apiClient.get(
-      `/api/Quotation/getQuotation/${quotationId}`,
+      `/api/Quotation/getQuotationDetailByCustomer/${quotationCode}`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
-    console.log("🟢 Quotation Details Retrieved:", response.data);
-    return response.data;
+    console.log("🟢 Quotation detail response received:", response.status);
+    console.log("🟢 Quotation detail data:", response.data);
+    
+    return response.data || { success: false, data: null, message: "No data received" };
   } catch (error: any) {
-    console.error("🔴 Get Quotation Details API Error:", error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || "Failed to retrieve quotation details.");
+    console.error("🔴 Get Quotation Detail API Error:", error);
+    
+    // Log details about the error
+    if (error.response) {
+      console.error("🔴 Error status:", error.response.status);
+      console.error("🔴 Error data:", error.response.data);
+    } else if (error.request) {
+      console.error("🔴 No response received:", error.request);
+    } else {
+      console.error("🔴 Error message:", error.message);
+    }
+    
+    return { 
+      success: false, 
+      data: null, 
+      message: error.response?.data?.message || "Failed to retrieve quotation details." 
+    };
   }
 };
-
-// Create Quotation API
-export const createQuotationAPI = async (quotationData: {
-  products: Array<{ productId: number, quantity: number }>,
-  notes?: string
-}) => {
-  const apiClient = await initApiClient();
-  const token = await getToken();
-
-  if (!token) {
-    throw new Error("Unauthorized: Please log in.");
-  }
-
+/**
+ * Create a new quotation for a specific booking
+ */
+export const createQuotationByBookingCodeAPI = async (bookingCode: string, quotationData: any) => {
   try {
-    const userId = await getUserIdFromToken();
+    const apiClient = await initApiClient();
+    const token = await getToken();
+
+    if (!token) {
+      throw new Error("Unauthorized: Please log in.");
+    }
+
     const response = await apiClient.post(
-      "/api/Quotation/create",
-      {
-        ...quotationData,
-        customerId: userId
-      },
+      `/api/Quotation/createQuotationByBookingCode/${bookingCode}`,
+      quotationData,
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
-    console.log("🟢 Quotation Created:", response.data);
     return response.data;
   } catch (error: any) {
-    console.error("🔴 Create Quotation API Error:", error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || "Failed to create quotation.");
+    console.error("Error creating quotation:", error);
+    throw new Error(error.response?.data?.message || "Failed to create quotation");
   }
 };
 
-// Update Quotation Status API
-export const updateQuotationStatusAPI = async (quotationId: number, status: number) => {
-  const apiClient = await initApiClient();
-  const token = await getToken();
-
-  if (!token) {
-    throw new Error("Unauthorized: Please log in.");
-  }
-
+/**
+ * Upload a quotation file for a specific booking
+ */
+export const uploadQuotationFileByBookingCodeAPI = async (bookingCode: string, formData: FormData) => {
   try {
-    const response = await apiClient.put(
-      `/api/Quotation/updateStatus/${quotationId}`,
-      null,
-      {
-        params: { status },
-        headers: { Authorization: `Bearer ${token}` }
+    const apiClient = await initApiClient();
+    const token = await getToken();
+
+    if (!token) {
+      throw new Error("Unauthorized: Please log in.");
+    }
+
+    const response = await apiClient.post(
+      `/api/Quotation/uploadQuotationFileByBookingCode/${bookingCode}`,
+      formData,
+      { 
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        } 
       }
     );
 
-    console.log("🟢 Quotation Status Updated:", response.data);
     return response.data;
   } catch (error: any) {
-    console.error("🔴 Update Quotation Status API Error:", error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || "Failed to update quotation status.");
+    console.error("Error uploading quotation file:", error);
+    throw new Error(error.response?.data?.message || "Failed to upload quotation file");
   }
 };
 
-// Accept Quotation API
-export const acceptQuotationAPI = async (quotationId: number) => {
-  const apiClient = await initApiClient();
-  const token = await getToken();
-
-  if (!token) {
-    throw new Error("Unauthorized: Please log in.");
-  }
-
+/**
+ * Confirm a quotation by its code
+ */
+export const confirmQuotationAPI = async (quotationCode: string) => {
   try {
+    const apiClient = await initApiClient();
+    const token = await getToken();
+    
+    if (!token) {
+      throw new Error("Unauthorized: Please log in.");
+    }
+    
+    // Send true as the request body to confirm the quotation
     const response = await apiClient.put(
-      `/api/Quotation/accept/${quotationId}`,
-      null,
-      { headers: { Authorization: `Bearer ${token}` } }
+      `/api/Quotation/confirmQuotation/${quotationCode}`,
+      true,  // Changed from null to true
+      { 
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'  // Explicitly set content type
+        } 
+      }
     );
-
-    console.log("🟢 Quotation Accepted:", response.data);
+    
     return response.data;
   } catch (error: any) {
-    console.error("🔴 Accept Quotation API Error:", error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || "Failed to accept quotation.");
+    console.error("Error confirming quotation:", error);
+    throw new Error(error.response?.data?.message || "Failed to confirm quotation");
   }
 };
 
-// Reject Quotation API
-export const rejectQuotationAPI = async (quotationId: number, reason?: string) => {
-  const apiClient = await initApiClient();
-  const token = await getToken();
-
-  if (!token) {
-    throw new Error("Unauthorized: Please log in.");
-  }
-
+/**
+ * A debug function to test the API directly
+ */
+export const testQuotationAPI = async () => {
   try {
-    const response = await apiClient.put(
-      `/api/Quotation/reject/${quotationId}`,
-      { reason },
-      { headers: { Authorization: `Bearer ${token}` } }
+    const apiClient = await initApiClient();
+    const token = await getToken();
+    
+    if (!token) {
+      return { success: false, message: "No authentication token available" };
+    }
+    
+    const response = await apiClient.get(
+      "/api/Quotation/getPaginatedQuotationsForCustomer",
+      { 
+        params: {
+          PageIndex: 0,
+          PageSize: 10
+        },
+        headers: { Authorization: `Bearer ${token}` }
+      }
     );
-
-    console.log("🟢 Quotation Rejected:", response.data);
-    return response.data;
+    
+    return response.data || { success: false, message: "No data received" };
   } catch (error: any) {
-    console.error("🔴 Reject Quotation API Error:", error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || "Failed to reject quotation.");
+    console.error("API test error:", error);
+    return { 
+      success: false, 
+      error: error.message,
+      status: error.response?.status,
+      data: error.response?.data
+    };
   }
 };

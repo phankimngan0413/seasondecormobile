@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { 
-  View, 
-  Text, 
-  ActivityIndicator, 
-  FlatList, 
-  StyleSheet, 
+import {
+  View,
+  Text,
+  ActivityIndicator,
+  FlatList,
+  StyleSheet,
   TouchableOpacity,
   Dimensions
 } from "react-native";
@@ -54,9 +54,9 @@ const ProductListScreen = () => {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header Section */}
       <View style={styles.headerContainer}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Sản phẩm của chúng tôi</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Our Products</Text>
         <Text style={[styles.headerSubtitle, { color: colors.text }]}>
-          Khám phá các sản phẩm trang trí cho mùa lễ hội
+          Explore our holiday decoration products
         </Text>
       </View>
       
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   productWrapper: {
-    width: (width - 36) / 2, // Đảm bảo 2 sản phẩm trên một hàng với khoảng cách phù hợp
+    width: (width - 36) / 2, // Ensures 2 products per row with appropriate spacing
     marginBottom: 16,
   },
   errorText: {

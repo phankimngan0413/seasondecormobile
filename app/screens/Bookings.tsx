@@ -148,7 +148,7 @@ const getStatusStage = (statusCode: number): string => {
 };
 
 const canBookingBeCancelled = (statusCode: number): boolean => {
-  return [0, 1, 2, 3].includes(statusCode); // Pending, Planning, Quoting, Contracting
+  return [0, 1].includes(statusCode); // Pending, Planning, Quoting, Contracting
 };
 
 const doesBookingNeedConfirmation = (statusCode: number): boolean => {
@@ -366,45 +366,22 @@ const BookingListScreen: React.FC = () => {
     }
   };
 
-  const handleCancelBooking = async (booking: IBooking): Promise<void> => {
-    const bookingCode = booking.bookingCode;
+  const handleCancelBooking = (booking: IBooking): void => {
+    console.log('📘 Navigating to cancel request screen for booking:', booking.bookingCode);
     
-    Alert.alert(
-      'Cancel Booking',
-      'Are you sure you want to cancel this booking?',
-      [
-        { text: 'No', style: 'cancel' },
-        {
-          text: 'Yes',
-          onPress: async () => {
-            try {
-              console.log('📘 Requesting cancellation for booking:', bookingCode);
-              setLoading(true);
-              
-              const result = await requestCancelBookingAPI(bookingCode);
-              console.log('📘 Cancellation request result:', result);
-              
-              if (result.success) {
-                console.log('📘 Cancellation request successful');
-                Alert.alert('Success', 'Cancellation request submitted successfully');
-                fetchBookings(true);
-              } else {
-                console.error('❌ Cancellation request failed:', result.message);
-                Alert.alert('Error', result.message || 'Failed to request cancellation');
-              }
-            } catch (err: any) {
-              console.error('❌ Error in cancellation request:', err);
-              if (err.response) {
-                console.error('❌ API Error Response:', err.response.status, err.response.data);
-              }
-              Alert.alert('Error', 'Failed to request cancellation');
-            } finally {
-              setLoading(false);
-            }
-          }
-        }
-      ]
-    );
+    // Log booking details that might be useful for the cancel request screen
+    console.log('📘 Booking details for cancel request:', {
+      id: booking.id || booking.bookingId,
+      code: booking.bookingCode,
+      status: booking.status,
+      statusText: mapStatusCodeToString(booking.status)
+    });
+    
+    // Navigate to cancel request screen
+    router.push({
+      pathname: '/booking/cancel-request',
+      params: { bookingCode: booking.bookingCode }
+    });
   };
 
   const handleConfirmBooking = async (booking: IBooking): Promise<void> => {
