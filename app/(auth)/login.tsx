@@ -4,19 +4,17 @@ import { useRouter } from "expo-router";
 import InputField from "@/components/InputField";
 import CustomButton from "@/components/ui/Button/Button";
 import { Ionicons } from "@expo/vector-icons";
-import { loginAPI } from "@/utils/authAPI";
-import { setToken } from "@/services/auth";
+import { loginAPI, googleLoginAPI, resetPasswordAPI, forgotPasswordAPI } from "@/utils/authAPI";
+import { setToken, getToken } from "@/services/auth";
 import Logo from "@/components/Logo/Logo";
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
-import * as Google from "expo-auth-session/providers/google"; // Google login import
-import { googleLoginAPI ,resetPasswordAPI,forgotPasswordAPI} from "@/utils/authAPI"; // Import your googleLoginAPI function
+import * as Google from "expo-auth-session/providers/google";
 import { makeRedirectUri } from 'expo-auth-session';
 
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
 const isValidPassword = (password: string) => {
-  // Check if password contains at least one uppercase letter, one lowercase letter, and one number
   const hasUppercase = /[A-Z]/.test(password);
   const hasLowercase = /[a-z]/.test(password);
   const hasNumber = /[0-9]/.test(password);
@@ -42,9 +40,10 @@ const LoginScreen: React.FC = () => {
   const [resetOtp, setResetOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
-
+  
   // Google Login State
-  const [googleUserInfo, setGoogleUserInfo] = useState<{ displayName: string; idToken: string } | null>(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleToken, setGoogleToken] = useState<string | null>(null);
 
   // Google OAuth client IDs
   const googleExpoClientId = "269748534933-pfelsope967cksdg624uhahaj99apdgu.apps.googleusercontent.com";
@@ -53,6 +52,7 @@ const LoginScreen: React.FC = () => {
   const redirectUri = makeRedirectUri({
     // You can add additional configurations here if needed
   });
+  
   const [request, response, promptAsync] = Google.useAuthRequest({
     clientId: googleExpoClientId,
     androidClientId: googleAndroidStandaloneClientId,
@@ -60,52 +60,97 @@ const LoginScreen: React.FC = () => {
     redirectUri: redirectUri,
   });
 
+  // Check token status on component mount
   useEffect(() => {
-    if (response?.type === "success") {
-      const { id_token } = response.params;
-      if (id_token) {
-        setGoogleUserInfo({ displayName: "Google User", idToken: id_token });
+    const checkTokenStatus = async () => {
+      try {
+        const token = await getToken();
+        console.log("🟡 Initial token check:", token ? "Token exists" : "No token");
         
-        // Add logging to see the token
-        console.log("Google ID Token received:", id_token.substring(0, 10) + "...");
-        
-        // Call your API with better error handling
-        googleLoginAPI(id_token)
-          .then(async (response) => {
-            console.log("Google Login API response structure:", Object.keys(response));
-            
-            // Check if token exists and is valid
-            if (response && response.token) {
-              console.log("✅ Valid token received from API");
-              try {
-                await setToken(response.token);
-                console.log("✅ Token successfully stored");
-                router.replace("/(tabs)/profile");
-              } catch (storageError) {
-                console.error("🔴 Error storing token:", storageError);
-                Alert.alert("Login Error", "Failed to store authentication token");
-              }
-            } else {
-              console.error("🔴 Invalid token structure:", response);
-              Alert.alert("Login Failed", "Invalid authentication response from server");
-            }
-          })
-          .catch((error) => {
-            console.error("🔴 Google login API error:", error);
-            Alert.alert(
-              "Google Login Failed", 
-              "Unable to authenticate with the server. Please try again later."
-            );
-          });
-      } else {
-        console.error("🔴 No ID token in Google response");
-        Alert.alert("Google Login Failed", "Authentication information missing");
+        if (token) {
+          console.log("🟢 Valid token found, redirecting to profile");
+          router.replace("/(tabs)/profile");
+        }
+      } catch (error) {
+        console.error("🔴 Error checking token:", error);
       }
-    } else if (response?.type === "error") {
-      console.error("🔴 Google auth error:", response.error);
-      Alert.alert("Google Login Failed", "Authentication process was interrupted");
+    };
+    
+    checkTokenStatus();
+  }, []);
+
+  // Handle Google authentication response
+  useEffect(() => {
+    const handleGoogleAuth = async () => {
+      console.log("🟡 Google auth response type:", response?.type);
+      
+      if (response?.type === "success") {
+        setGoogleLoading(true);
+        
+        console.log("🟡 Full response params:", JSON.stringify(response.params));
+        
+        if (!response.params.id_token) {
+          console.error("🔴 GOOGLE AUTH: No ID token in response");
+          Alert.alert("Google Login Failed", "Authentication information missing");
+          setGoogleLoading(false);
+          return;
+        }
+        
+        const idToken = response.params.id_token;
+        setGoogleToken(idToken);
+        console.log("🟢 GOOGLE AUTH: ID token received:", idToken.substring(0, 15) + "...");
+        
+        try {
+          console.log("🟡 Calling backend with Google token...");
+          const loginResponse = await googleLoginAPI(idToken);
+          console.log("🟢 Google login API response:", JSON.stringify(loginResponse));
+          
+          if (!loginResponse || !loginResponse.token) {
+            console.error("🔴 GOOGLE AUTH: Invalid or missing token in response");
+            Alert.alert("Login Failed", "Server returned an invalid response");
+            setGoogleLoading(false);
+            return;
+          }
+          
+          const authToken = loginResponse.token;
+          console.log("🟢 GOOGLE AUTH: Backend token received:", authToken.substring(0, 15) + "...");
+          
+          try {
+            console.log("🟡 Attempting to store token...");
+            await setToken(authToken);
+            
+            // Verify token was stored
+            const storedToken = await getToken();
+            console.log("🟢 Token storage verification:", storedToken ? "Success" : "Failed");
+            
+            if (storedToken) {
+              console.log("🟢 GOOGLE AUTH: Token successfully stored");
+              router.replace("/(tabs)/profile");
+            } else {
+              console.error("🔴 GOOGLE AUTH: Token stored but verification failed");
+              Alert.alert("Login Error", "Failed to persist authentication");
+            }
+          } catch (storageError) {
+            console.error("🔴 GOOGLE AUTH: Error storing token:", storageError);
+            Alert.alert("Login Error", "Failed to store authentication token");
+          }
+        } catch (apiError: any) {
+          console.error("🔴 GOOGLE AUTH: API call failed:", apiError.message);
+          Alert.alert("Google Login Failed", apiError.message || "Unable to authenticate with the server");
+        } finally {
+          setGoogleLoading(false);
+        }
+      } else if (response?.type === "error") {
+        console.error("🔴 Google auth error:", response.error);
+        Alert.alert("Google Login Failed", "Authentication process was interrupted");
+      }
+    };
+    
+    if (response) {
+      handleGoogleAuth();
     }
   }, [response]);
+
   async function handleLogin() {
     setErrors({ email: "", password: "" });
 
@@ -132,19 +177,29 @@ const LoginScreen: React.FC = () => {
 
     setLoading(true);
     try {
-      console.log("🔵 Sending login request...");
+      console.log("🟡 Sending login request...");
       const { token } = await loginAPI(email, password);
-      console.log("✅ Received Token:", token);
+      console.log("🟢 Received Token:", token.substring(0, 15) + "...");
 
       if (token) {
         await setToken(token);
-        console.log("🔵 Navigating to profile...");
-        router.replace("/(tabs)/profile");
+        
+        // Verify token was stored
+        const storedToken = await getToken();
+        console.log("🟢 Token storage verification:", storedToken ? "Success" : "Failed");
+        
+        if (storedToken) {
+          console.log("🟢 Token successfully stored, navigating to profile");
+          router.replace("/(tabs)/profile");
+        } else {
+          console.error("🔴 Token stored but verification failed");
+          Alert.alert("Login Error", "Failed to persist authentication");
+        }
       } else {
         throw new Error("Invalid login response");
       }
     } catch (error: any) {
-      console.error("🔴 Login Error:", error);
+      console.error("🔴 Login Error:", error.message);
       Alert.alert("Login Failed", error.message || "Something went wrong");
       setPassword("");
     } finally {
@@ -165,19 +220,19 @@ const LoginScreen: React.FC = () => {
     
     setResetLoading(true);
     try {
-      console.log("🔵 Attempting to send forgot password request for:", forgotPasswordEmail);
+      console.log("🟡 Attempting to send forgot password request for:", forgotPasswordEmail);
       await forgotPasswordAPI(forgotPasswordEmail);
       
       // Request was successful, proceed to verification step
-      console.log("🔵 Forgot password request successful, proceeding to verification step");
+      console.log("🟢 Forgot password request successful, proceeding to verification step");
       setResetStep("verify");
       
     } catch (error: any) {
-      console.error("🔴 Error in handleForgotPassword:", error);
+      console.error("🔴 Error in handleForgotPassword:", error.message);
       
       // If it's a cooldown error, show message and auto-proceed to OTP screen
       if (error.cooldownError) {
-        console.log("🔵 Cooldown error detected, showing message and auto-proceeding to OTP screen");
+        console.log("🟡 Cooldown error detected, showing message and auto-proceeding to OTP screen");
         Alert.alert(
           "Information", 
           error.message,
@@ -189,14 +244,8 @@ const LoginScreen: React.FC = () => {
           "Connection Error",
           "Cannot connect to the server. Please check your internet connection.",
           [
-            { 
-              text: "OK", 
-              onPress: () => {} 
-            },
-            {
-              text: "Proceed Anyway",
-              onPress: () => setResetStep("verify")
-            }
+            { text: "OK", onPress: () => {} },
+            { text: "Proceed Anyway", onPress: () => setResetStep("verify") }
           ]
         );
       } else {
@@ -342,7 +391,6 @@ const LoginScreen: React.FC = () => {
             value={newPassword}
             onChangeText={(text) => {
               setNewPassword(text);
-              // You could add real-time validation here if you want
             }}
             error=""
             rightIcon={
@@ -438,17 +486,28 @@ const LoginScreen: React.FC = () => {
       <CustomButton 
         title={loading ? "Logging in..." : "Continue with Email"} 
         onPress={handleLogin} 
-        disabled={loading} 
+        disabled={loading || googleLoading} 
       />
 
       <Text style={[styles.or, { color: colors.icon }]}>or</Text>
 
       {/* Google Login */}
       <CustomButton
-        title="Continue with Google"
-        onPress={() => promptAsync()} // Trigger Google login prompt
+        title={googleLoading ? "Authenticating..." : "Continue with Google"}
+        onPress={() => {
+          console.log("🟡 Starting Google login flow...");
+          promptAsync();
+        }}
+        disabled={loading || googleLoading}
         icon={<Ionicons name="logo-google" size={20} color="#fff" />}
       />
+
+      {/* For debugging - show Google token if available */}
+      {googleToken && __DEV__ && (
+        <Text style={[styles.debugText, { color: colors.icon }]}>
+          Google Token: {googleToken.substring(0, 10)}...
+        </Text>
+      )}
 
       {/* Signup Link */}
       <Text style={[styles.signupText, { color: colors.icon }]}>
@@ -483,6 +542,11 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 10,
     fontStyle: "italic",
+  },
+  debugText: {
+    fontSize: 10,
+    marginTop: 5,
+    opacity: 0.7,
   },
   or: {
     marginVertical: 10,
