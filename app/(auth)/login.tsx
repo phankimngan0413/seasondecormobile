@@ -1,16 +1,19 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import InputField from "@/components/InputField";
 import CustomButton from "@/components/ui/Button/Button";
 import { Ionicons } from "@expo/vector-icons";
 import { loginAPI, googleLoginAPI, resetPasswordAPI, forgotPasswordAPI } from "@/utils/authAPI";
-import { setToken, getToken } from "@/services/auth";
+import authService from "@/services/auth"; // Sử dụng service mới
 import Logo from "@/components/Logo/Logo";
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
 import * as Google from "expo-auth-session/providers/google";
-import { makeRedirectUri } from 'expo-auth-session';
+import * as WebBrowser from 'expo-web-browser';
+
+// Thiết lập để WebBrowser có thể hoàn tất phiên xác thực
+WebBrowser.maybeCompleteAuthSession();
 
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -22,17 +25,23 @@ const isValidPassword = (password: string) => {
   return hasUppercase && hasLowercase && hasNumber;
 };
 
+// Hàm trợ giúp debug AsyncStorage
+
+
 const LoginScreen: React.FC = () => {
   const router = useRouter();
   const { theme } = useTheme();
   const validTheme = theme as "light" | "dark";
   const colors = Colors[validTheme];
+  const hasCheckedAuth = useRef(false);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<{ email: string; password: string }>({ email: "", password: "" });
+  
+  // Forgot Password states
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
@@ -43,117 +52,67 @@ const LoginScreen: React.FC = () => {
   
   // Google Login State
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [googleToken, setGoogleToken] = useState<string | null>(null);
+  const [googleResponseReceived, setGoogleResponseReceived] = useState(false);
 
   // Google OAuth client IDs
-  const googleExpoClientId = "269748534933-pfelsope967cksdg624uhahaj99apdgu.apps.googleusercontent.com";
-  const googleAndroidStandaloneClientId = "269748534933-mk0kjr1k5rcutol5bb7nqdj52bbn1udm.apps.googleusercontent.com";
-
-  const redirectUri = makeRedirectUri({
-    // You can add additional configurations here if needed
-  });
+  const googleAndroidClientId = "269748534933-mk0kjr1k5rcutol5bb7nqdj52bbn1udm.apps.googleusercontent.com";
   
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    clientId: googleExpoClientId,
-    androidClientId: googleAndroidStandaloneClientId,
-    scopes: ["profile", "email"],
-    redirectUri: redirectUri,
+  // Thiết lập xác thực Google với Expo, sử dụng ID token
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
+    androidClientId: googleAndroidClientId,
+    // Cấu hình đầy đủ cho tất cả nền tảng
+    iosClientId: Platform.OS === 'ios' ? googleAndroidClientId : undefined,
+    responseType: "id_token",
+    scopes: ["email", "profile"],
   });
 
-  // Check token status on component mount
+  // Kiểm tra token khi component mount - cải tiến để tránh vòng lặp vô hạn
   useEffect(() => {
-    const checkTokenStatus = async () => {
+    const checkAuthOnMount = async () => {
+      // Nếu đã kiểm tra rồi, không kiểm tra lại
+      if (hasCheckedAuth.current) return;
+      
       try {
-        const token = await getToken();
-        console.log("🟡 Initial token check:", token ? "Token exists" : "No token");
+        console.log("🔵 LoginScreen mounted, checking auth status");
+        hasCheckedAuth.current = true;
+        const isAuthenticated = await authService.checkAuthStatus();
         
-        if (token) {
-          console.log("🟢 Valid token found, redirecting to profile");
+        if (isAuthenticated) {
+          console.log("🟢 User already authenticated, redirecting to profile");
           router.replace("/(tabs)/profile");
+        } else {
+          console.log("🟠 User not authenticated, showing login screen");
         }
       } catch (error) {
-        console.error("🔴 Error checking token:", error);
+        console.error("🔴 Error checking auth on mount:", error);
       }
     };
     
-    checkTokenStatus();
+    checkAuthOnMount();
   }, []);
 
-  // Handle Google authentication response
+  // Xử lý phản hồi từ xác thực Google
   useEffect(() => {
-    const handleGoogleAuth = async () => {
-      console.log("🟡 Google auth response type:", response?.type);
+    if (response && !googleResponseReceived) {
+      console.log("🟡 Google auth response received, type:", response.type);
+      setGoogleResponseReceived(true);
       
-      if (response?.type === "success") {
-        setGoogleLoading(true);
-        
-        console.log("🟡 Full response params:", JSON.stringify(response.params));
-        
-        if (!response.params.id_token) {
-          console.error("🔴 GOOGLE AUTH: No ID token in response");
-          Alert.alert("Google Login Failed", "Authentication information missing");
-          setGoogleLoading(false);
-          return;
-        }
-        
-        const idToken = response.params.id_token;
-        setGoogleToken(idToken);
-        console.log("🟢 GOOGLE AUTH: ID token received:", idToken.substring(0, 15) + "...");
-        
-        try {
-          console.log("🟡 Calling backend with Google token...");
-          const loginResponse = await googleLoginAPI(idToken);
-          console.log("🟢 Google login API response:", JSON.stringify(loginResponse));
-          
-          if (!loginResponse || !loginResponse.token) {
-            console.error("🔴 GOOGLE AUTH: Invalid or missing token in response");
-            Alert.alert("Login Failed", "Server returned an invalid response");
-            setGoogleLoading(false);
-            return;
-          }
-          
-          const authToken = loginResponse.token;
-          console.log("🟢 GOOGLE AUTH: Backend token received:", authToken.substring(0, 15) + "...");
-          
-          try {
-            console.log("🟡 Attempting to store token...");
-            await setToken(authToken);
-            
-            // Verify token was stored
-            const storedToken = await getToken();
-            console.log("🟢 Token storage verification:", storedToken ? "Success" : "Failed");
-            
-            if (storedToken) {
-              console.log("🟢 GOOGLE AUTH: Token successfully stored");
-              router.replace("/(tabs)/profile");
-            } else {
-              console.error("🔴 GOOGLE AUTH: Token stored but verification failed");
-              Alert.alert("Login Error", "Failed to persist authentication");
-            }
-          } catch (storageError) {
-            console.error("🔴 GOOGLE AUTH: Error storing token:", storageError);
-            Alert.alert("Login Error", "Failed to store authentication token");
-          }
-        } catch (apiError: any) {
-          console.error("🔴 GOOGLE AUTH: API call failed:", apiError.message);
-          Alert.alert("Google Login Failed", apiError.message || "Unable to authenticate with the server");
-        } finally {
-          setGoogleLoading(false);
-        }
-      } else if (response?.type === "error") {
+      if (response.type === "success") {
+        handleGoogleAuth(response);
+      } else if (response.type === "error") {
         console.error("🔴 Google auth error:", response.error);
         Alert.alert("Google Login Failed", "Authentication process was interrupted");
+        setGoogleLoading(false);
+      } else if (response.type === "cancel") {
+        console.log("🟠 Google auth canceled by user");
+        setGoogleLoading(false);
       }
-    };
-    
-    if (response) {
-      handleGoogleAuth();
     }
   }, [response]);
-
   async function handleLogin() {
     setErrors({ email: "", password: "" });
-
+  
+    // Validate email
     if (!email) {
       setErrors((prev) => ({ ...prev, email: "Email is required." }));
       return;
@@ -162,6 +121,8 @@ const LoginScreen: React.FC = () => {
       setErrors((prev) => ({ ...prev, email: "Invalid email format." }));
       return;
     }
+    
+    // Validate password
     if (!password) {
       setErrors((prev) => ({ ...prev, password: "Password is required." }));
       return;
@@ -174,39 +135,96 @@ const LoginScreen: React.FC = () => {
       setErrors((prev) => ({ ...prev, password: "Password must contain at least one uppercase letter, one lowercase letter, and one number." }));
       return;
     }
-
+  
     setLoading(true);
     try {
       console.log("🟡 Sending login request...");
-      const { token } = await loginAPI(email, password);
-      console.log("🟢 Received Token:", token.substring(0, 15) + "...");
-
-      if (token) {
-        await setToken(token);
+      // Remove old token before new login
+      await authService.removeToken();
+      
+      try {
+        const { token } = await loginAPI(email, password);
         
-        // Verify token was stored
-        const storedToken = await getToken();
-        console.log("🟢 Token storage verification:", storedToken ? "Success" : "Failed");
+        if (!token) {
+          throw new Error("Login failed");
+        }
         
-        if (storedToken) {
+        console.log("🟢 Received Token:", token.substring(0, 15) + "...");
+  
+        // Use AuthService to store token
+        const success = await authService.setToken(token);
+        
+        if (success) {
           console.log("🟢 Token successfully stored, navigating to profile");
           router.replace("/(tabs)/profile");
         } else {
-          console.error("🔴 Token stored but verification failed");
           Alert.alert("Login Error", "Failed to persist authentication");
         }
-      } else {
-        throw new Error("Invalid login response");
+      } catch (apiError) {
+        // Skip error analysis, just display default message
+        throw new Error("Invalid email or password");
       }
     } catch (error: any) {
-      console.error("🔴 Login Error:", error.message);
-      Alert.alert("Login Failed", error.message || "Something went wrong");
+      console.error("🔴 Login Error:", error.message || String(error));
+      Alert.alert("Login Failed", "Invalid email or password");
       setPassword("");
     } finally {
       setLoading(false);
     }
   }
 
+  // Xử lý đăng nhập Google - Giữ nguyên logic này
+  // Google Login handler
+  const handleGoogleAuth = async (response: any) => {
+    if (!response || !response.params || !response.params.id_token) {
+      console.error("🔴 Missing id token in response");
+      Alert.alert("Google Login Failed", "Authentication information missing");
+      setGoogleLoading(false);
+      return;
+    }
+    
+    try {
+      setGoogleLoading(true);
+      
+      const idToken = response.params.id_token;
+      console.log("🟢 ID Token received:", idToken.substring(0, 15) + "...");
+      
+      try {
+        console.log("🟡 Calling backend with Google token...");
+        const loginResponse = await googleLoginAPI(idToken);
+        console.log("🟢 Google login API response:", JSON.stringify(loginResponse));
+        
+        // Only proceed if we have a token
+        if (!loginResponse.token) {
+          throw new Error("No authentication token received");
+        }
+        
+        const authToken = loginResponse.token;
+        console.log("🟢 Backend token received:", authToken.substring(0, 15) + "...");
+        
+        await authService.removeToken();
+        
+        const success = await authService.setToken(authToken);
+        
+        if (success) {
+          console.log("🟢 Token successfully stored, redirecting to profile");
+          router.replace("/(tabs)/profile");
+        } else {
+          throw new Error("Failed to store authentication token");
+        }
+      } catch (error) {
+        // Display default error message regardless of actual error
+        throw new Error("Authentication failed");
+      }
+    } catch (error) {
+      console.error("🔴 Google auth error:", error);
+      Alert.alert("Login Failed", "Authentication failed");
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  // Xử lý quên mật khẩu
   async function handleForgotPassword() {
     if (!forgotPasswordEmail) {
       Alert.alert("Email Required", "Please enter your email address");
@@ -259,7 +277,8 @@ const LoginScreen: React.FC = () => {
       setResetLoading(false);
     }
   }
-  
+
+  // Xử lý đặt lại mật khẩu
   async function handleResetPassword() {
     if (!resetOtp) {
       Alert.alert("OTP Required", "Please enter the verification code sent to your email");
@@ -314,7 +333,7 @@ const LoginScreen: React.FC = () => {
     }
   }
 
-  // Render the forgot password modal/screen
+  // Render màn hình quên mật khẩu
   if (showForgotPassword) {
     if (resetStep === "request") {
       return (
@@ -437,7 +456,14 @@ const LoginScreen: React.FC = () => {
         value={email}
         onChangeText={(text) => {
           setEmail(text.trim());
-          setErrors((prev) => ({ ...prev, email: isValidEmail(text) ? "" : "Invalid email format." }));
+          if (errors.email) {
+            setErrors((prev) => ({ ...prev, email: isValidEmail(text) ? "" : prev.email }));
+          }
+        }}
+        onBlur={() => {
+          if (email) {
+            setErrors((prev) => ({ ...prev, email: isValidEmail(email) ? "" : "Invalid email format." }));
+          }
         }}
         error={errors.email} 
         label=""
@@ -455,7 +481,7 @@ const LoginScreen: React.FC = () => {
           // Clear existing error when typing starts
           if (errors.password) setErrors((prev) => ({ ...prev, password: "" }));
           
-          // Optional: provide real-time validation feedback
+          // Real-time validation feedback
           if (text.length >= 6 && !isValidPassword(text)) {
             setErrors((prev) => ({ 
               ...prev, 
@@ -494,21 +520,27 @@ const LoginScreen: React.FC = () => {
       {/* Google Login */}
       <CustomButton
         title={googleLoading ? "Authenticating..." : "Continue with Google"}
-        onPress={() => {
+        onPress={async () => {
+          if (!request) {
+            Alert.alert("Error", "Google login is not available at the moment");
+            return;
+          }
+          
           console.log("🟡 Starting Google login flow...");
-          promptAsync();
+          setGoogleLoading(true);
+          setGoogleResponseReceived(false);
+          
+          try {
+            await promptAsync();
+          } catch (error) {
+            console.error("🔴 Error starting Google auth:", error);
+            Alert.alert("Error", "Failed to start Google authentication");
+            setGoogleLoading(false);
+          }
         }}
         disabled={loading || googleLoading}
         icon={<Ionicons name="logo-google" size={20} color="#fff" />}
       />
-
-      {/* For debugging - show Google token if available */}
-      {googleToken && __DEV__ && (
-        <Text style={[styles.debugText, { color: colors.icon }]}>
-          Google Token: {googleToken.substring(0, 10)}...
-        </Text>
-      )}
-
       {/* Signup Link */}
       <Text style={[styles.signupText, { color: colors.icon }]}>
         Don't have an account?{" "}
@@ -544,9 +576,12 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
   },
   debugText: {
-    fontSize: 10,
-    marginTop: 5,
-    opacity: 0.7,
+    fontSize: 12,
+    color: '#666',
+  },
+  debugButton: {
+    marginTop: 10,
+    padding: 5,
   },
   or: {
     marginVertical: 10,

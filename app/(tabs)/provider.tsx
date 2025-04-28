@@ -109,11 +109,19 @@ const ProviderScreen = () => {
             activeOpacity={0.7}
           >
             <View style={styles.cardHeader}>
-              <Image 
-                source={{ uri: item.avatar || 'https://via.placeholder.com/100' }} 
-                style={styles.avatar}
-                onError={(e) => console.log('Image load error', e.nativeEvent.error)}
-              />
+              {item.avatar ? (
+                // Show image if avatar URL exists
+                <Image 
+                  source={{ uri: item.avatar }} 
+                  style={styles.avatar}
+                  onError={(e) => console.log('Image load error', e.nativeEvent.error)}
+                />
+              ) : (
+                // Show icon placeholder if no avatar
+                <View style={[styles.avatarPlaceholder, { backgroundColor: PRIMARY_COLOR + '20' }]}>
+                  <Ionicons name="person" size={30} color={PRIMARY_COLOR} />
+                </View>
+              )}
               
               <View style={styles.headerInfo}>
                 <Text style={[styles.businessName, { color: colors.text }]}>
@@ -257,6 +265,14 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     marginRight: 12,
+  },
+  avatarPlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerInfo: {
     flex: 1,

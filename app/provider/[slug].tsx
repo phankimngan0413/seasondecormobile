@@ -15,13 +15,12 @@ import {
 import { useRouter } from "expo-router";
 import { useLocalSearchParams } from "expo-router";
 import Ionicons from "react-native-vector-icons/Ionicons";
-import { AxiosError } from "axios";
 // API Utilities
 import {
-  getProviderDetailAPI,
-  getProductsByProviderAPI,
+  getProviderDetailAPI
 } from "@/utils/providerAPI";
 import { getDecorServiceByProviderAPI } from "@/utils/decorserviceAPI";
+import {getProductsByProviderAPI} from "@utils/productAPI"
 // Import follow APIs
 import {
   followUserAPI,
@@ -281,78 +280,83 @@ const ProviderDetailScreen: React.FC = () => {
       setFollowLoading(false);
     }
   };
-  
-  const fetchProviderDetail = useCallback(async () => {
-    // Validate slug
-    if (!slug || typeof slug !== "string") {
-      console.error("Invalid slug:", slug);
-      setError("No provider information available");
+  // Update the fetchProviderDetail function to use the new paginated API
+const fetchProviderDetail = useCallback(async () => {
+  // Validate slug
+  if (!slug || typeof slug !== "string") {
+    console.error("Invalid slug:", slug);
+    setError("No provider information available");
+    setLoading(false);
+    return;
+  }
+
+  try {
+    console.log("Fetching provider details for slug:", slug);
+    setLoading(true);
+    setDecorLoading(true);
+    setProductLoading(true);
+
+    // Fetch provider data first
+    try {
+      const providerData = await getProviderDetailAPI(slug);
+      if (providerData) {
+        setProvider(providerData);
+      } else {
+        console.error("No provider data received");
+        setError("Could not load provider details");
+      }
+    } catch (providerErr) {
+      console.error("Error fetching provider:", providerErr);
+      setError("Could not load provider details");
       setLoading(false);
       return;
     }
 
+    // Fetch products using the new paginated API
+    // Fetch products using the new paginated API
+// Fetch products using the new paginated API
+try {
+  const productResponse = await getProductsByProviderAPI(slug);
+  
+  // The structure is now guaranteed to have 'items'
+  setProducts(productResponse.items);
+  
+  // You can also log pagination information if needed
+  console.log(`Loaded ${productResponse.items.length} of ${productResponse.totalItems} products (Page ${productResponse.currentPage} of ${productResponse.totalPages})`);
+} catch (productErr) {
+  console.log("No products available for this provider:", productErr);
+  setProducts([]);
+} finally {
+  setProductLoading(false);
+}
+    // Fetch decor services
     try {
-      console.log("Fetching provider details for slug:", slug);
-      setLoading(true);
-      setDecorLoading(true);
-      setProductLoading(true);
+      const decorData = await getDecorServiceByProviderAPI(slug);
 
-      // Fetch provider data first
-      try {
-        const providerData = await getProviderDetailAPI(slug);
-        if (providerData) {
-          setProvider(providerData);
-        } else {
-          console.error("No provider data received");
-          setError("Could not load provider details");
-        }
-      } catch (providerErr) {
-        console.error("Error fetching provider:", providerErr);
-        setError("Could not load provider details");
-        setLoading(false);
-        return;
-      }
+      // Process and set decor services
+      const processedServices = Array.isArray(decorData)
+        ? decorData.map(processDecorService)
+        : decorData
+        ? [processDecorService(decorData)]
+        : [];
 
-      // Fetch products
-      try {
-        const productData = await getProductsByProviderAPI(slug);
-        setProducts(productData || []);
-      } catch (productErr) {
-        console.log("No products available for this provider");
-        setProducts([]);
-      } finally {
-        setProductLoading(false);
-      }
-
-      // Fetch decor services
-      try {
-        const decorData = await getDecorServiceByProviderAPI(slug);
-
-        // Process and set decor services
-        const processedServices = Array.isArray(decorData)
-          ? decorData.map(processDecorService)
-          : decorData
-          ? [processDecorService(decorData)]
-          : [];
-
-        setDecorServices(processedServices);
-      } catch (decorErr) {
-        console.log("No decor services available for this provider");
-        setDecorServices([]);
-      } finally {
-        setDecorLoading(false);
-      }
-    } catch (err) {
-      console.error("Comprehensive Fetch Error:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to fetch provider details"
-      );
+      setDecorServices(processedServices);
+    } catch (decorErr) {
+      console.log("No decor services available for this provider");
+      setDecorServices([]);
     } finally {
-      // Always set loading to false
-      setLoading(false);
+      setDecorLoading(false);
     }
-  }, [slug]);
-
+  } catch (err) {
+    console.error("Comprehensive Fetch Error:", err);
+    setError(
+      err instanceof Error ? err.message : "Failed to fetch provider details"
+    );
+  } finally {
+    // Always set loading to false
+    setLoading(false);
+  }
+}, [slug]);
   // Check follow status after provider is loaded
   useEffect(() => {
     if (provider?.id) {
