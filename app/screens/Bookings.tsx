@@ -26,7 +26,7 @@ import {
 const PRIMARY_COLOR = "#5fc1f1";
 
 // Define a proper type for status codes to avoid 'any' type errors
-type BookingStatusCode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
+type BookingStatusCode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14;
 
 // Define the status category type
 type StatusCategory = 'initial' | 'agreement' | 'construction' | 'completed' | 'cancelled' | 'unknown';
@@ -43,11 +43,12 @@ const mapStatusCodeToString = (statusCode: number): string => {
     6: 'Preparing',          // Chuẩn bị nguyên liệu
     7: 'InTransit',          // Nguyên liệu được chuyển đến chỗ khách hàng
     8: 'Progressing',        // Đang tiến hành thi công (theo dạng Tracking service)
-    9: 'ConstructionPayment',// Thanh toán thi công
-    10: 'Completed',         // Dự án hoàn thành
-    11: 'PendingCancellation', // Chờ provider duyệt hủy
-    12: 'Canceled',          // Booking bị hủy
-    13: 'Rejected'           // Booking bị từ chối
+    9: 'AllDone',            // Đã thi công xong
+    10: 'FinalPaid',         // Thanh toán thi công
+    11: 'Completed',         // Dự án hoàn thành
+    12: 'PendingCancel',     // Chờ provider duyệt hủy
+    13: 'Canceled',          // Booking bị hủy
+    14: 'Rejected'           // Booking bị từ chối
   };
   
   return statusMap[statusCode] || 'Unknown';
@@ -75,11 +76,13 @@ const getStatusColor = (statusCode: number): string => {
       return '#34c759'; // Green
     case 'Progressing':
       return '#34c759'; // Green
-    case 'ConstructionPayment':
+    case 'AllDone':
+      return '#34c759'; // Green
+    case 'FinalPaid':
       return '#5ac8fa'; // Light blue
     case 'Completed':
       return '#4caf50'; // Green
-    case 'PendingCancellation':
+    case 'PendingCancel':
       return '#ff9500'; // Orange
     case 'Canceled':
       return '#ff3b30'; // Red
@@ -112,11 +115,13 @@ const getStatusIcon = (statusCode: number): string => {
       return 'car-outline';
     case 'Progressing':
       return 'hammer-outline';
-    case 'ConstructionPayment':
+    case 'AllDone':
+      return 'checkmark-outline';
+    case 'FinalPaid':
       return 'cash-outline';
     case 'Completed':
       return 'checkmark-done-circle-outline';
-    case 'PendingCancellation':
+    case 'PendingCancel':
       return 'hourglass-outline';
     case 'Canceled':
       return 'close-circle-outline';
@@ -134,13 +139,11 @@ const getStatusStage = (statusCode: number): string => {
     return 'Initial Stage';
   } else if (['Quoting', 'Contracting', 'Confirm'].includes(statusString)) {
     return 'Agreement Stage';
-  } else if (['DepositPaid', 'Preparing', 'InTransit'].includes(statusString)) {
-    return 'Preparation Stage';
-  } else if (['Progressing', 'ConstructionPayment'].includes(statusString)) {
+  } else if (['DepositPaid', 'Preparing', 'InTransit', 'Progressing', 'AllDone'].includes(statusString)) {
     return 'Construction Stage';
-  } else if (statusString === 'Completed') {
+  } else if (['FinalPaid', 'Completed'].includes(statusString)) {
     return 'Final Stage';
-  } else if (['PendingCancellation', 'Canceled', 'Rejected'].includes(statusString)) {
+  } else if (['PendingCancel', 'Canceled', 'Rejected'].includes(statusString)) {
     return 'Cancelled';
   }
   
@@ -148,7 +151,7 @@ const getStatusStage = (statusCode: number): string => {
 };
 
 const canBookingBeCancelled = (statusCode: number): boolean => {
-  return [0, 1].includes(statusCode); // Pending, Planning, Quoting, Contracting
+  return [0, 1].includes(statusCode); // Pending, Planning
 };
 
 const doesBookingNeedConfirmation = (statusCode: number): boolean => {
@@ -159,11 +162,20 @@ const doesBookingNeedDeposit = (statusCode: number): boolean => {
   return statusCode === 4; // Confirm
 };
 
+// Check if booking is in progress (status=8) to show tracking button
+const hasTrackingAvailable = (statusCode: number): boolean => {
+  return statusCode === 8 || statusCode === 9; // Progressing or statusCode 9
+};
+const doesBookingNeedFinalPayment = (statusCode: number): boolean => {
+  return statusCode === 9; // AllDone status
+};
+
 // Define the booking interface with proper typing
 interface IBooking {
   id?: number;
   bookingId: number;
   bookingCode: string;
+  quotationCode?: string; // Added quotationCode property
   decorServiceId?: number;
   userId?: number;
   addressId?: number;
@@ -176,6 +188,8 @@ interface IBooking {
   totalPrice?: number;
   cost?: number;
   serviceItems?: string;
+  isQuoteExisted?: boolean; // Optional property to check if quotation exists
+  isContractSigned?: boolean; // Optional property to check if contract is signed
   decorService?: {
     id: number;
     style: string;
@@ -228,13 +242,12 @@ const BookingListScreen: React.FC = () => {
     { label: 'All', value: undefined },
     { label: 'Initial', value: 'initial' },     // 0-1: Pending, Planning
     { label: 'Agreement', value: 'agreement' }, // 2-4: Quoting, Contracting, Confirm
-    { label: 'Construction', value: 'construction' }, // 5-9: DepositPaid through ConstructionPayment
-    { label: 'Completed', value: 'completed' }, // 10: Completed
-    { label: 'Cancelled', value: 'cancelled' }  // 11-13: PendingCancellation, Canceled, Rejected
+    { label: 'Construction', value: 'construction' }, // 5-9: DepositPaid through AllDone
+    { label: 'Completed', value: 'completed' }, // 10-11: FinalPaid, Completed
+    { label: 'Cancelled', value: 'cancelled' }  // 12-14: PendingCancel, Canceled, Rejected
   ];
 
   useEffect(() => {
-    console.log('🔄 useEffect triggered - currentPage:', currentPage, 'selectedCategory:', selectedCategory);
     fetchBookings();
   }, [currentPage, selectedCategory]); // Fetch bookings when page or category changes
 
@@ -252,9 +265,9 @@ const BookingListScreen: React.FC = () => {
       case 'construction':
         return status >= 5 && status <= 9;
       case 'completed':
-        return status === 10;
+        return status >= 10 && status <= 11;
       case 'cancelled':
-        return status >= 11;
+        return status >= 12;
       default:
         return true;
     }
@@ -262,14 +275,11 @@ const BookingListScreen: React.FC = () => {
 
   const fetchBookings = async (refresh = false) => {
     try {
-      console.log('📘 fetchBookings called, refresh:', refresh);
       
       if (refresh) {
-        console.log('📘 Refreshing, resetting to page 1');
         setCurrentPage(1);
         setRefreshing(true);
       } else if (!refreshing) {
-        console.log('📘 Setting loading state to true');
         setLoading(true);
       }
       
@@ -286,11 +296,9 @@ const BookingListScreen: React.FC = () => {
       // Let's not filter on the server side for now, we'll filter client-side instead
       // This avoids potential API parameter type issues
       
-      console.log('📘 API Request Params:', apiOptions);
       
       const response = await getPaginatedBookingsForCustomerAPI(apiOptions);
       
-      console.log('📘 API Response structure:', Object.keys(response));
       
       // Handle the nested data structure correctly
       let responseItems: IBooking[] = [];
@@ -301,11 +309,9 @@ const BookingListScreen: React.FC = () => {
         if (Array.isArray(response.data)) {
           // Direct array in data property
           responseItems = response.data;
-          console.log(`📘 Found items directly in response.data array: ${responseItems.length} items`);
         } else if (response.data.data && Array.isArray(response.data.data)) {
           // Nested data.data structure
           responseItems = response.data.data;
-          console.log(`📘 Found items in nested response.data.data array: ${responseItems.length} items`);
         }
         
         // Check for totalCount in different possible locations
@@ -318,10 +324,8 @@ const BookingListScreen: React.FC = () => {
         // Alternative format with items array
         responseItems = response.items;
         totalItemCount = response.totalCount || 0;
-        console.log(`📘 Found items in response.items array: ${responseItems.length} items`);
       }
       
-      console.log(`📘 Found ${responseItems.length} booking items, total count: ${totalItemCount}`);
       
       // Log each booking item details for debugging
       responseItems.forEach((item, index) => {
@@ -383,7 +387,18 @@ const BookingListScreen: React.FC = () => {
       params: { bookingCode: booking.bookingCode }
     });
   };
-
+  const handleMakeFinalPayment = (booking: IBooking): void => {
+    console.log('📘 Navigating to final payment screen for booking:', booking.bookingCode);
+    
+    // Navigate to contract detail screen with payment indicator
+    router.push({
+      pathname: '/booking/final-payment',
+      params: { 
+        contractCode: booking.bookingCode,
+        bookingCode: booking.bookingCode 
+      }
+    });
+  };
   const handleConfirmBooking = async (booking: IBooking): Promise<void> => {
     Alert.alert(
       'Confirm Booking',
@@ -436,10 +451,33 @@ const BookingListScreen: React.FC = () => {
     });
     
     // Navigate to deposit payment screen
-    // router.push({
-    //   pathname: '/booking/deposit',
-    //   params: { bookingCode: booking.bookingCode }
-    // });
+    router.push({
+      pathname: '/booking/deposit-payment',
+      params: { contractCode: booking.bookingCode }
+    });
+  };
+
+  // New handler for tracking button
+  const handleViewTracking = (booking: IBooking): void => {
+    console.log('📘 Navigating to tracking screen for booking:', booking.bookingCode);
+    
+    // Navigate to tracking view screen with booking code
+    router.push({
+      pathname: '/booking/tracking-view',
+      params: { bookingCode: booking.bookingCode }
+    });
+  };
+
+  const handleViewQuotation = (quotationCode: string): void => {
+    if (!quotationCode) return;
+    
+    console.log('📘 Navigating to quotation details for:', quotationCode);
+    
+    // Navigate to quotation detail screen with the correct route
+    router.push({
+      pathname: '/quotation/quotation-detail/[code]',
+      params: { code: quotationCode }
+    });
   };
 
   const renderHeader = (): React.ReactElement => (
@@ -499,6 +537,10 @@ const BookingListScreen: React.FC = () => {
     const canCancel = canBookingBeCancelled(statusCode);
     const needsConfirmation = doesBookingNeedConfirmation(statusCode);
     const needsDeposit = doesBookingNeedDeposit(statusCode);
+    const hasTracking = hasTrackingAvailable(statusCode);
+    const needsFinalPayment = doesBookingNeedFinalPayment(statusCode);
+    // Check if booking has a quotation code
+    const hasQuotation = item.quotationCode && item.quotationCode.trim() !== '';
     
     // Use either id or bookingId depending on which is available
     const bookingId = item.id || item.bookingId;
@@ -506,7 +548,7 @@ const BookingListScreen: React.FC = () => {
     return (
       <TouchableOpacity
         style={[styles.bookingCard, { backgroundColor: colors.card }]}
-        onPress={() => router.push(`/booking/${bookingId}`)}
+        // onPress={() => router.push(`/booking/booking-detail/${bookingId}`)}
       >
         <View style={styles.bookingHeader}>
           <Text style={[styles.bookingCode, { color: colors.text }]}>
@@ -519,7 +561,7 @@ const BookingListScreen: React.FC = () => {
             </Text>
           </View>
         </View>
-  
+
         {statusStage ? (
           <View style={styles.stageContainer}>
             <Text style={[styles.stageText, { color: colors.textSecondary }]}>
@@ -527,7 +569,17 @@ const BookingListScreen: React.FC = () => {
             </Text>
           </View>
         ) : null}
-  
+
+        {/* Quotation Code - Show if available */}
+        {hasQuotation && (
+          <View style={styles.bookingDetail}>
+            <Ionicons name="document-text-outline" size={18} color={PRIMARY_COLOR} />
+            <Text style={[styles.detailText, { color: colors.textSecondary }]}>
+              Quotation Code: {item.quotationCode}
+            </Text>
+          </View>
+        )}
+
         {/* Provider info if available */}
         {item.provider ? (
           <View style={styles.bookingDetail}>
@@ -537,7 +589,7 @@ const BookingListScreen: React.FC = () => {
             </Text>
           </View>
         ) : null}
-  
+
         {/* Survey date if available */}
         {item.surveyDate ? (
           <View style={styles.bookingDetail}>
@@ -547,7 +599,7 @@ const BookingListScreen: React.FC = () => {
             </Text>
           </View>
         ) : null}
-  
+
         {/* Address */}
         <View style={styles.bookingDetail}>
           <Ionicons name="location-outline" size={18} color={PRIMARY_COLOR} />
@@ -555,7 +607,7 @@ const BookingListScreen: React.FC = () => {
             {item.address}
           </Text>
         </View>
-  
+
         {/* Decor style if available */}
         {item.decorService ? (
           <View style={styles.bookingDetail}>
@@ -565,7 +617,7 @@ const BookingListScreen: React.FC = () => {
             </Text>
           </View>
         ) : null}
-  
+
         {/* Price if available */}
         {item.totalPrice !== undefined && item.totalPrice > 0 ? (
           <View style={styles.bookingDetail}>
@@ -578,15 +630,35 @@ const BookingListScreen: React.FC = () => {
             </Text>
           </View>
         ) : null}
-  
+
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
-  
+
         <View style={styles.bookingFooter}>
           <Text style={[styles.dateText, { color: colors.textSecondary }]}>
             Booked on {new Date(item.createdAt).toLocaleDateString()}
           </Text>
           
           <View style={styles.actionButtonsContainer}>
+            {/* View Tracking button - Only show for status 8 (Progressing) */}
+            {hasTracking && (
+              <TouchableOpacity
+                style={styles.trackingButton}
+                onPress={() => handleViewTracking(item)}
+              >
+                <Text style={styles.trackingButtonText}>View Tracking</Text>
+              </TouchableOpacity>
+            )}
+            
+            {/* View Quotation button - Show if quotation exists */}
+            {hasQuotation && (
+              <TouchableOpacity
+                style={styles.quotationViewButton}
+                onPress={() => handleViewQuotation(item.quotationCode || '')}
+              >
+                <Text style={styles.quotationViewButtonText}>View Quotation</Text>
+              </TouchableOpacity>
+            )}
+            
             {needsConfirmation && (
               <TouchableOpacity
                 style={styles.confirmButton}
@@ -604,7 +676,14 @@ const BookingListScreen: React.FC = () => {
                 <Text style={styles.depositButtonText}>Pay Deposit</Text>
               </TouchableOpacity>
             )}
-            
+             {needsFinalPayment && (
+      <TouchableOpacity
+        style={styles.finalPaymentButton}
+        onPress={() => handleMakeFinalPayment(item)}
+      >
+        <Text style={styles.finalPaymentButtonText}>Final Payment</Text>
+      </TouchableOpacity>
+    )}
             {canCancel && (
               <TouchableOpacity
                 style={styles.cancelButton}
@@ -683,48 +762,49 @@ const BookingListScreen: React.FC = () => {
   
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-    <StatusBar barStyle={theme === 'dark' ? 'light-content' : 'dark-content'} />
-    {renderHeader()}
-    {renderFilterTabs()}
-    
-    <FlatList
-      data={bookings}
-      renderItem={renderBookingItem}
-      keyExtractor={(item) => `${item.id || item.bookingId}`}
-      contentContainerStyle={styles.listContainer}
-      ListEmptyComponent={renderEmpty}
-      ListFooterComponent={renderFooter}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          colors={[PRIMARY_COLOR]}
-          tintColor={PRIMARY_COLOR}
-        />
-      }
-      onEndReached={loadMoreBookings}
-      onEndReachedThreshold={0.5}
-    />
-    
-    {/* Updated floating buttons container */}
-    <View style={styles.floatingButtonsRow}>
-      <TouchableOpacity
-        style={[styles.floatingButton, styles.quotationFloatingButton]}
-        onPress={() => router.push('/quotation/list')}
-      >
-        <Ionicons name="document-text" size={24} color="#FFFFFF" />
-      </TouchableOpacity>
+      <StatusBar barStyle={theme === 'dark' ? 'light-content' : 'dark-content'} />
+      {renderHeader()}
+      {renderFilterTabs()}
       
-      <TouchableOpacity
-        style={styles.floatingButton}
-        onPress={() => router.push('/(tabs)/decor')}
-      >
-        <Ionicons name="add" size={24} color="#FFFFFF" />
-      </TouchableOpacity>
-    </View>
-  </SafeAreaView>
+      <FlatList
+        data={bookings}
+        renderItem={renderBookingItem}
+        keyExtractor={(item) => `${item.id || item.bookingId}`}
+        contentContainerStyle={styles.listContainer}
+        ListEmptyComponent={renderEmpty}
+        ListFooterComponent={renderFooter}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[PRIMARY_COLOR]}
+            tintColor={PRIMARY_COLOR}
+          />
+        }
+        onEndReached={loadMoreBookings}
+        onEndReachedThreshold={0.5}
+      />
+      
+      {/* Updated floating buttons container */}
+      <View style={styles.floatingButtonsRow}>
+        <TouchableOpacity
+          style={[styles.floatingButton, styles.quotationFloatingButton]}
+          onPress={() => router.push('/quotation/list')}
+        >
+          <Ionicons name="document-text" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.floatingButton}
+          onPress={() => router.push('/(tabs)/decor')}
+        >
+          <Ionicons name="add" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
   );
 };
+
+// Updated styles with correct property names
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -744,10 +824,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 20,
     right: 20,
-    flexDirection: 'row', // Arrange buttons horizontally
-    justifyContent: 'flex-end', // Align to the right
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
     alignItems: 'center',
-    gap: 16, // Space between buttons
+    gap: 16,
   },
   floatingButton: {
     width: 56,
@@ -763,17 +843,8 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
   },
   quotationFloatingButton: {
-    backgroundColor: '#34c759', // Different color for the quotation button
+    backgroundColor: '#34c759',
   },
-  // Add these new styles
-  floatingButtonsContainer: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-    alignItems: 'center',
-  },
-
-
   backButton: {
     padding: 8,
   },
@@ -881,7 +952,10 @@ const styles = StyleSheet.create({
   },
   actionButtonsContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
+    justifyContent: 'flex-end',
+    maxWidth: '70%',
   },
   cancelButton: {
     backgroundColor: '#ff3b30',
@@ -912,6 +986,29 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   depositButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  // Added the tracking button styles
+  trackingButton: {
+    backgroundColor: '#4cd964',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+  },
+  trackingButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  quotationViewButton: {
+    backgroundColor: '#5856d6',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+  },
+  quotationViewButtonText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: '500',
@@ -974,6 +1071,17 @@ const styles = StyleSheet.create({
     padding: 15,
     alignItems: 'center',
   },
-  
+  finalPaymentButton: {
+    backgroundColor: '#34c759', // Green color for final payment
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+  },
+  finalPaymentButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
+  },
 });
-  export default BookingListScreen;
+
+export default BookingListScreen;

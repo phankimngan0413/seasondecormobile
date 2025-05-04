@@ -20,6 +20,38 @@ interface TopUpResponse {
     [key: string]: any;
   } | string;
 }
+interface IFinalPaymentResponse {
+  success?: boolean;
+  message?: string;
+  paymentUrl?: string;
+  bookingCode?: string;
+  errors?: any[]
+  customerAddress?: string;
+  customerEmail?: string;
+  customerName?: string;
+  customerPhone?: string | null;
+  finalPaymentAmount?: number;
+    providerAddress?: string;
+  providerEmail?: string;
+  providerName?: string;
+  providerPhone?: string;
+  quotationCode?: string;
+  data?: any | null;
+  isFinalPaid?: boolean;
+}
+// Define response type for deposit payment API
+export interface IDepositPaymentResponse {
+  success: boolean;
+  message?: string;
+  paymentUrl?: string;
+  errors?: any[]
+    data?: {
+    amount?: number;
+    paymentUrl?: string;
+    [key: string]: any;
+  } | null;
+}
+
 
 /**
  * Add funds to wallet (top-up)
@@ -29,7 +61,6 @@ interface TopUpResponse {
 export const topUpWalletAPI = async (amount: number): Promise<TopUpResponse> => {
   const url = "/api/Payment/top-up-mobile";
   
-
   const apiClient = await initApiClient();
   
   try {
@@ -37,7 +68,7 @@ export const topUpWalletAPI = async (amount: number): Promise<TopUpResponse> => 
     const userId = await getUserIdFromToken();
     
     console.log("👤 Retrieved User ID:", userId);
-
+    
     if (!userId) {
       console.error("❌ User ID not found");
       return {
@@ -53,13 +84,13 @@ export const topUpWalletAPI = async (amount: number): Promise<TopUpResponse> => 
       customerId: userId,
     };
     
-    console.log(" Payload to be sent:", JSON.stringify(payload, null, 2));
-
+    console.log("📘 Payload to be sent:", JSON.stringify(payload, null, 2));
+    
     try {
       const response = await apiClient.post(url, payload);
       
       // Log the ENTIRE backend response
-      console.log(" COMPLETE BACKEND RESPONSE:", 
+      console.log("📘 COMPLETE BACKEND RESPONSE:", 
         JSON.stringify({
           status: response.status,
           headers: response.headers,
@@ -68,12 +99,12 @@ export const topUpWalletAPI = async (amount: number): Promise<TopUpResponse> => 
       );
       
       // Additional detailed logging
-      console.log(" Response Status:", response.status);
-      console.log(" Response Headers:", JSON.stringify(response.headers, null, 2));
-      console.log(" Response Data:", JSON.stringify(response.data, null, 2));
+      console.log("📘 Response Status:", response.status);
+      console.log("📘 Response Headers:", JSON.stringify(response.headers, null, 2));
+      console.log("📘 Response Data:", JSON.stringify(response.data, null, 2));
       
       if (response && response.data) {
-        console.log(" Top-Up Successful");
+        console.log("📘 Top-Up Successful");
         return response.data;
       } else {
         console.error("🔴 Invalid top-up response");
@@ -84,7 +115,7 @@ export const topUpWalletAPI = async (amount: number): Promise<TopUpResponse> => 
       }
     } catch (apiError: any) {
       // Log full error response if available
-      console.error(" COMPLETE API ERROR:", 
+      console.error("🔴 COMPLETE API ERROR:", 
         JSON.stringify({
           message: apiError.message,
           response: apiError.response ? {
@@ -101,11 +132,375 @@ export const topUpWalletAPI = async (amount: number): Promise<TopUpResponse> => 
       };
     }
   } catch (error: any) {
-    console.error(" Unexpected Error:", JSON.stringify(error, null, 2));
+    console.error("🔴 Unexpected Error:", JSON.stringify(error, null, 2));
     
     return {
       success: false,
       message: error.message || "Unexpected error occurred"
+    };
+  }
+};
+
+/**
+ * Get deposit payment URL for a contract
+ * @param contractCode Contract code to make deposit payment for
+ * @returns Promise with the payment URL and status
+ */
+export const getDepositPaymentAPI = async (contractCode: string): Promise<IDepositPaymentResponse> => {
+  const url = `/api/Payment/getDepositPayment/${contractCode}`;
+  
+  const apiClient = await initApiClient();
+  
+  try {
+    // Get current user ID
+    const userId = await getUserIdFromToken();
+    
+    console.log("👤 Retrieved User ID:", userId);
+    
+    if (!userId) {
+      console.error("❌ User ID not found");
+      return {
+        success: false,
+        message: "Unable to identify user. Please log in again."
+      };
+    }
+    
+    console.log("📘 Getting deposit payment URL for contract:", contractCode);
+    
+    try {
+      const response = await apiClient.get(url);
+      
+      // Log the ENTIRE backend response
+      console.log("📘 COMPLETE BACKEND RESPONSE:", 
+        JSON.stringify({
+          status: response.status,
+          headers: response.headers,
+          data: response.data
+        }, null, 2)
+      );
+      
+      // Additional detailed logging
+      console.log("📘 Response Status:", response.status);
+      console.log("📘 Response Headers:", JSON.stringify(response.headers, null, 2));
+      console.log("📘 Response Data:", JSON.stringify(response.data, null, 2));
+      
+      if (response && response.data) {
+        console.log("📘 Retrieved Payment URL Successfully");
+        return {
+          success: true,
+          ...response.data,
+        };
+      } else {
+        console.error("🔴 Invalid payment URL response");
+        return {
+          success: false,
+          message: "Failed to retrieve payment information"
+        };
+      }
+    } catch (apiError: any) {
+      // Log full error response if available
+      console.error("🔴 COMPLETE API ERROR:", 
+        JSON.stringify({
+          message: apiError.message,
+          response: apiError.response ? {
+            status: apiError.response.status,
+            data: apiError.response.data,
+            headers: apiError.response.headers
+          } : null
+        }, null, 2)
+      );
+      
+      return {
+        success: false,
+        message: apiError.response?.data?.message || "Failed to connect to payment service",
+      };
+    }
+  } catch (error: any) {
+    console.error("🔴 Unexpected Error:", JSON.stringify(error, null, 2));
+    
+    return {
+      success: false,
+      message: error.message || "Unexpected error occurred"
+    };
+  }
+};
+
+/**
+ * Make a deposit payment for a contract
+ * @param contractCode Contract code to make deposit payment for
+ * @returns Promise with the payment result or URL
+ */
+/**
+ * Make a deposit payment for a contract
+ * @param contractCode Contract code to make deposit payment for
+ * @returns Promise with the payment result
+ */
+export const makeDirectDepositPaymentAPI = async (
+  contractCode: string,
+  amount: number,
+  bookingCode?: string
+): Promise<IDepositPaymentResponse> => {
+  // Use bookingCode if provided, otherwise fallback to contractCode
+  const codeToUse = bookingCode || contractCode;
+  const url = `/api/Booking/deposit/${codeToUse}`;
+  
+  const apiClient = await initApiClient();
+  
+  try {
+    // Get current user ID
+    const userId = await getUserIdFromToken();
+    
+    console.log("👤 Retrieved User ID:", userId);
+    
+    if (!userId) {
+      console.error("❌ User ID not found");
+      return {
+        success: false,
+        message: "Unable to identify user. Please log in again.",
+        errors: [],
+        data: null
+      };
+    }
+    
+    console.log(`📘 Processing deposit payment for contract: ${contractCode}, using code: ${codeToUse}`);
+    
+    try {
+      // Call the actual API endpoint
+      const response = await apiClient.post(url);
+      
+      // Log the ENTIRE backend response
+      console.log("📘 COMPLETE BACKEND RESPONSE:",
+        JSON.stringify({
+          status: response.status,
+          headers: response.headers,
+          data: response.data
+        }, null, 2)
+      );
+      
+      // Additional detailed logging
+      console.log("📘 Response Status:", response.status);
+      console.log("📘 Response Headers:", JSON.stringify(response.headers, null, 2));
+      console.log("📘 Response Data:", JSON.stringify(response.data, null, 2));
+      
+      // Return the server response directly since it already matches our format
+      if (response && response.status >= 200 && response.status < 300) {
+        console.log("📘 Deposit Payment Successful");
+        return response.data;
+      } else {
+        console.error("🔴 Invalid deposit payment response");
+        return {
+          success: false,
+          message: response.data?.message || "Failed to process payment",
+          errors: response.data?.errors || [],
+          data: null
+        };
+      }
+    } catch (apiError: any) {
+      // Log full error response if available
+      console.error("🔴 COMPLETE API ERROR:",
+        JSON.stringify({
+          message: apiError.message,
+          response: apiError.response ? {
+            status: apiError.response.status,
+            data: apiError.response.data,
+            headers: apiError.response.headers
+          } : null
+        }, null, 2)
+      );
+      
+      return {
+        success: false,
+        message: apiError.response?.data?.message || "Failed to process payment",
+        errors: apiError.response?.data?.errors || [],
+        data: null
+      };
+    }
+  } catch (error: any) {
+    console.error("🔴 Unexpected Error in makeDirectDepositPayment:", JSON.stringify(error, null, 2));
+    
+    return {
+      success: false,
+      message: error.message || "Unexpected error occurred while processing payment",
+      errors: [],
+      data: null
+    };
+  }
+};
+/**
+ * Get final payment information for a booking
+ * @param bookingCode Booking code to get final payment info for
+ * @returns Promise with the payment information
+ */
+export const getFinalPaymentAPI = async (bookingCode: string): Promise<IFinalPaymentResponse> => {
+  const url = `/api/Payment/getFinalPayment/${bookingCode}`;
+  
+  const apiClient = await initApiClient();
+  
+  try {
+    // Get current user ID
+    const userId = await getUserIdFromToken();
+    
+    console.log("👤 Retrieved User ID:", userId);
+    
+    if (!userId) {
+      console.error("❌ User ID not found");
+      return {
+        success: false,
+        message: "Unable to identify user. Please log in again."
+      };
+    }
+    
+    console.log("📘 Getting final payment info for booking:", bookingCode);
+    
+    try {
+      const response = await apiClient.get(url);
+      
+      // Log the complete backend response
+      console.log("📘 COMPLETE BACKEND RESPONSE:", 
+        JSON.stringify({
+          status: response.status,
+          headers: response.headers,
+          data: response.data
+        }, null, 2)
+      );
+      
+      // Additional detailed logging
+      console.log("📘 Response Status:", response.status);
+      console.log("📘 Response Headers:", JSON.stringify(response.headers, null, 2));
+      console.log("📘 Response Data:", JSON.stringify(response.data, null, 2));
+      
+      if (response && response.data) {
+        console.log("📘 Retrieved Final Payment Info Successfully");
+        return {
+          success: true,
+          ...response.data,
+        };
+      } else {
+        console.error("🔴 Invalid payment info response");
+        return {
+          success: false,
+          message: "Failed to retrieve payment information"
+        };
+      }
+    } catch (apiError: any) {
+      // Log full error response if available
+      console.error("🔴 COMPLETE API ERROR:", 
+        JSON.stringify({
+          message: apiError.message,
+          response: apiError.response ? {
+            status: apiError.response.status,
+            data: apiError.response.data,
+            headers: apiError.response.headers
+          } : null
+        }, null, 2)
+      );
+      
+      return {
+        success: false,
+        message: apiError.response?.data?.message || "Failed to connect to payment service",
+      };
+    }
+  } catch (error: any) {
+    console.error("🔴 Unexpected Error:", JSON.stringify(error, null, 2));
+    
+    return {
+      success: false,
+      message: error.message || "Unexpected error occurred"
+    };
+  }
+};
+
+/**
+ * Make a final payment for a booking
+ * @param bookingCode Booking code to make final payment for
+ * @param amount Amount to pay in VND
+ * @returns Promise with the payment result
+ */export const makeDirectFinalPaymentAPI = async (
+  bookingCode: string,
+  amount: number
+): Promise<IFinalPaymentResponse> => {
+  // Using the endpoint shown in your previous messages
+  const url = `/api/Booking/payment/${bookingCode}`;
+  
+  const apiClient = await initApiClient();
+  
+  try {
+    // Get current user ID
+    const userId = await getUserIdFromToken();
+    
+    console.log("👤 Retrieved User ID:", userId);
+    console.log("📘 Request details:", {
+      bookingCode,
+      amount,
+      endpoint: url
+    });
+    
+    if (!userId) {
+      console.error("❌ User ID not found");
+      return {
+        success: false,
+        message: "Unable to identify user. Please log in again.",
+        errors: [],
+        data: null
+      };
+    }
+    
+    console.log(`📘 Processing final payment for booking: ${bookingCode}`);
+    
+    try {
+      // Add request body with amount to ensure it's sent to the API
+      const response = await apiClient.post(url, {
+        amount: amount
+      });
+      
+      // More detailed logging
+      console.log("📘 COMPLETE PAYMENT REQUEST:", url);
+      if (response) {
+        console.log("📘 PAYMENT RESPONSE STATUS:", response.status);
+        console.log("📘 PAYMENT RESPONSE DATA:", JSON.stringify(response.data, null, 2));
+      }
+      
+      // If successful, return the server response directly
+      if (response && response.status >= 200 && response.status < 300 && response.data) {
+        console.log("📘 Final Payment Successful");
+        return response.data;
+      } else {
+        console.error("🔴 Invalid final payment response");
+        return {
+          success: false,
+          message: response?.data?.message || "Failed to process payment",
+          errors: response?.data?.errors || [],
+          data: null
+        };
+      }
+    } catch (apiError: any) {
+      // Log full error response if available
+      console.error("🔴 PAYMENT API ERROR DETAILS:",
+        JSON.stringify({
+          message: apiError.message,
+          response: apiError.response ? {
+            status: apiError.response.status,
+            data: apiError.response.data,
+            headers: apiError.response.headers
+          } : null
+        }, null, 2)
+      );
+      
+      return {
+        success: false,
+        message: apiError.response?.data?.message || "Failed to process payment",
+        errors: apiError.response?.data?.errors || [],
+        data: null
+      };
+    }
+  } catch (error: any) {
+    console.error("🔴 Unexpected Error in makeDirectFinalPayment:", JSON.stringify(error, null, 2));
+    
+    return {
+      success: false,
+      message: error.message || "Unexpected error occurred while processing payment",
+      errors: [],
+      data: null
     };
   }
 };

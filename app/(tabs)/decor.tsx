@@ -82,35 +82,29 @@ const DecorListScreen = () => {
   // Refresh when screen is focused
   useFocusEffect(
     useCallback(() => {
-      console.log('🔍 DecorListScreen focused - checking if refresh needed');
       // Only refresh if the screen has been out of focus for a while
       // or if we haven't loaded data yet
       const shouldRefresh = decorServices.length === 0;
       
       if (shouldRefresh) {
-        console.log('🔄 Refreshing data on focus');
         fetchDecorServices();
       } else {
-        console.log('⏩ Skipping refresh on focus - data already loaded');
       }
       
       return () => {
         // Cleanup if needed
-        console.log('⬅️ DecorListScreen unfocused');
       };
     }, [decorServices.length])
   );
 
   // Apply filters whenever selectedSeason or searchQuery changes
   useEffect(() => {
-    console.log('Filters changed - reapplying filters');
     filterServices();
   }, [selectedSeason, searchQuery, decorServices]);
 
   // Debounced search function
   const debouncedSearch = useCallback(
     debounce((text: string) => {
-      console.log('Searching for:', text);
       setSearchQuery(text);
     }, 300),
     []
@@ -134,7 +128,6 @@ const DecorListScreen = () => {
         setLoading(true);
       }
       setError(null);
-      console.log('🔄 Fetching decor services...');
       
       // Add a small delay to make the refresh animation more visible
       if (refreshing) {
@@ -144,7 +137,6 @@ const DecorListScreen = () => {
       const data = await getDecorServicesAPI();
       
       if (Array.isArray(data)) {
-        console.log(`✅ Fetched ${data.length} decor services successfully`);
         setDecorServices(data);
         setFilteredServices(data);
       } else {
@@ -157,13 +149,11 @@ const DecorListScreen = () => {
     } finally {
       setLoading(false);
       setRefreshing(false);
-      console.log('🔄 Fetch operation complete');
     }
   };
 
   // Handler for pull-to-refresh
   const onRefresh = useCallback(() => {
-    console.log('Pull-to-refresh triggered');
     setRefreshing(true);
     // Reset filters on refresh to show all results
     // setSelectedSeason(null);

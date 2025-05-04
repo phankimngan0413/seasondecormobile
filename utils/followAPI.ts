@@ -86,7 +86,6 @@ export const getFollowersAPI = async (userId?: number): Promise<IFollowUser[]> =
     if (response && Array.isArray(response.data)) {
       return response.data;
     } else {
-      console.error("🔴 API Response is invalid:", response);
       return Promise.reject(new Error("Invalid response format from the server."));
     }
   } catch (error: any) {
@@ -119,7 +118,6 @@ export const getFollowingsAPI = async (userId?: number): Promise<IFollowUser[]> 
     if (response && Array.isArray(response.data)) {
       return response.data;
     } else {
-      console.error("🔴 API Response is invalid:", response);
       return Promise.reject(new Error("Invalid response format from the server."));
     }
   } catch (error: any) {
@@ -146,7 +144,6 @@ export const getFollowCountsAPI = async (userId?: number): Promise<IFollowCounts
     const response = await apiClient.get(url);
     
     // Log the full response for debugging
-    console.log("Follow Counts API Response:", response);
     
     // Check if response contains the expected data structure
     if (response && response.data && 
@@ -226,7 +223,6 @@ export const checkIsFollowingAPI = async (targetUserId: number): Promise<boolean
     if (response && response.data && typeof response.data.isFollowing === 'boolean') {
       return response.data.isFollowing;
     } else {
-      console.error("🔴 API Response is invalid:", response);
       return false; // Default to false instead of rejecting
     }
   } catch (error: any) {

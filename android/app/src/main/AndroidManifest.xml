@@ -47,7 +47,6 @@
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="com.baymaxphan.seasondecormobileapp"/>
-        <data android:scheme="com.baymaxphan.seasondecormobileapp"/>
         <data android:scheme="exp+seasondecormobileapp"/>
       </intent-filter>
     </activity>

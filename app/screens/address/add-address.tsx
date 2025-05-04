@@ -216,7 +216,6 @@ const AddAddressScreen = () => {
     try {
       const response = await createAddressAPI(newAddress);
       
-      console.log("Complete API response object:", JSON.stringify(response));
       
       // Type guard to check if response is address object by checking for typical address properties
       const isAddressResponse = (obj: any): obj is IAddress => {

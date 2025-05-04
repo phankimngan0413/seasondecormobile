@@ -1,7 +1,9 @@
 {
   "expo": {
     "name": "seasondecor",
+    
     "slug": "seasondecormobileapp",
+    "owner": "baymaxphan",
     "platforms": [
       "ios",
       "android",
@@ -15,7 +17,16 @@
     "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.baymaxphan.seasondecormobileapp"
+      "bundleIdentifier": "com.baymaxphan.seasondecormobileapp",
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.baymaxphan.seasondecormobileapp"
+            ]
+          }
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -30,7 +41,22 @@
       ],
       "config": {
         "usesCleartextTraffic": true
-      }
+      },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "category": [
+            "DEFAULT",
+            "BROWSABLE"
+          ],
+          "data": [
+            {
+              "scheme": "com.baymaxphan.seasondecormobileapp"
+            }
+          ]
+        }
+      ]
     },
     "web": {
       "bundler": "metro",

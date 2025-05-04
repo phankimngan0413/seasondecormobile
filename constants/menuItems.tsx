@@ -8,4 +8,5 @@ export const menuItems: { icon: keyof typeof Ionicons.glyphMap; label: string; r
   { icon: "heart-outline", label: "Favorites", route: "/screens/Favorites" },
   { icon: "heart-outline", label: "Following", route: "/screens/Following" },
   { icon: "star-outline", label: "Reviews", route: "/screens/Reviews" },
+
 ];

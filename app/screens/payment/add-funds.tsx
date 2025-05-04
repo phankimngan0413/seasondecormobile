@@ -9,7 +9,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert,
   Linking,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -75,6 +74,10 @@ const AddFundsScreen = () => {
     
     // Đánh dấu thanh toán thành công
     setPaymentSuccess(true);
+    
+    // Tự động chuyển hướng đến trang thành công
+    setShowWebView(false);
+    router.push("/screens/payment/success");
   };
 
   // Handle WebView navigation state changes
@@ -107,8 +110,6 @@ const AddFundsScreen = () => {
       } else if (url.includes('vnp_ResponseCode')) {
         // Payment was completed but not successful
         console.log("Payment completed but not successful");
-        setShowWebView(false);
-        setError("Payment was not successful. Please try again.");
         return;
       }
     }
@@ -120,13 +121,6 @@ const AddFundsScreen = () => {
       if (url.includes('/success') || url.includes('success')) {
         console.log("Success detected in app scheme URL");
         handlePaymentSuccess();
-        
-        // Chuyển hướng đến trang thành công trong ứng dụng
-        setTimeout(() => {
-          setShowWebView(false);
-          router.push("/screens/payment/success");
-        }, 500);
-        
         return;
       }
     }
@@ -146,12 +140,6 @@ const AddFundsScreen = () => {
             (url.includes('vnp_ResponseCode=00') && url.includes('vnp_TransactionStatus=00'))) {
           console.log("Success detected in deep link");
           handlePaymentSuccess();
-          
-          // Chuyển hướng đến trang thành công
-          setTimeout(() => {
-            setShowWebView(false);
-            router.push("/screens/payment/success");
-          }, 500);
         }
       } catch (error) {
         console.error("Error handling deep link:", error);
@@ -254,12 +242,6 @@ const AddFundsScreen = () => {
                 // Mark payment as successful if not already done
                 handlePaymentSuccess();
                 
-                // Use requestAnimationFrame for smoother transition
-                requestAnimationFrame(() => {
-                  setShowWebView(false);
-                  router.push("/screens/payment/success");
-                });
-                
                 // Prevent WebView from trying to load this URL
                 return false;
               }
@@ -289,15 +271,6 @@ const AddFundsScreen = () => {
                     
                     // Mark payment as successful
                     handlePaymentSuccess();
-                    
-                    // Navigate to success after a short delay to allow backend processing
-                    setTimeout(() => {
-                      setShowWebView(false);
-                      router.push("/screens/payment/success");
-                    }, 1000);
-                    
-                    // Let the backend process the API call first
-                    return true;
                   }
                 }
               } catch (error) {
@@ -326,26 +299,8 @@ const AddFundsScreen = () => {
               
               console.log("Detected successful payment on localhost URL");
               
-              // Extract the parameters from the URL to pass to the success endpoint
-              let params = "";
-              try {
-                const urlParts = nativeEvent.url.split('?');
-                if (urlParts.length > 1) {
-                  params = "?" + urlParts[1];
-                }
-              } catch (e) {
-                console.error("Error extracting URL parameters:", e);
-              }
-              
               // Handle success directly
               handlePaymentSuccess();
-              
-              // Chuyển hướng sau một khoảng thời gian ngắn
-              setTimeout(() => {
-                setShowWebView(false);
-                router.push("/screens/payment/success");
-              }, 500);
-              
               return;
             }
             
@@ -357,35 +312,34 @@ const AddFundsScreen = () => {
               if (nativeEvent.url.includes('/success') || nativeEvent.url.includes('success')) {
                 // Đánh dấu thành công
                 handlePaymentSuccess();
-                
-                // Chuyển hướng đến trang thành công
-                setTimeout(() => {
-                  setShowWebView(false);
-                  router.push("/screens/payment/success");
-                }, 500);
               }
               
               return;
             }
-            
-            // For other errors, close WebView and show error
-            setShowWebView(false);
-            setError("Failed to load payment page. Please try again.");
           }}
           incognito={false}
           cacheEnabled={true}
           allowsBackForwardNavigationGestures={true}
           userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1"
-          // Auto-click the "Visit Site" button on ngrok warning pages
           injectedJavaScript={`
             (function() {
+              // Biến để theo dõi đã click nút Visit Site chưa
+              let hasClickedVisitSite = false;
+              
               function autoClickVisitSite() {
+                // Nếu đã click rồi thì không click nữa để tránh vòng lặp
+                if (hasClickedVisitSite) {
+                  console.log('Already clicked Visit Site, skipping');
+                  return false;
+                }
+                
                 // Look for the "Visit Site" button on ngrok warning pages
                 const visitButtons = document.querySelectorAll('a, button');
                 for (let i = 0; i < visitButtons.length; i++) {
                   const button = visitButtons[i];
                   if (button.textContent && button.textContent.includes('Visit Site')) {
                     console.log('Auto-clicking Visit Site button');
+                    hasClickedVisitSite = true; // Đánh dấu đã click
                     button.click();
                     return true;
                   }
@@ -400,20 +354,36 @@ const AddFundsScreen = () => {
                   autoClickVisitSite();
                   
                   // And try one more time after a slight delay
-                  setTimeout(autoClickVisitSite, 500);
+                  setTimeout(() => {
+                    if (!hasClickedVisitSite) {
+                      autoClickVisitSite();
+                    }
+                  }, 1000);
                 });
               }
               
               // Monitor URL changes to detect successful payments
               let lastUrl = '';
-              setInterval(() => {
+              let checkCount = 0; // Biến đếm số lần kiểm tra
+              const MAX_CHECKS = 50; // Giới hạn số lần kiểm tra
+              
+              const urlCheckInterval = setInterval(() => {
+                checkCount++;
+                
+                // Dừng kiểm tra nếu đã vượt quá giới hạn
+                if (checkCount > MAX_CHECKS) {
+                  console.log('Reached max URL checks, clearing interval');
+                  clearInterval(urlCheckInterval);
+                  return;
+                }
+                
                 if (window.location.href !== lastUrl) {
                   lastUrl = window.location.href;
                   console.log('URL changed to: ' + lastUrl);
                   
                   // Check if the URL indicates a successful payment
                   if ((lastUrl.includes('/api/Payment/mobileReturn') || 
-                       lastUrl.includes('mobileReturn')) && 
+                      lastUrl.includes('mobileReturn')) && 
                       lastUrl.includes('vnp_ResponseCode=00') && 
                       lastUrl.includes('vnp_TransactionStatus=00')) {
                     
@@ -423,9 +393,37 @@ const AddFundsScreen = () => {
                       type: 'PAYMENT_SUCCESS',
                       url: lastUrl
                     }));
+                    
+                    // Clear interval after success
+                    clearInterval(urlCheckInterval);
                   }
                 }
               }, 300);
+              
+              // Theo dõi nút "Chuyển đến trang thành công" trong VNPay
+              function checkForSuccessButton() {
+                const successButtons = document.querySelectorAll('button, a, div');
+                for (let i = 0; i < successButtons.length; i++) {
+                  const button = successButtons[i];
+                  if (button.textContent && button.textContent.includes('Chuyển đến trang thành công')) {
+                    console.log('Found success button, clicking it');
+                    button.click();
+                    return true;
+                  }
+                }
+                return false;
+              }
+              
+              // Kiểm tra nút thành công sau khi trang tải xong
+              window.addEventListener('load', function() {
+                // Thử ngay lập tức
+                if (!checkForSuccessButton()) {
+                  // Nếu không tìm thấy, thử lại sau 2 giây
+                  setTimeout(checkForSuccessButton, 2000);
+                  // Và thử lại lần nữa sau 5 giây
+                  setTimeout(checkForSuccessButton, 5000);
+                }
+              });
               
               true;
             })();

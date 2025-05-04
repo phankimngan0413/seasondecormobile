@@ -30,6 +30,7 @@ interface IQuotationDetail {
     id: number;
     businessName: string;
     avatar: string;
+    phone?: string;
     isProvider: boolean;
     providerVerified: boolean;
     providerStatus: number;
@@ -482,7 +483,7 @@ const QuotationDetailScreen: React.FC = () => {
   
   const handleConfirmQuotation = async (): Promise<void> => {
     if (!quotation) return;
-
+  
     Alert.alert(
       'Confirm Quotation',
       'Are you sure you want to confirm this quotation?',
@@ -496,7 +497,7 @@ const QuotationDetailScreen: React.FC = () => {
               const result = await confirmQuotationAPI(quotation.quotationCode);
               
               if (result && result.success) {
-                Alert.alert('Success', 'Quotation confirmed successfully');
+                Alert.alert('Success', result.message || 'Quotation confirmed successfully');
                 fetchQuotationDetails();
               } else {
                 Alert.alert('Error', (result && result.message) || 'Failed to confirm quotation');
@@ -512,7 +513,6 @@ const QuotationDetailScreen: React.FC = () => {
       ]
     );
   };
-
   const handleExternalOpen = async () => {
     if (!quotation || !quotation.quotationFilePath) return;
     
@@ -816,18 +816,169 @@ const QuotationDetailScreen: React.FC = () => {
           </View>
         )}
 
-        {/* Action buttons */}
-        {canConfirm && (
-          <TouchableOpacity
-            style={styles.confirmButton}
-            onPress={handleConfirmQuotation}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.confirmButtonText}>Confirm Quotation</Text>
-          </TouchableOpacity>
-        )}
+      {/* Action buttons */}
+{canConfirm && (
+  <TouchableOpacity
+    style={styles.confirmButton}
+    onPress={handleConfirmQuotation}
+    activeOpacity={0.8}
+  >
+    <Text style={styles.confirmButtonText}>Confirm Quotation</Text>
+  </TouchableOpacity>
+)}
+
+{/* NEW SECTION: Payment Information */}
+<View style={[styles.section, { backgroundColor: colors.card }]}>
+  <Text style={[styles.sectionTitle, { color: colors.text }]}>Payment Information</Text>
+  
+  <View style={styles.paymentInfoRow}>
+    <Ionicons name="card-outline" size={20} color={QUOTATION_COLOR} />
+    <Text style={[styles.paymentInfoLabel, { color: colors.textSecondary }]}>Payment Method:</Text>
+    <Text style={[styles.paymentInfoValue, { color: colors.text }]}>Bank Transfer</Text>
+  </View>
+  
+  <View style={styles.paymentInfoRow}>
+    <Ionicons name="calendar-outline" size={20} color={QUOTATION_COLOR} />
+    <Text style={[styles.paymentInfoLabel, { color: colors.textSecondary }]}>Due Date:</Text>
+    <Text style={[styles.paymentInfoValue, { color: colors.text }]}>
+      {new Date(new Date(quotation.createdAt).getTime() + 7*24*60*60*1000).toLocaleDateString()}
+    </Text>
+  </View>
+  
+  <View style={styles.paymentInfoRow}>
+    <Ionicons name="alert-circle-outline" size={20} color={QUOTATION_COLOR} />
+    <Text style={[styles.paymentInfoLabel, { color: colors.textSecondary }]}>Note:</Text>
+    <Text style={[styles.paymentInfoValue, { color: colors.text }]}>
+      Please include the quotation code as reference
+    </Text>
+  </View>
+  
+  <View style={[styles.divider, { backgroundColor: colors.border, marginVertical: 12 }]} />
+  
+  <Text style={[styles.paymentInstructions, { color: colors.textSecondary }]}>
+    After confirming the quotation, you will need to pay a deposit of {quotation.depositPercentage}% 
+    ({new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(depositAmount)}) 
+    to start the project.
+  </Text>
+</View>
+
+{/* NEW SECTION: Timeline */}
+<View style={[styles.section, { backgroundColor: colors.card }]}>
+  <Text style={[styles.sectionTitle, { color: colors.text }]}>Project Timeline</Text>
+  
+  <View style={styles.timelineContainer}>
+    <View style={styles.timelineItem}>
+      <View style={[styles.timelineCircle, { backgroundColor: QUOTATION_COLOR }]}>
+        <Text style={styles.timelineNumber}>1</Text>
+      </View>
+      <View style={styles.timelineContent}>
+        <Text style={[styles.timelineTitle, { color: colors.text }]}>Quotation Approval</Text>
+        <Text style={[styles.timelineDescription, { color: colors.textSecondary }]}>
+          Review and confirm the quotation
+        </Text>
+      </View>
+    </View>
+    
+    <View style={[styles.timelineConnector, { backgroundColor: colors.border }]} />
+    
+    <View style={styles.timelineItem}>
+      <View style={[styles.timelineCircle, { backgroundColor: colors.border }]}>
+        <Text style={styles.timelineNumber}>2</Text>
+      </View>
+      <View style={styles.timelineContent}>
+        <Text style={[styles.timelineTitle, { color: colors.text }]}>Deposit Payment</Text>
+        <Text style={[styles.timelineDescription, { color: colors.textSecondary }]}>
+          Pay {quotation.depositPercentage}% deposit to start the project
+        </Text>
+      </View>
+    </View>
+    
+    <View style={[styles.timelineConnector, { backgroundColor: colors.border }]} />
+    
+    <View style={styles.timelineItem}>
+      <View style={[styles.timelineCircle, { backgroundColor: colors.border }]}>
+        <Text style={styles.timelineNumber}>3</Text>
+      </View>
+      <View style={styles.timelineContent}>
+        <Text style={[styles.timelineTitle, { color: colors.text }]}>Contract Signing</Text>
+        <Text style={[styles.timelineDescription, { color: colors.textSecondary }]}>
+          Sign the contract to formalize the agreement
+        </Text>
+      </View>
+    </View>
+    
+    <View style={[styles.timelineConnector, { backgroundColor: colors.border }]} />
+    
+    <View style={styles.timelineItem}>
+      <View style={[styles.timelineCircle, { backgroundColor: colors.border }]}>
+        <Text style={styles.timelineNumber}>4</Text>
+      </View>
+      <View style={styles.timelineContent}>
+        <Text style={[styles.timelineTitle, { color: colors.text }]}>Project Execution</Text>
+        <Text style={[styles.timelineDescription, { color: colors.textSecondary }]}>
+          Work begins according to the agreed specifications
+        </Text>
+      </View>
+    </View>
+  </View>
+</View>
+{/* NEW SECTION: Contact Provider */}
+<TouchableOpacity 
+  style={[styles.contactButton, { backgroundColor: colors.card }]}
+  activeOpacity={0.7}
+  onPress={() => {
+    // Implement contact functionality here
+    Alert.alert(
+      "Contact Provider",
+      "Would you like to contact the provider?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        { 
+          text: "Call", 
+          onPress: () => {
+            // Check if provider exists and has phone property before accessing
+            const providerPhone = quotation?.provider?.phone;
+            if (providerPhone) {
+              Linking.openURL(`tel:${providerPhone}`);
+            } else {
+              Alert.alert("Contact Information", "Provider phone number is not available");
+            }
+          }
+        },
+        { 
+          text: "Message", 
+          onPress: () => {
+            // Navigate to messaging screen
+            router.push({
+              pathname: "/chat",
+              params: { providerId: quotation.provider.id.toString() }
+            });
+          }
+        }
+      ]
+    );
+  }}
+>
+  <Ionicons name="chatbox-ellipses" size={24} color={QUOTATION_COLOR} />
+  <Text style={[styles.contactButtonText, { color: colors.text }]}>
+    Contact Provider
+  </Text>
+  <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+</TouchableOpacity>
+
+{/* NEW SECTION: Additional Info */}
+<View style={[styles.infoContainer, { backgroundColor: `${QUOTATION_COLOR}15` }]}>
+  <Ionicons name="information-circle" size={24} color={QUOTATION_COLOR} />
+  <Text style={[styles.infoText, { color: colors.text }]}>
+    This quotation is valid for 30 days from the creation date. Please contact the provider if you have any questions or need modifications.
+  </Text>
+</View>
+
+<View style={styles.bottomSpace} />
         
-        <View style={styles.bottomSpace} />
       </ScrollView>
 
       {/* PDF Viewer Modal */}
@@ -1128,6 +1279,106 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '500',
+  },
+  // Add these new styles to the StyleSheet
+  // Payment Information styles
+  paymentInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  paymentInfoLabel: {
+    marginLeft: 8,
+    fontSize: 14,
+    width: 110,
+  },
+  paymentInfoValue: {
+    fontSize: 14,
+    flex: 1,
+    fontWeight: '500',
+  },
+  paymentInstructions: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  
+  // Timeline styles
+  timelineContainer: {
+    marginTop: 5,
+  },
+  timelineItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 5,
+  },
+  timelineCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    marginTop: 2,
+  },
+  timelineNumber: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  timelineContent: {
+    flex: 1,
+    paddingVertical: 3,
+  },
+  timelineTitle: {
+    fontSize: 15,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  timelineDescription: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  timelineConnector: {
+    width: 2,
+    height: 20,
+    marginLeft: 12,
+    marginVertical: 2,
+  },
+  
+  // Contact button styles
+  contactButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 15,
+    borderRadius: 12,
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  contactButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    flex: 1,
+    marginLeft: 10,
+  },
+  
+  // Info container styles
+  infoContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 15,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  infoText: {
+    fontSize: 14,
+    lineHeight: 20,
+    flex: 1,
+    marginLeft: 10,
   },
 });
 

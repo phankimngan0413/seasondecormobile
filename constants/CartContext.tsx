@@ -1,105 +1,108 @@
-import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getCartAPI } from '@/utils/cartAPI';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { getCartData } from '@/services/CartService';
 import { getUserIdFromToken } from '@/services/auth';
 
-// Define interface for context value
 interface CartContextType {
   cartItemCount: number;
-  isLoading: boolean;
   refreshCartCount: () => Promise<void>;
+  isLoading: boolean;
 }
 
-// Create context with default value
 const CartContext = createContext<CartContextType>({
   cartItemCount: 0,
+  refreshCartCount: async () => {},
   isLoading: false,
-  refreshCartCount: async () => {}
 });
 
-// Define props interface for CartProvider
-interface CartProviderProps {
-  children: ReactNode;
-}
+export const useCart = () => useContext(CartContext);
 
-export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
-  const [cartItemCount, setCartItemCount] = useState<number>(0);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-
-  // Function to fetch cart data and update item count
-  const fetchCartCount = async (): Promise<void> => {
+export const CartProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
+  const [cartItemCount, setCartItemCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // Sử dụng ref để tránh re-render và track trạng thái
+  const lastFetchRef = useRef(0);
+  const isFetchingRef = useRef(false);
+  const userIdRef = useRef<number | null>(null);
+  
+  // Thời gian cache dài hơn để tránh gọi API quá thường xuyên
+  const MIN_FETCH_INTERVAL = 60000; // 1 phút
+  
+  // Lấy userId một lần và lưu vào ref
+  const fetchUserId = useCallback(async () => {
+    if (userIdRef.current) return userIdRef.current;
+    
     try {
+      const userId = await getUserIdFromToken();
+      if (userId) {
+        const numericId = typeof userId === 'string' ? parseInt(userId, 10) : userId;
+        userIdRef.current = numericId;
+        return numericId;
+      }
+      return null;
+    } catch (err) {
+      console.error("Error getting userId:", err);
+      return null;
+    }
+  }, []);
+  
+  const refreshCartCount = useCallback(async () => {
+    // Tránh gọi liên tục nếu đã gọi gần đây
+    const now = Date.now();
+    if (now - lastFetchRef.current < MIN_FETCH_INTERVAL) {
+      return;
+    }
+    
+    // Tránh nhiều yêu cầu đồng thời
+    if (isFetchingRef.current) return;
+    
+    try {
+      isFetchingRef.current = true;
       setIsLoading(true);
       
-      const userId = await getUserIdFromToken();
+      // Lấy userId (hoặc dùng cache)
+      const userId = await fetchUserId();
       if (!userId) {
         setCartItemCount(0);
         return;
       }
-
-      const cartData = await getCartAPI(userId);
       
-      if (cartData?.cartItems && Array.isArray(cartData.cartItems)) {
+      // Sử dụng CartService để lấy dữ liệu giỏ hàng
+      const cartData = await getCartData(userId);
+      
+      // Cập nhật số lượng sản phẩm
+      if (cartData && cartData.cartItems) {
         setCartItemCount(cartData.cartItems.length);
-        
-        // Also store in AsyncStorage for persistence
-        await AsyncStorage.setItem('cartItemCount', cartData.cartItems.length.toString());
       } else {
         setCartItemCount(0);
-        await AsyncStorage.setItem('cartItemCount', '0');
-      }
-    } catch (error) {
-      console.error('Error fetching cart count:', error);
-      // Try to get from local storage as fallback
-      const storedCount = await AsyncStorage.getItem('cartItemCount');
-      if (storedCount) {
-        setCartItemCount(parseInt(storedCount, 10));
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Initialize cart count on mount
-  useEffect(() => {
-    const initializeCart = async () => {
-      // First try to get from AsyncStorage for immediate display
-      const storedCount = await AsyncStorage.getItem('cartItemCount');
-      if (storedCount) {
-        setCartItemCount(parseInt(storedCount, 10));
       }
       
-      // Then fetch the real count from API
-      fetchCartCount();
-    };
+      // Cập nhật thời gian fetch gần nhất
+      lastFetchRef.current = now;
+      
+    } catch (error) {
+      console.error('Error refreshing cart count:', error);
+    } finally {
+      isFetchingRef.current = false;
+      setIsLoading(false);
+    }
+  }, [fetchUserId]);
 
-    initializeCart();
+  // Chỉ gọi một lần khi component mount
+  useEffect(() => {
+    // Gọi không đồng bộ để không block render
+    const initCart = async () => {
+      await refreshCartCount();
+    };
     
-    // Set up polling to refresh cart count every 30 seconds
-    const intervalId = setInterval(fetchCartCount, 30000);
+    initCart();
     
-    return () => clearInterval(intervalId);
+    // Không thêm refreshCartCount vào dependencies
   }, []);
 
-  // Value object to be provided by context
-  const value: CartContextType = {
-    cartItemCount,
-    isLoading,
-    refreshCartCount: fetchCartCount,
-  };
-
   return (
-    <CartContext.Provider value={value}>
+    <CartContext.Provider value={{ cartItemCount, refreshCartCount, isLoading }}>
       {children}
     </CartContext.Provider>
   );
-};
-
-// Custom hook to use the cart context
-export const useCart = (): CartContextType => {
-  const context = useContext(CartContext);
-  if (!context) {
-    throw new Error('useCart must be used within a CartProvider');
-  }
-  return context;
 };

@@ -83,7 +83,7 @@ const BookingScreen = () => {
   // Add state to store service ID
   const [serviceId, setServiceId] = useState<string>(id || "");
   const [isFavorite, setIsFavorite] = useState(false);
-const [favoriteLoading, setFavoriteLoading] = useState(false);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
   // New state variables for the additional fields
   const [note, setNote] = useState<string>("");
   const [expectedCompletion, setExpectedCompletion] = useState<string>("");
@@ -103,8 +103,6 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
     
     // If we don't have style from params but have it in global state, use it
     if ((!style || style === '') && globalData.currentBookingState && globalData.currentBookingState.style) {
-      // This will update UI to show the correct service name in the header
-      console.log("Using style from global state:", globalData.currentBookingState.style);
       setServiceName(globalData.currentBookingState.style);
     } else if (style) {
       setServiceName(style);
@@ -123,7 +121,6 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
 
   // Update selected address when the parameter changes (coming back from address list)
   useEffect(() => {
-    console.log("Params changed, selectedAddressId:", selectedAddressIdParam, "timestamp:", timestamp);
     if (selectedAddressIdParam) {
       setSelectedAddress(selectedAddressIdParam);
       setError(null); // Clear any errors when a new address is selected
@@ -140,7 +137,6 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
       
       // Check if we have service info in global state
       if (globalData.currentBookingState && globalData.currentBookingState.serviceId) {
-        console.log("Found service ID in global state:", globalData.currentBookingState.serviceId);
         // Update service ID from global state
         const serviceId = globalData.currentBookingState.serviceId;
         // Save to local variable to use when calling API
@@ -152,31 +148,20 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
   // Check for address updates when screen is focused
   useFocusEffect(
     useCallback(() => {
-      console.log("BookingScreen focused - checking for address updates");
-      
       // Safely access global state with proper typing
       const globalData = globalThis as unknown as CustomGlobal;
       
-      console.log("Global state:", 
-        "addressSelection:", globalData.addressSelection?.id,
-        "selectedAddressId:", globalData.selectedAddressId,
-        "timestamp:", globalData.addressTimestamp);
-      
       // Check if there's a new address selection (using new approach first)
       if (globalData.addressTimestamp && globalData.addressTimestamp !== lastAddressTimestamp) {
-        console.log("Detected new address selection with timestamp:", globalData.addressTimestamp);
-        
         // Update timestamp to prevent duplicate processing
         setLastAddressTimestamp(globalData.addressTimestamp);
         
         // Handle the updated address
         if (globalData.addressSelection && globalData.addressSelection.id) {
-          console.log("Using addressSelection.id from global state:", globalData.addressSelection.id);
           setSelectedAddress(globalData.addressSelection.id);
           setError(null); // Clear any errors when a new address is selected
         } 
         else if (globalData.selectedAddressId) {
-          console.log("Using selectedAddressId from global state:", globalData.selectedAddressId);
           setSelectedAddress(globalData.selectedAddressId);
           setError(null); // Clear any errors when a new address is selected
         }
@@ -193,14 +178,11 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
 
   // Helper function to select default address
   const selectDefaultAddress = (addressList: IAddress[]) => {
-    console.log("Selecting default address");
     const defaultAddress = addressList.find(address => address.isDefault);
     if (defaultAddress) {
-      console.log("Setting default address:", defaultAddress.id);
       setSelectedAddress(defaultAddress.id);
     } else if (addressList.length > 0) {
       // If no default, select the first one
-      console.log("Setting first address:", addressList[0].id);
       setSelectedAddress(addressList[0].id);
     }
   };
@@ -217,7 +199,6 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
       }
 
       const fetchedAddresses = await getAddressesAPI();
-      console.log("Fetched addresses:", fetchedAddresses);
       
       if (Array.isArray(fetchedAddresses) && fetchedAddresses.length > 0) {
         setAddresses(fetchedAddresses);
@@ -226,22 +207,19 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
         const globalData = globalThis as unknown as CustomGlobal;
         
         if (globalData.addressSelection && globalData.addressSelection.id) {
-          console.log("Using addressSelection.id from global:", globalData.addressSelection.id);
           setSelectedAddress(globalData.addressSelection.id);
         }
         else if (globalData.selectedAddressId) {
-          console.log("Using selectedAddressId from global:", globalData.selectedAddressId);
           setSelectedAddress(globalData.selectedAddressId);
         }
         else if (selectedAddressIdParam) {
-          console.log("Using selectedAddressId from params:", selectedAddressIdParam);
           setSelectedAddress(selectedAddressIdParam);
         }
         else if (selectedAddress) {
           // Check if current selection still exists in the new address list
           const addressExists = fetchedAddresses.some(address => address.id === selectedAddress);
           if (addressExists) {
-            console.log("Keeping current selection:", selectedAddress);
+            // Keep current selection
           } else {
             // If selected address no longer exists, select default or first
             selectDefaultAddress(fetchedAddresses);
@@ -257,19 +235,18 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
         setSelectedAddress(null);
       }
     } catch (error) {
-      console.error("Address loading error:", error);
       setError("Unable to load address list. Please try again.");
     } finally {
       setAddressesLoading(false);
     }
   };
 
-  // Handle date change
+  // Handle date change - FIXED to ensure date consistency
   const onDateChange = (selectedDate: Date) => {
     const now = new Date();
     setError(null); // Clear any errors
     
-    // Set the time component of now to 00:00:00 for date-only comparison
+    // Create today date with time set to midnight (00:00:00)
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     
     // If selected date is before today, use today instead and show inline error
@@ -277,7 +254,16 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
       setError("You cannot select a date in the past. Today's date has been selected.");
       setSurveyDate(today);
     } else {
-      setSurveyDate(selectedDate);
+      // IMPORTANT FIX: Create a new date object with time set to midnight
+      // This ensures that when we later convert to ISO string and split at 'T',
+      // we get the correct date regardless of timezone
+      const normalizedDate = new Date(
+        selectedDate.getFullYear(),
+        selectedDate.getMonth(),
+        selectedDate.getDate(),
+        0, 0, 0, 0
+      );
+      setSurveyDate(normalizedDate);
     }
     
     setShowDatePicker(false);
@@ -313,7 +299,16 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
     });
   };
 
-  // Handle booking
+  // Format date for API to ensure consistency across timezones - FIXED
+  const formatDateForAPI = (date: Date): string => {
+    // Format date as YYYY-MM-DD, ensuring we get the right date regardless of timezone
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Handle booking - FIXED date handling
   const handleBooking = async () => {
     // Clear all previous errors
     setError(null);
@@ -323,11 +318,8 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
       (globalThis as unknown as CustomGlobal).currentBookingState?.serviceId || 
       id;
     
-    console.log("Using service ID for booking:", currentServiceId);
-    
     // Validate service ID
     if (!currentServiceId) {
-      console.error("Invalid service ID: service ID is missing");
       setError("Invalid service ID. Please try selecting the service again.");
       return;
     }
@@ -335,7 +327,6 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
     // Convert to number and check if it's valid
     const numericServiceId = Number(currentServiceId);
     if (isNaN(numericServiceId)) {
-      console.error("Invalid service ID:", currentServiceId);
       setError("Invalid service ID. Please try selecting the service again.");
       return;
     }
@@ -351,17 +342,11 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
     // Get current date for validation
     const now = new Date();
     
-    // Create a date object that combines selected date and current time
-    const selectedDateTime = new Date(
-      surveyDate.getFullYear(),
-      surveyDate.getMonth(),
-      surveyDate.getDate(),
-      now.getHours(),
-      now.getMinutes()
-    );
+    // Create a date object for today at midnight for comparison
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   
     // Check if the date is in the past
-    if (surveyDate < now) {
+    if (surveyDate < today) {
       setError("The selected date cannot be in the past. Please select a future date.");
       return;
     }
@@ -369,39 +354,42 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
     try {
       setLoading(true);
   
+      // FIXED: Format the date to YYYY-MM-DD format consistently
+      const formattedDate = formatDateForAPI(surveyDate);
+  
       // Prepare booking data - make sure all fields are properly set
       const bookingData: IBookingRequest = {
         decorServiceId: numericServiceId,
         addressId: Number(selectedAddress),
-        surveyDate: surveyDate.toISOString().split('T')[0],
+        surveyDate: formattedDate, // Using our fixed format function
         note: note.trim() !== "" ? note : undefined,
         expectedCompletion: expectedCompletion.trim() !== "" ? expectedCompletion : undefined
       };
-      
-      console.log("Sending booking data:", bookingData);
   
       // Call booking API
       const response = await createBookingAPI(bookingData);
-      console.log("Full response:", JSON.stringify(response));
-      console.log("response.success:", response.success);
-      console.log("response.data:", response.data);
-      console.log("typeof response:", typeof response);
+      
       // Handle response
       if (response.success && response.data) {
         // Refresh addresses to get any potential new addresses
         await fetchAddresses();
         
+        // Format the returned date consistently for display
+        let displayDate = '';
+        if (response.data.timeSlots && response.data.timeSlots.length > 0) {
+          // Convert the date string to a Date object and format it consistently
+          const dateObj = new Date(response.data.timeSlots[0].surveyDate);
+          displayDate = dateObj.toLocaleDateString();
+        }
+        
         Alert.alert(
           "✅ Booking Successful",
-          `Booking Details:
+          `Your booking has been confirmed!
           
-        - ID: ${response.data.id}
-        - Code: ${response.data.bookingCode || 'N/A'}
-        ${response.data.decorService ? `• Service: ${response.data.decorService.style}` : ''}
-        ${response.data.timeSlots && response.data.timeSlots.length > 0 ? 
-          `• Date: ${new Date(response.data.timeSlots[0].surveyDate).toLocaleDateString()}` : ''}
-        
-        Thank you for your booking!`,
+Your booking ID: ${response.data.id}
+Booking code: ${response.data.bookingCode || 'N/A'}${response.data.decorService ? `\nService: ${response.data.decorService.style}` : ''}${displayDate ? `\nDate: ${displayDate}` : ''}
+
+Thank you for your booking. We'll be in touch soon.`,
           [
             {
               text: "Return to Home",
@@ -415,8 +403,6 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
         setError(response.message || "Unable to book service");
       }
     } catch (err: any) {
-      console.error("Booking error:", err);
-      
       // Extract the exact error message from the error object
       let errorMessage = "Unable to book service. Please try again.";
       
@@ -436,7 +422,6 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
           }
         } catch (e) {
           // If parsing fails, keep the original message
-          console.log("Error parsing error message:", e);
         }
       }
       
@@ -576,16 +561,6 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
           backgroundColor: colors.card,
           shadowColor: colors.text,
         }]}>
-          {/* <TouchableOpacity 
-            onPress={() => router.back()} 
-            style={[styles.backButton, { backgroundColor: `${colors.primary}10` }]}
-          >
-            <Ionicons 
-              name="arrow-back" 
-              size={24} 
-              color={colors.primary} 
-            />
-          </TouchableOpacity> */}
           <View style={styles.headerTitleContainer}>
             <Text style={[styles.headerTitle, { color: colors.text }]}>
               Book Service
@@ -661,7 +636,7 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
                 />
               </View>
               
-              {/* Expected Completion */}
+              {/* Expected Completion
               <View style={styles.formGroup}>
                 <Text style={[styles.label, { color: colors.text }]}>
                   <Ionicons name="time-outline" size={18} color={colors.primary} /> 
@@ -687,7 +662,7 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
                     onChangeText={setExpectedCompletion}
                   />
                 </View>
-              </View>
+              </View> */}
               
               {/* Notes */}
               <View style={styles.formGroup}>

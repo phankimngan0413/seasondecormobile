@@ -97,7 +97,6 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
     try {
       setReviewsLoading(true);
       const response = await getReviewByProductIdAPI(productId);
-      console.log("🟢 Product Review Retrieved:", JSON.stringify(response));
       
       // Kiểm tra cấu trúc dữ liệu và gán giá trị đúng
       if (response) {
@@ -548,7 +547,7 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
         )}
       </View>
 
-      {/* Additional Info Section - Specs and Shipping */}
+      {/* Additional Info Section - Specs and Shipping
       <View style={[styles.additionalInfoContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <TouchableOpacity style={styles.additionalInfoItem}>
           <Text style={[styles.additionalInfoTitle, { color: colors.text }]}>
@@ -563,7 +562,7 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
           </Text>
           <Ionicons name="chevron-forward" size={20} color={colors.text} />
         </TouchableOpacity>
-      </View>
+      </View> */}
     </ScrollView>
   );
 };

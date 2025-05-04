@@ -444,7 +444,7 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                <Ionicons name="home-outline" size={20} color={PRIMARY_COLOR} /> Sublocation
+                <Ionicons name="home-outline" size={20} color={PRIMARY_COLOR} /> Location
               </Text>
               <TouchableOpacity onPress={toggleSublocation}>
                 <Text style={[styles.readMoreText, { color: PRIMARY_COLOR }]}>
@@ -467,7 +467,7 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
         {/* Seasons Card */}
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            <Ionicons name="calendar-outline" size={20} color={PRIMARY_COLOR} /> Available Seasons
+            <Ionicons name="calendar-outline" size={20} color={PRIMARY_COLOR} /> Seasons
           </Text>
           
           <View style={[styles.divider, { backgroundColor: colors.border }]} />

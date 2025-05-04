@@ -157,7 +157,6 @@ const ProviderDetailScreen: React.FC = () => {
       const response = await addContactAPI(provider.id);
       
       // Log the result for debugging but don't show to user
-      console.log("Contact API response:", response);
     } catch (error) {
       // Just log any errors, don't show to user
       console.log("Contact addition error:", error);

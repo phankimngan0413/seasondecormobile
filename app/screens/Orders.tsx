@@ -31,8 +31,6 @@ interface Order {
 const PRIMARY_COLOR = "#3498db";      // Blue
 const PENDING_COLOR = "#f39c12";      // Orange
 const PAYMENT_COLOR = "#9b59b6";      // Purple
-const PROCESSING_COLOR = "#3498db";   // Blue
-const SHIPPING_COLOR = "#1abc9c";     // Teal
 const COMPLETED_COLOR = "#2ecc71";    // Green
 const CANCELLED_COLOR = "#e74c3c";    // Red
 const TOTAL_PRICE_COLOR = "#3498db";  // Blue for price
@@ -49,14 +47,12 @@ const OrderListScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<number | null>(null);
 
-  // Status filter options
+  // Status filter options - simplified
   const statusFilters = [
     { label: "All", value: null },
     { label: "Pending", value: 0 },
     { label: "Payment", value: 1 },
-    { label: "Processing", value: 2 },
-    { label: "Shipping", value: 3 },
-    { label: "Completed", value: 4 },
+    { label: "Completed", value: 2 },
     { label: "Cancelled", value: 5 }
   ];
 
@@ -108,9 +104,7 @@ const OrderListScreen = () => {
     switch (status) {
       case 0: return PENDING_COLOR;     // Pending
       case 1: return PAYMENT_COLOR;     // Payment
-      case 2: return PROCESSING_COLOR;  // Processing
-      case 3: return SHIPPING_COLOR;    // Shipping
-      case 4: return COMPLETED_COLOR;   // Completed
+      case 2: return COMPLETED_COLOR;   // Completed
       case 5: return CANCELLED_COLOR;   // Cancelled
       default: return colors.textSecondary;
     }
@@ -120,9 +114,7 @@ const OrderListScreen = () => {
     const statusMap: Record<number, string> = {
       0: "Pending",
       1: "Payment",
-      2: "Processing",
-      3: "Shipping",
-      4: "Completed",
+      2: "Completed",
       5: "Cancelled"
     };
     return statusMap[status] || "Unknown";
@@ -130,12 +122,10 @@ const OrderListScreen = () => {
 
   const getStatusIcon = (status: number): string => {
     const iconMap: Record<number, string> = {
-      0: "time-outline",           // Pending
-      1: "card-outline",           // Payment
-      2: "construct-outline",      // Processing
-      3: "car-outline",            // Shipping
-      4: "checkmark-circle-outline", // Completed
-      5: "close-circle-outline"    // Cancelled
+      0: "time-outline",              // Pending
+      1: "card-outline",              // Payment
+      2: "checkmark-circle-outline",  // Completed
+      5: "close-circle-outline"       // Cancelled
     };
     return iconMap[status] || "help-circle-outline";
   };
@@ -295,26 +285,14 @@ const OrderListScreen = () => {
             </TouchableOpacity>
           )}
           
-          {item.status === 3 && (
-            <TouchableOpacity 
-              style={[styles.actionButton, { backgroundColor: SHIPPING_COLOR }]}
-              onPress={() => router.push({
-                pathname: "/screens/orders/order-success",
-                params: { orderId: item.id }
-              })}
-            >
-              <Text style={styles.actionButtonText}>Track Order</Text>
-            </TouchableOpacity>
-          )}
-          
-          {item.status === 4 && (
+          {item.status === 2 && (
             <TouchableOpacity style={[styles.actionButton, { backgroundColor: PRIMARY_COLOR }]}>
               <Text style={styles.actionButtonText}>Buy Again</Text>
             </TouchableOpacity>
           )}
           
           {/* Cancel button for orders that can be cancelled */}
-          {(item.status === 0 || item.status === 2) && (
+          {item.status === 0 && (
             <TouchableOpacity style={[styles.cancelButton, { borderColor: CANCELLED_COLOR }]}>
               <Text style={[styles.cancelButtonText, { color: CANCELLED_COLOR }]}>Cancel</Text>
             </TouchableOpacity>

@@ -10,7 +10,8 @@ import {
   StatusBar,
   Linking,
   Alert,
-  Modal
+  Modal,
+  Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -18,7 +19,6 @@ import { useTheme } from '@/constants/ThemeContext';
 import { Colors } from '@/constants/Colors';
 import { getContractFileAPI,requestSignatureAPI } from '@/utils/contractAPI';
 import { WebView } from 'react-native-webview';
-
 const CONTRACT_COLOR = "#4caf50"; // Green color for contract elements
 
 // Interface matching the API response
@@ -108,14 +108,11 @@ const ContractScreen: React.FC = () => {
       setLoading(true);
       setError('');
       
-      console.log('📘 Fetching contract details for:', quotationCode);
       const response = await getContractFileAPI(quotationCode);
       
       if (response && response.success && response.data) {
-        console.log('📘 Found contract data in response');
         setContract(response.data);
       } else {
-        console.log('📘 No usable data found, setting error');
         setError(response.message || 'Failed to load contract details');
       }
     } catch (err: any) {
@@ -125,38 +122,141 @@ const ContractScreen: React.FC = () => {
       setLoading(false);
     }
   };
-  // First, add a function to handle signing the contract
-const handleSignContract = async () => {
-  if (!contract || !contract.contractCode) return;
-
-  Alert.alert(
-    'Sign Contract',
-    'Are you sure you want to sign this contract?',
-    [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign',
-        onPress: async () => {
-          try {
-            setLoading(true);
-            const result = await requestSignatureAPI(contract.contractCode);
-            
-            if (result && result.success) {
-              Alert.alert('Success', 'Contract signature request has been sent successfully');
-              fetchContractDetails(); // Refresh the contract details
-            } else {
-              Alert.alert('Error', result.message || 'Failed to request contract signature');
-            }
-          } catch (err: any) {
-            console.error('Error signing contract:', err);
-            Alert.alert('Error', err.message || 'Failed to request contract signature. Please try again.');
-          } finally {
-            setLoading(false);
+  const openEmailApp = async (emailAddress = '') => {
+    try {
+      // List of common email app URI schemes to try
+      const emailApps = [
+        // Default mailto scheme
+        `mailto:${emailAddress}`,
+        
+        // Android specific apps
+        'content://com.android.email.provider',
+        'content://gmail.provider',
+        'googlegmail://',
+        'com.google.android.gm:/',
+        
+        // iOS specific apps
+        'message://',
+        'readdle-spark://',
+        'airmail://',
+        'ms-outlook://',
+        'ymail://',
+        'googlemail://',
+        
+        // If all else fails, try opening browser to common webmail
+        'https://mail.google.com',
+        'https://outlook.live.com'
+      ];
+      
+      // Try each email app until one succeeds
+      for (const app of emailApps) {
+        try {
+          const canOpen = await Linking.canOpenURL(app);
+          if (canOpen) {
+            console.log(`Opening email app with URI: ${app}`);
+            await Linking.openURL(app);
+            return true;
           }
+        } catch (err) {
+          console.log(`Failed to open ${app}`);
+          // Continue to next app
         }
       }
-    ]
-  );
+      
+      // If we get here, none of the email apps could be opened
+      console.log('Could not open any email app');
+      Alert.alert(
+        'Email App Not Found',
+        'Please manually check your email inbox to verify your signature.',
+        [{ text: 'OK' }]
+      );
+      return false;
+      
+    } catch (error) {
+      console.error('Error opening email app:', error);
+      
+      // Show alert with instructions
+      Alert.alert(
+        'Email App Not Available',
+        'Please open your email app manually and check for our verification message.',
+        [{ text: 'OK' }]
+      );
+      return false;
+    }
+  };
+
+
+  const handleSignContract = async () => {
+    if (!contract || !contract.contractCode) return;
+    
+    Alert.alert(
+      'Sign Contract',
+      'Are you sure you want to sign this contract?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              console.log('Requesting signature for contract:', contract.contractCode);
+              const result = await requestSignatureAPI(contract.contractCode);
+              console.log('Signature request result:', result);
+              
+              // Show email check alert regardless of the API response
+              // This ensures users always get directed to check their email
+              setLoading(false);
+              showEmailCheckAlert(contract.customerEmail);
+              
+            } catch (error) {
+              // Even if there's an error, still show the email check alert
+              setLoading(false);
+              showEmailCheckAlert(contract.customerEmail);
+              console.error('Error signing contract:', error);
+            }
+          }
+        }
+      ]
+    );
+  };
+  const showEmailCheckAlert = (customerEmail: string) => {
+    Alert.alert(
+      'Check Your Email',
+      'We\'ve sent a signature verification link to your email. Please open your email app and click the "Confirm Your Signature" button.',
+      [
+        {
+          text: 'Later',
+          style: 'cancel'
+        },
+        {
+          text: 'Open Email App',
+          style: 'default',
+          onPress: async () => {
+            const opened = await openEmailApp(customerEmail);
+            if (!opened) {
+              console.log('Could not open email app, showing fallback message');
+            }
+          }
+        }
+      ],
+      { cancelable: false }
+    );
+  };
+  
+// In the handleMakeDeposit function in ContractScreen.tsx
+const handleMakeDeposit = () => {
+  if (!contract || !contract.contractCode || !contract.bookingCode) return;
+  
+  console.log('📘 Navigating to deposit payment screen for booking:', contract.bookingCode);
+  
+  // Navigate to deposit payment screen with both contractCode and bookingCode
+  router.push({
+    pathname: '/booking/deposit-payment',
+    params: { 
+      contractCode: contract.contractCode,
+      bookingCode: contract.bookingCode 
+    }
+  });
 };
   const createPdfHtml = (pdfUrl: string) => {
     return `
@@ -792,14 +892,25 @@ const handleSignContract = async () => {
 
       {/* PDF Viewer Modal */}
       {renderPdfModal()}
-      {contract && !contract.isSigned && (
+     {/* Action buttons based on contract status */}
+{contract && contract.status === 0 && (
   <TouchableOpacity
     style={styles.signButton}
     onPress={handleSignContract}
-    activeOpacity={0.8}
   >
     <Ionicons name="create-outline" size={20} color="#FFFFFF" />
     <Text style={styles.signButtonText}>Sign Contract</Text>
+  </TouchableOpacity>
+)}
+
+{/* Display Pay Deposit button when contract is signed */}
+{contract && contract.status === 1 && !contract.isDeposited && (
+  <TouchableOpacity
+    style={styles.depositButton}
+    onPress={handleMakeDeposit}
+  >
+    <Ionicons name="wallet-outline" size={20} color="#FFFFFF" />
+    <Text style={styles.depositButtonText}>Pay Deposit</Text>
   </TouchableOpacity>
 )}
     </SafeAreaView>
@@ -1056,6 +1167,27 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   signButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  depositButton: {
+    backgroundColor: '#5ac8fa', // Light blue color for deposit
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 12,
+    marginHorizontal: 15,
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  depositButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',

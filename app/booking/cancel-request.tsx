@@ -53,12 +53,10 @@ const CancelRequestScreen: React.FC = () => {
       setLoading(true);
       setError('');
       
-      console.log('📘 Fetching cancellation types');
       const response = await getAllCancelTypesAPI();
       
       // Handle direct array response from API
       if (Array.isArray(response)) {
-        console.log(`📘 Fetched ${response.length} cancellation types directly`);
         setCancelTypes(response);
         
         if (response.length > 0) {
@@ -68,7 +66,6 @@ const CancelRequestScreen: React.FC = () => {
       } 
       // Handle wrapped response
       else if (response.success && response.data) {
-        console.log(`📘 Fetched ${response.data.length} cancellation types`);
         setCancelTypes(response.data);
         
         if (response.data.length > 0) {
@@ -120,11 +117,9 @@ const CancelRequestScreen: React.FC = () => {
         cancelReason
       );
       
-      console.log('📘 Cancellation response:', result);
       
       // Check for success in the response
       if (result.success) {
-        console.log('📘 Cancellation request successful');
         Alert.alert(
           'Success',
           'Your cancellation request has been submitted successfully',

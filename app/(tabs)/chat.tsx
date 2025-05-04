@@ -117,7 +117,6 @@ export default function ChatListScreen() {
     setLoading(true);
     try {
       const data = await getContactsAPI();
-      console.log("Fetched Contacts:", data);
       if (Array.isArray(data) && data.length > 0) {
         // Process data to mark messages as images or text
         const processedData = data.map(contact => {
@@ -150,7 +149,6 @@ export default function ChatListScreen() {
         const sortedData = sortContacts(validContacts);
         setContacts(sortedData);
       } else {
-        console.log("No contacts found or empty data");
         setContacts([]);
       }
     } catch (error) {
@@ -164,7 +162,6 @@ export default function ChatListScreen() {
   // Reload data when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
-      console.log("Chat screen focused - reloading data");
       fetchContacts();
       
       return () => {
@@ -177,7 +174,6 @@ export default function ChatListScreen() {
   useEffect(() => {
     // Listen for new messages via SignalR
     const handleNewMessage = (newMessage: Message) => {
-      console.log("New message received:", newMessage);
       
       // Validate incoming message
       if (!newMessage || !newMessage.contactId) {

@@ -63,7 +63,6 @@ const getImageUrl = (fileObject: any): string | null => {
   }
   
   // Log the structure to debug
-  console.log('Unable to extract URL from file object:', JSON.stringify(fileObject));
   return null;
 };
 

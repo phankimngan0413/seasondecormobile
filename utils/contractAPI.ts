@@ -19,6 +19,21 @@ export interface IContractContent {
   createdAt: string;
   message?: string;
 }
+// Define the response type for getContractFileAPI
+export interface IContractFileResponse {
+  success: boolean;
+  message?: string;
+  errors?: string[];
+  data?: IContractDetail | null;
+}
+
+// Interface matching the API response for contract details
+export interface IContractDetail {
+  contractCode: string;
+  status: number;
+  isSigned: boolean;
+  // ...other properties
+}
 
 /**
  * Get contract content by contract code
@@ -73,24 +88,26 @@ export const getContractContentAPI = async (contractCode: string): Promise<ICont
  * @param contractCode The code of the contract to sign
  * @returns Promise with the signature request result
  */
+// Replace the beginning of your requestSignatureAPI function with this code
 export const requestSignatureAPI = async (contractCode: string): Promise<IContractResponse> => {
   try {
     const apiClient = await initApiClient();
     
+    // Make the API request
     const response = await apiClient.post(
-      `/api/Contract/requestSignature/${contractCode}`,
+      `/api/Contract/requestSignatureForMobile/${contractCode}`,
       null // No request body needed
     );
     
-    if (response && response.data) {
-      return response.data;
-    } else {
-      console.log("Invalid request signature response:", response);
-      return {
-        success: false,
-        message: "Failed to request signature"
-      };
-    }
+    console.log("Signature API raw response:", response.data);
+    
+    // Even if response.data is null, the API call succeeded
+    // We can assume the email was sent if we didn't get an error
+    return {
+      success: true,
+      message: "Signature request has been sent to your email. Please check your inbox.",
+      data: null
+    };
   } catch (error: any) {
     console.log("Error requesting signature:", error);
     
@@ -104,7 +121,46 @@ export const requestSignatureAPI = async (contractCode: string): Promise<IContra
     };
   }
 };
-
+export const verifySignatureAPI = async (token: string): Promise<IContractResponse> => {
+  try {
+    const apiClient = await initApiClient();
+    
+    // Đóng gói token trong một đối tượng để gửi làm JSON
+    const requestBody = JSON.stringify(token);
+    
+    const response = await apiClient.post(
+      `/api/Contract/verifySignature`,
+      requestBody,
+      {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    if (response && response.data) {
+      console.log("Verification response:", response.data);
+      return response.data;
+    } else {
+      console.log("Invalid signature verification response:", response);
+      return {
+        success: false,
+        message: "Failed to verify signature"
+      };
+    }
+  } catch (error: any) {
+    console.log("Error verifying signature:", error);
+    
+    if (error.response) {
+      console.log("API Error Response:", error.response.data);
+    }
+    
+    return {
+      success: false,
+      message: error.response?.data?.message || "Failed to verify signature"
+    };
+  }
+};
 /**
  * Get contract by quotation code
  * @param quotationCode The code of the quotation to get contract for
@@ -152,6 +208,7 @@ export const getContractByQuotationAPI = async (quotationCode: string): Promise<
     };
   }
 };
+
 export const getContractFileAPI = async (quotationCode: string) => {
   try {
     const apiClient = await initApiClient();

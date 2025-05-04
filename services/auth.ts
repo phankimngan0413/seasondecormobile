@@ -1,4 +1,4 @@
-// Cập nhật AuthService để tránh gọi liên tục
+// Enhanced AuthService to prevent redundant API calls
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Alert } from "react-native";
 import { router } from "expo-router";
@@ -10,28 +10,85 @@ const APP_TOKEN_KEY = "@app_token";
 // Cached token to prevent multiple AsyncStorage reads
 let cachedToken: string | null = null;
 let decodedTokenData: any = null;
-let isCheckingToken = false; // Flag để tránh kiểm tra đồng thời
+let isCheckingToken = false; // Flag to prevent simultaneous checks
+let cachedUserId: number | null = null; // Cache the user ID to avoid repeated decoding
+let lastUserIdFetch = 0; // Timestamp of the last getUserId call
+const USER_ID_CACHE_TTL = 3600000; // Increased to 1 hour to reduce frequency
+
+// Add a simple app-wide memory cache for authenticated state
+const cachedAuthState: { isAuthenticated: boolean | null } = { isAuthenticated: null };
+
+// Logging control
+let debugLogging = false; // Set to false in production
+
+// Promise cache to avoid duplicate requests in flight
+const pendingPromises: Record<string, Promise<any>> = {};
+
+// Helper function for controlled logging
+const logDebug = (message: string, ...args: any[]) => {
+  if (debugLogging) {
+    console.log(message, ...args);
+  }
+};
 
 /**
  * Authentication Service with token caching
  * - Avoids repeated AsyncStorage reads
  * - Maintains in-memory token cache
+ * - Prevents duplicate API calls
  */
 class AuthService {
   /**
-   * Get the authentication token
+   * Get the authentication token with promise deduplication
    * - Uses cached token if available
    * - Falls back to AsyncStorage if needed
+   * - Prevents multiple simultaneous requests for the same token
    */
   async getToken(): Promise<string | null> {
+    // First check memory cache for token before anything else
+    if (cachedToken) {
+      logDebug("🟢 Using cached token");
+      return cachedToken;
+    }
+    
+    const key = 'getToken';
+    
+    // Check if we already have a pending request
+    if (key in pendingPromises) {
+      logDebug("🔄 Reusing in-flight token request");
+      // Return the existing promise
+      return pendingPromises[key] as Promise<string | null>;
+    }
+  
     try {
-      // Return cached token if available
+      // Create and store the promise
+      const promise = this._getTokenInternal();
+      pendingPromises[key] = promise;
+      
+      // Wait for the result
+      const result = await promise;
+      
+      // Clear the promise cache
+      delete pendingPromises[key];
+      
+      return result;
+    } catch (error) {
+      // Clean up the promise cache on error
+      delete pendingPromises[key];
+      console.error("🔴 Error in getToken:", error);
+      return null;
+    }
+  }
+  
+  private async _getTokenInternal(): Promise<string | null> {
+    try {
+      // Double check cached token (to handle race conditions)
       if (cachedToken) {
-        console.log("🟢 Using cached token");
+        logDebug("🟢 Using cached token (double-check)");
         return cachedToken;
       }
 
-      console.log("🟡 Getting token from AsyncStorage");
+      logDebug("🟡 Getting token from AsyncStorage");
       const token = await AsyncStorage.getItem(APP_TOKEN_KEY);
       
       if (token) {
@@ -39,14 +96,17 @@ class AuthService {
         cachedToken = token;
         // Also decode and cache the token data
         this.decodeToken(token);
-        console.log("🟢 Token retrieved from storage and cached");
+        cachedAuthState.isAuthenticated = true; // Update auth state
+        logDebug("🟢 Token retrieved from storage and cached");
       } else {
-        console.log("🟡 No token found in storage");
+        cachedAuthState.isAuthenticated = false; // Update auth state
+        logDebug("🟡 No token found in storage");
       }
       
       return token;
     } catch (error) {
       console.error("🔴 Error getting token:", error);
+      cachedAuthState.isAuthenticated = false; // Update auth state on error
       return null;
     }
   }
@@ -58,24 +118,18 @@ class AuthService {
    */
   async setToken(token: string): Promise<boolean> {
     try {
-      console.log("🟡 Setting token");
+      logDebug("🟡 Setting token");
       
       // Store token in AsyncStorage
       await AsyncStorage.setItem(APP_TOKEN_KEY, token);
       
-      // Verify storage was successful
-      const storedToken = await AsyncStorage.getItem(APP_TOKEN_KEY);
-      if (storedToken === token) {
-        // Update cache
-        cachedToken = token;
-        // Also decode and cache the token data
-        this.decodeToken(token);
-        console.log("🟢 Token stored successfully and cached");
-        return true;
-      } else {
-        console.error("🔴 Token verification failed");
-        return false;
-      }
+      // Update cache immediately without verification to reduce calls
+      cachedToken = token;
+      // Decode and cache the token data
+      this.decodeToken(token);
+      cachedAuthState.isAuthenticated = true; // Update auth state
+      logDebug("🟢 Token stored successfully and cached");
+      return true;
     } catch (error) {
       console.error("🔴 Error storing token:", error);
       throw new Error("Failed to save authentication data");
@@ -91,11 +145,11 @@ class AuthService {
     try {
       await AsyncStorage.removeItem(APP_TOKEN_KEY);
       
-      // Clear cache
-      cachedToken = null;
-      decodedTokenData = null;
+      // Clear all caches
+      this.clearCache();
+      cachedAuthState.isAuthenticated = false; // Update auth state
       
-      console.log("✅ Token removed and cache cleared (Logout)");
+      logDebug("✅ Token removed and cache cleared (Logout)");
     } catch (error) {
       console.error("🔴 Error removing token:", error);
     }
@@ -107,24 +161,82 @@ class AuthService {
    */
   private decodeToken(token: string): void {
     try {
-      decodedTokenData = jwtDecode(token);
+      // Only decode if not already decoded or if decodedTokenData is null
+      if (!decodedTokenData) {
+        decodedTokenData = jwtDecode(token);
+        
+        // Also cache the user ID here to save additional work later
+        if (decodedTokenData) {
+          const userId = decodedTokenData?.nameid 
+            ? parseInt(decodedTokenData.nameid, 10) 
+            : (decodedTokenData?.sub ? parseInt(decodedTokenData.sub, 10) : null);
+          
+          if (userId) {
+            cachedUserId = userId;
+            lastUserIdFetch = Date.now();
+            logDebug("🟢 User ID cached during token decode:", userId);
+          }
+        }
+      }
     } catch (error) {
       console.error("🔴 Error decoding token:", error);
       decodedTokenData = null;
+      cachedUserId = null;
     }
   }
 
   /**
-   * Get user ID from token
-   * - Uses cached decoded token data if available
+   * Get user ID from token with caching
+   * - Uses cached userId if available and not expired
+   * - Falls back to token decoding if needed
    */
   async getUserId(): Promise<number | null> {
+    // First, check if we have a cached userId before doing anything else
+    const now = Date.now();
+    if (cachedUserId !== null && now - lastUserIdFetch < USER_ID_CACHE_TTL) {
+      logDebug("🟢 Using cached user ID:", cachedUserId);
+      return cachedUserId;
+    }
+    
+    // If we already have a pending promise for this request, return it
+    if ('getUserId' in pendingPromises) {
+      logDebug("🔄 Reusing in-flight user ID request");
+      return pendingPromises['getUserId'];
+    }
+
     try {
-      // If we don't have decoded data but might have a token
+      // Create and store the promise
+      pendingPromises['getUserId'] = this._getUserIdInternal();
+      // Wait for the result
+      const result = await pendingPromises['getUserId'];
+      // Clear the promise cache
+      delete pendingPromises['getUserId'];
+      return result;
+    } catch (error) {
+      // Clean up the promise cache on error
+      delete pendingPromises['getUserId'];
+      console.error("🔴 Error in getUserId:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Internal method for user ID retrieval
+   * @private
+   */
+  private async _getUserIdInternal(): Promise<number | null> {
+    try {
+      // Double check cache to avoid race conditions
+      const now = Date.now();
+      if (cachedUserId !== null && now - lastUserIdFetch < USER_ID_CACHE_TTL) {
+        logDebug("🟢 Using cached user ID (double-check):", cachedUserId);
+        return cachedUserId;
+      }
+      
+      // We need to get and decode the token
       if (!decodedTokenData) {
         const token = await this.getToken();
         if (!token) {
-          console.warn("No token found, unable to extract user ID");
           return null;
         }
         
@@ -141,16 +253,40 @@ class AuthService {
         : (decodedTokenData?.sub ? parseInt(decodedTokenData.sub, 10) : null);
       
       if (!userId) {
-        console.warn("⚠️ User ID not found in token. Token data:", decodedTokenData);
+        console.warn("⚠️ User ID not found in token");
         return null;
       }
       
-      console.log("✅ User ID retrieved:", userId);
+      // Update cache
+      cachedUserId = userId;
+      lastUserIdFetch = now;
+      
+      logDebug("✅ User ID retrieved:", userId);
       return userId;
     } catch (error) {
       console.error("🔴 Error getting user ID:", error);
       return null;
     }
+  }
+
+  /**
+   * Check if user is authenticated (without getting the token)
+   * Uses cached authentication state for performance
+   */
+  isUserAuthenticated(): boolean {
+    // If we have a cached authentication state, use it
+    if (cachedAuthState.isAuthenticated !== null) {
+      return cachedAuthState.isAuthenticated;
+    }
+    
+    // If we have a cached token, the user is authenticated
+    if (cachedToken) {
+      cachedAuthState.isAuthenticated = true;
+      return true;
+    }
+    
+    // We don't know yet
+    return false;
   }
 
   /**
@@ -160,20 +296,49 @@ class AuthService {
    * - Redirects to login
    */
   async handleSessionExpired(): Promise<void> {
+    // Prevent multiple alerts if already handling an expired session
+    if ('handleSessionExpired' in pendingPromises) {
+      logDebug("⚠️ Already handling expired session");
+      return pendingPromises['handleSessionExpired'];
+    }
+    
+    try {
+      pendingPromises['handleSessionExpired'] = this._handleSessionExpiredInternal();
+      await pendingPromises['handleSessionExpired'];
+      delete pendingPromises['handleSessionExpired'];
+    } catch (error) {
+      delete pendingPromises['handleSessionExpired'];
+      this.redirectToLogin();
+    }
+  }
+
+  /**
+   * Internal method for handling expired sessions
+   * @private
+   */
+  private async _handleSessionExpiredInternal(): Promise<void> {
     try {
       console.warn("⚠️ Token expired, logging out...");
       await this.removeToken();
       
       // Show alert and redirect
-      Alert.alert(
-        "Phiên đăng nhập hết hạn", 
-        "Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.", 
-        [{ text: "OK", onPress: () => this.redirectToLogin() }]
-      );
+      return new Promise<void>((resolve) => {
+        Alert.alert(
+          "Phiên đăng nhập hết hạn", 
+          "Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.", 
+          [{ 
+            text: "OK", 
+            onPress: () => {
+              this.redirectToLogin();
+              resolve();
+            }
+          }]
+        );
+      });
     } catch (error) {
       console.error("🔴 Error handling expired session:", error);
-      // Try to redirect anyway
       this.redirectToLogin();
+      throw error;
     }
   }
 
@@ -182,48 +347,113 @@ class AuthService {
    * @private
    */
   private redirectToLogin(): void {
-    console.log("🔵 Redirecting to login page...");
+    logDebug("🔵 Redirecting to login page...");
     router.replace("/(auth)/login");
   }
 
   /**
-   * Check if user is authenticated
+   * Check if user is authenticated with deduplication
    * - Uses locking mechanism to prevent multiple parallel checks
    */
   async checkAuthStatus(): Promise<boolean> {
-    // Nếu đang kiểm tra, bỏ qua
+    // First check if we already know the auth status
+    if (cachedAuthState.isAuthenticated !== null) {
+      logDebug("🟢 Using cached auth status:", cachedAuthState.isAuthenticated);
+      return cachedAuthState.isAuthenticated;
+    }
+    
+    // If we have a cached token, the user is authenticated
+    if (cachedToken) {
+      cachedAuthState.isAuthenticated = true;
+      logDebug("🟢 User is authenticated based on cached token");
+      return true;
+    }
+    
+    // If we already have a pending promise for this request, return it
+    if ('checkAuthStatus' in pendingPromises) {
+      logDebug("🔄 Reusing in-flight auth check");
+      return pendingPromises['checkAuthStatus'];
+    }
+    
+    try {
+      pendingPromises['checkAuthStatus'] = this._checkAuthStatusInternal();
+      const result = await pendingPromises['checkAuthStatus'];
+      delete pendingPromises['checkAuthStatus'];
+      return result;
+    } catch (error) {
+      delete pendingPromises['checkAuthStatus'];
+      console.error("🔴 Error in checkAuthStatus:", error);
+      return false;
+    }
+  }
+
+  /**
+   * Internal method for auth status check
+   * @private
+   */
+  private async _checkAuthStatusInternal(): Promise<boolean> {
+    // If another check is already in progress, skip this one
     if (isCheckingToken) {
-      console.log("⚠️ Auth check already in progress, skipping");
+      logDebug("⚠️ Auth check already in progress, skipping");
       return false;
     }
     
     try {
-      isCheckingToken = true; // Đánh dấu đang kiểm tra
+      isCheckingToken = true; // Mark as checking
       
-      // Nếu đã có token trong cache, sử dụng ngay
+      // Double check cached values to handle race conditions
+      if (cachedAuthState.isAuthenticated !== null) {
+        isCheckingToken = false;
+        return cachedAuthState.isAuthenticated;
+      }
+      
       if (cachedToken) {
-        console.log("🟢 Using cached token for auth check");
+        cachedAuthState.isAuthenticated = true;
         isCheckingToken = false;
         return true;
       }
       
       const token = await this.getToken();
       const hasToken = !!token;
+      cachedAuthState.isAuthenticated = hasToken; // Cache the result
       
-      isCheckingToken = false; // Đánh dấu đã xong
+      isCheckingToken = false; // Mark as done
       return hasToken;
     } catch (error) {
       console.error("🔴 Error checking auth status:", error);
-      isCheckingToken = false; // Đánh dấu đã xong
+      cachedAuthState.isAuthenticated = false; // Cache the negative result
+      isCheckingToken = false; // Mark as done
       return false;
     }
   }
 
   /**
-   * Refresh authentication token
-   * - Implement your API call here
+   * Refresh authentication token with deduplication
    */
   async refreshAuthToken(): Promise<boolean> {
+    // If we already have a pending promise for this request, return it
+    if ('refreshAuthToken' in pendingPromises) {
+      logDebug("🔄 Reusing in-flight token refresh");
+      return pendingPromises['refreshAuthToken'];
+    }
+    
+    try {
+      pendingPromises['refreshAuthToken'] = this._refreshAuthTokenInternal();
+      const result = await pendingPromises['refreshAuthToken'];
+      delete pendingPromises['refreshAuthToken'];
+      return result;
+    } catch (error) {
+      delete pendingPromises['refreshAuthToken'];
+      console.error("🔴 Error in refreshAuthToken:", error);
+      return false;
+    }
+  }
+
+  /**
+   * Internal method for token refresh
+   * @private
+   */
+  private async _refreshAuthTokenInternal(): Promise<boolean> {
     try {
       const currentToken = await this.getToken();
       if (!currentToken) return false;
@@ -235,7 +465,7 @@ class AuthService {
       //   return true;
       // }
       
-      console.log("🔄 Token refresh functionality not implemented yet");
+      logDebug("🔄 Token refresh functionality not implemented yet");
       return false;
     } catch (error) {
       console.error("🔴 Error refreshing token:", error);
@@ -244,12 +474,27 @@ class AuthService {
   }
 
   /**
-   * Clear cache (useful for testing)
+   * Clear cache (useful for testing and logout)
    */
   clearCache(): void {
     cachedToken = null;
     decodedTokenData = null;
-    console.log("🧹 Auth cache cleared");
+    cachedUserId = null;
+    lastUserIdFetch = 0;
+    cachedAuthState.isAuthenticated = null;
+    // Clear all pending promises
+    for (const key in pendingPromises) {
+      delete pendingPromises[key];
+    }
+    logDebug("🧹 Auth cache cleared completely");
+  }
+  
+  /**
+   * Enable or disable debug logging
+   */
+  setDebugLogging(enabled: boolean): void {
+    debugLogging = enabled;
+    console.log(`🔧 Auth debug logging ${enabled ? 'enabled' : 'disabled'}`);
   }
 }
 
@@ -265,3 +510,7 @@ export const getUserIdFromToken = () => authService.getUserId();
 export const handleSessionExpired = () => authService.handleSessionExpired();
 export const checkAuthStatus = () => authService.checkAuthStatus();
 export const refreshAuthToken = () => authService.refreshAuthToken();
+export const checkIsAuthenticated = () => authService.isUserAuthenticated();
+
+// Helper to toggle debug logging
+export const setAuthDebugLogging = (enabled: boolean) => authService.setDebugLogging(enabled);

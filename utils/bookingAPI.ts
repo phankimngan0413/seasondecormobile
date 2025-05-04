@@ -296,32 +296,56 @@ export const requestCancelBookingAPI = async (
   try {
     const response: AxiosResponse = await apiClient.put(url, payload);
     
-    console.log(`🔍 Cancellation API response:`, response.data);
+    // Log the complete API response
+    console.log(`🔍 Complete API response:`, response);
     
-    if (response && response.data) {
-      // The API seems to return a success response with a message
-      return response.data;
-    } else {
-      console.error("🔴 Invalid cancellation request response:", response);
-      return {
-        success: false,
-        message: "Failed to request cancellation"
-      };
+    // The issue is that response.data is null, but the response itself has success details
+    // Let's check if we need to extract success info from the response rather than response.data
+    if (response.data === null) {
+      console.log("📘 Response data is null, extracting success info from response");
+      
+      // Check if response has a status in the 200 range (successful HTTP status)
+      if (response.status >= 200 && response.status < 300) {
+        return {
+          success: true,
+          message: "Booking has been canceled successfully."
+        };
+      }
     }
+    
+    // If response.data exists, return it
+    if (response.data) {
+      return response.data;
+    }
+    
+    // Default success response
+    return {
+      success: true,
+      message: "Request processed successfully"
+    };
   } catch (error: any) {
     console.error("🔴 Error requesting cancellation:", error);
     
-    // Check for error response with message
-    if (error.response && error.response.data) {
-      console.error("API Error Response:", error.response.data);
-      // Return the exact error from the server
-      return error.response.data;
+    // Handle axios error with response
+    if (error.response) {
+      console.error("API Error Response:", error.response);
+      
+      // If the error response has data, return it
+      if (error.response.data) {
+        return error.response.data;
+      }
+      
+      // Otherwise create an error based on status
+      return {
+        success: false,
+        message: `Error: ${error.response.status} - ${error.response.statusText}`
+      };
     }
     
     // Return a generic error for network issues
     return {
       success: false,
-      message: "Network error or server unavailable"
+      message: error.message || "Network error or server unavailable"
     };
   }
 };

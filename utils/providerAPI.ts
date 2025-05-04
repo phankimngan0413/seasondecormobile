@@ -50,13 +50,11 @@ export const getProvidersAPI = async (): Promise<IProvider[]> => {
 
   try {
     const response = await apiClient.get<IProvider[]>(url);
-    console.log("🟢 Full API Response:", response.data);
 
     if (Array.isArray(response.data)) {
       return response.data;
     }
 
-    console.error("🔴 API Response không hợp lệ:", response.data);
     return Promise.reject(new Error("Invalid response from server."));
   } catch (error: any) {
     console.error("🔴 Get Providers API Error:", error);
@@ -78,7 +76,6 @@ export const getProviderDetailAPI = async (slug: string): Promise<IProvider> => 
 
   try {
     const response = await apiClient.get<IProvider>(url);
-    console.log("🟢 Full API Response:", response.data);
 
     if (response.data && typeof response.data === "object") {
       return {
@@ -89,7 +86,6 @@ export const getProviderDetailAPI = async (slug: string): Promise<IProvider> => 
       };
     }
 
-    console.error("🔴 API Response không hợp lệ:", response.data);
     return Promise.reject(new Error("Invalid response from server."));
   } catch (error: any) {
     console.error("🔴 Get Provider Detail API Error:", error);
@@ -109,7 +105,6 @@ export const getProductsByProviderAPI = async (slug: string): Promise<IProduct[]
 
   try {
     const response = await apiClient.get<IProduct[]>(url);
-    console.log("🟢 Full API Response:", response.data);
 
     if (Array.isArray(response.data)) {
       // Ensuring the returned products adhere to the IProduct interface with default values for missing fields
@@ -123,7 +118,6 @@ export const getProductsByProviderAPI = async (slug: string): Promise<IProduct[]
       }));
     }
 
-    console.error("🔴 API Response không hợp lệ:", response.data);
     return Promise.reject(new Error("Invalid response from server."));
   } catch (error: any) {
     console.error("🔴 Get Products by Provider API Error:", error);

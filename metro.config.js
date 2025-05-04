@@ -1,14 +1,20 @@
+const path = require('path'); // Add this line at the top
+
 const { getDefaultConfig } = require('expo/metro-config');
-const path = require('path');
 
-const config = getDefaultConfig(__dirname);
-
-// Thêm cấu hình resolver để hỗ trợ alias
-config.resolver = {
-  ...config.resolver,
-  extraNodeModules: {
-    '@': path.resolve(__dirname),
-  }
-};
-
-module.exports = config;
+module.exports = (() => {
+  const config = getDefaultConfig(__dirname);
+  
+  const { resolver } = config;
+  
+  config.resolver = {
+    ...resolver,
+    extraNodeModules: new Proxy({}, {
+      get: (target, name) => {
+        return path.join(__dirname, `${name}`)
+      },
+    }),
+  };
+  
+  return config;
+})();

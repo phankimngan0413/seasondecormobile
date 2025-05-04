@@ -12,6 +12,7 @@ LogBox.ignoreLogs([
   "{}" ,// Include this if the empty object is appearing as a separate message
   "Received invalid data []",
   "❌ API Error [400]: []",
+  "❌ API Error [400]: {}",
   
 ]);
 

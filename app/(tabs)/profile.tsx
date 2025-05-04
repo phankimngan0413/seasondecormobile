@@ -194,7 +194,7 @@ export default function ProfileScreen() {
           </View>
 
           {/* Order Tracking Section */}
-          <View style={[styles.orderTrackingContainer, { backgroundColor: colors.card }]}>
+          {/* <View style={[styles.orderTrackingContainer, { backgroundColor: colors.card }]}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Order Tracking</Text>
             <TouchableOpacity 
               style={styles.trackingItem}
@@ -209,7 +209,7 @@ export default function ProfileScreen() {
               </View>
               <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
-          </View>
+          </View> */}
 
           {/* Logout Button */}
           <View style={styles.logoutContainer}>

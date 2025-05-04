@@ -73,18 +73,14 @@ const LoginScreen: React.FC = () => {
       if (hasCheckedAuth.current) return;
       
       try {
-        console.log("🔵 LoginScreen mounted, checking auth status");
         hasCheckedAuth.current = true;
         const isAuthenticated = await authService.checkAuthStatus();
         
         if (isAuthenticated) {
-          console.log("🟢 User already authenticated, redirecting to profile");
           router.replace("/(tabs)/profile");
         } else {
-          console.log("🟠 User not authenticated, showing login screen");
         }
       } catch (error) {
-        console.error("🔴 Error checking auth on mount:", error);
       }
     };
     
@@ -94,7 +90,6 @@ const LoginScreen: React.FC = () => {
   // Xử lý phản hồi từ xác thực Google
   useEffect(() => {
     if (response && !googleResponseReceived) {
-      console.log("🟡 Google auth response received, type:", response.type);
       setGoogleResponseReceived(true);
       
       if (response.type === "success") {
@@ -104,7 +99,6 @@ const LoginScreen: React.FC = () => {
         Alert.alert("Google Login Failed", "Authentication process was interrupted");
         setGoogleLoading(false);
       } else if (response.type === "cancel") {
-        console.log("🟠 Google auth canceled by user");
         setGoogleLoading(false);
       }
     }
@@ -138,7 +132,6 @@ const LoginScreen: React.FC = () => {
   
     setLoading(true);
     try {
-      console.log("🟡 Sending login request...");
       // Remove old token before new login
       await authService.removeToken();
       
@@ -149,13 +142,11 @@ const LoginScreen: React.FC = () => {
           throw new Error("Login failed");
         }
         
-        console.log("🟢 Received Token:", token.substring(0, 15) + "...");
   
         // Use AuthService to store token
         const success = await authService.setToken(token);
         
         if (success) {
-          console.log("🟢 Token successfully stored, navigating to profile");
           router.replace("/(tabs)/profile");
         } else {
           Alert.alert("Login Error", "Failed to persist authentication");
@@ -192,7 +183,6 @@ const LoginScreen: React.FC = () => {
       try {
         console.log("🟡 Calling backend with Google token...");
         const loginResponse = await googleLoginAPI(idToken);
-        console.log("🟢 Google login API response:", JSON.stringify(loginResponse));
         
         // Only proceed if we have a token
         if (!loginResponse.token) {

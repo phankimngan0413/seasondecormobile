@@ -35,13 +35,17 @@ const TransactionsScreen = () => {
       
       const response = await getTransactionsDetailsAPI();
       
-      if (response.success && response.transactions.length > 0) {
-        setTransactions(response.transactions);
+      // Check if the response was successful
+      if (response && response.success) {
+        // Even if transactions array is empty, we consider this a success
+        setTransactions(response.transactions || []);
         setError(false);
       } else {
+        console.log("API error:", response);
         setError(true);
       }
     } catch (err) {
+      console.error("Error fetching transactions:", err);
       setError(true);
     } finally {
       setLoading(false);
@@ -151,21 +155,28 @@ const TransactionsScreen = () => {
             Cannot load transaction history
           </Text>
           <TouchableOpacity
-            style={[styles.retryButton, { backgroundColor: colors.primary }]}
+            style={[styles.actionButton, { backgroundColor: colors.primary }]}
             onPress={() => fetchTransactions()}
           >
-            <Text style={styles.retryButtonText}>Try Again</Text>
+            <Text style={styles.actionButtonText}>Try Again</Text>
           </TouchableOpacity>
         </View>
       );
     }
     
+    // This case is when API succeeded but no transactions exist
     return (
       <View style={styles.emptyContainer}>
-        <Ionicons name="document-outline" size={40} color={colors.textSecondary} />
+        <Ionicons name="wallet-outline" size={40} color={colors.textSecondary} />
         <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
           You don't have any transactions yet
         </Text>
+        <TouchableOpacity
+          style={[styles.actionButton, { backgroundColor: colors.primary }]}
+          onPress={() => router.push('/screens/payment/add-funds')} // Navigate to your add transaction screen
+        >
+          <Text style={styles.actionButtonText}>Add Transaction</Text>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -191,6 +202,7 @@ const TransactionsScreen = () => {
             refreshing={refreshing}
             onRefresh={handleRefresh}
             colors={[colors.primary]}
+            tintColor={colors.primary}
           />
         }
       />
@@ -295,13 +307,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
-  retryButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  actionButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
     borderRadius: 8,
-    marginTop: 16,
+    marginTop: 20,
+    minWidth: 120,
+    alignItems: 'center',
   },
-  retryButtonText: {
+  actionButtonText: {
     color: 'white',
     fontSize: 14,
     fontWeight: '500',

@@ -57,7 +57,6 @@ export const getDecorServicesAPI = async (): Promise<IDecor[]> => {
       console.log("🟢 Decor Services:", decorServices);
       return decorServices;
     } else {
-      console.error("🔴 Invalid API response format");
       throw new Error("Failed to fetch decor services: Invalid response format.");
     }
   } catch (error: any) {
@@ -96,7 +95,6 @@ export const getDecorServiceByIdAPI = async (id: number): Promise<IDecor> => {
         seasons: validSeasons, // Add season names to seasons array
       };
     } else {
-      console.error("🔴 Invalid API response format: Expected 'response.data'");
       throw new Error("Failed to fetch decor service: Invalid response format.");
     }
   } catch (error: any) {

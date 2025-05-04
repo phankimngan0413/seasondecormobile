@@ -43,22 +43,33 @@ export const getQuotationDetailByCustomerAPI = async (quotationCode: string) => 
     console.log('🔍 Getting quotation details for code:', quotationCode);
     const apiClient = await initApiClient();
     const token = await getToken();
-
+    
     if (!token) {
       console.log('🔍 No token available');
       throw new Error("Unauthorized: Please log in.");
     }
-
-    // Make the API request - check if this path matches your API documentation
+    
+    // Make the API request
     const response = await apiClient.get(
       `/api/Quotation/getQuotationDetailByCustomer/${quotationCode}`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
-
-    console.log("🟢 Quotation detail response received:", response.status);
-    console.log("🟢 Quotation detail data:", response.data);
     
-    return response.data || { success: false, data: null, message: "No data received" };
+    console.log("🟢 Quotation detail response received:", response.status);
+    
+    // Check if the response contains data and has the expected structure
+    if (response.data && response.data.success) {
+      console.log("🟢 Quotation detail data received successfully");
+      return response.data;
+    } else {
+      console.log("🟡 Received response but data may be incomplete:", response.data);
+      return response.data || { 
+        success: false, 
+        data: null, 
+        message: "No data or incomplete data received" 
+      };
+    }
+    
   } catch (error: any) {
     console.error("🔴 Get Quotation Detail API Error:", error);
     
@@ -72,16 +83,13 @@ export const getQuotationDetailByCustomerAPI = async (quotationCode: string) => 
       console.error("🔴 Error message:", error.message);
     }
     
-    return { 
-      success: false, 
-      data: null, 
-      message: error.response?.data?.message || "Failed to retrieve quotation details." 
+    return {
+      success: false,
+      data: null,
+      message: error.response?.data?.message || "Failed to retrieve quotation details."
     };
   }
 };
-/**
- * Create a new quotation for a specific booking
- */
 export const createQuotationByBookingCodeAPI = async (bookingCode: string, quotationData: any) => {
   try {
     const apiClient = await initApiClient();
@@ -137,34 +145,70 @@ export const uploadQuotationFileByBookingCodeAPI = async (bookingCode: string, f
 /**
  * Confirm a quotation by its code
  */
-export const confirmQuotationAPI = async (quotationCode: string) => {
+export const confirmQuotationAPI = async (quotationCode: string): Promise<any> => {
   try {
     const apiClient = await initApiClient();
     const token = await getToken();
     
     if (!token) {
-      throw new Error("Unauthorized: Please log in.");
+      console.error("No authentication token found");
+      return {
+        success: false,
+        message: "Unauthorized: Please log in.",
+        errors: [],
+        data: null
+      };
     }
+    
+    console.log(`🔍 Sending confirmQuotation request for code: ${quotationCode}`);
     
     // Send true as the request body to confirm the quotation
     const response = await apiClient.put(
       `/api/Quotation/confirmQuotation/${quotationCode}`,
-      true,  // Changed from null to true
-      { 
-        headers: { 
+      true,  // Boolean true as request body
+      {
+        headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'  // Explicitly set content type
-        } 
+          'Content-Type': 'application/json'
+        }
       }
     );
     
+    console.log(`🔍 Confirm quotation response:`, response.data);
+    
+    // Return the API response directly since it already matches our expected format
     return response.data;
+    
   } catch (error: any) {
-    console.error("Error confirming quotation:", error);
-    throw new Error(error.response?.data?.message || "Failed to confirm quotation");
+    console.error("🔴 Error confirming quotation:", error);
+    
+    // If the error contains a response from the server, use that information
+    if (error.response && error.response.data) {
+      console.log("🔴 Server error response:", error.response.data);
+      
+      // If the server response is already in our expected format
+      if (typeof error.response.data === 'object' && 'success' in error.response.data) {
+        return error.response.data;
+      }
+      
+      // Otherwise create a standardized error response
+      return {
+        success: false,
+        message: error.response.data.message || "Failed to confirm quotation",
+        errors: error.response.data.errors || [],
+        data: null
+      };
+    }
+    
+    // For network errors or other issues
+    return {
+      success: false,
+      message: error.message || "Network error or server unavailable",
+      errors: [],
+      data: null
+    };
   }
 };
-
 /**
  * A debug function to test the API directly
  */
