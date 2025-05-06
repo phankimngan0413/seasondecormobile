@@ -496,6 +496,176 @@ class AuthService {
     debugLogging = enabled;
     console.log(`🔧 Auth debug logging ${enabled ? 'enabled' : 'disabled'}`);
   }
+
+  /**
+   * Get formatted token for SignalR connections
+   * This ensures the token is always properly formatted with "Bearer " prefix
+   */
+  async getFormattedToken(): Promise<string | null> {
+    try {
+      const token = await this.getToken();
+      if (!token) {
+        console.log("🔴 No token available for SignalR connection");
+        return null;
+      }
+      
+      // Đảm bảo token có tiền tố "Bearer "
+      const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+      logDebug("🟢 Formatted token for SignalR:", formattedToken);
+      return formattedToken;
+    } catch (error) {
+      console.error("🔴 Error getting formatted token for SignalR:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Verify token is valid before SignalR connection
+   * Returns true if token is valid, false otherwise
+   */
+  async verifyTokenForSignalR(): Promise<boolean> {
+    try {
+      const token = await this.getToken();
+      if (!token) {
+        console.log("🔴 No token available for SignalR verification");
+        return false;
+      }
+      
+      // Kiểm tra token còn hiệu lực dựa vào decoded data
+      // Nếu không có decoded data, decode lại
+      if (!decodedTokenData) {
+        this.decodeToken(token);
+      }
+      
+      if (!decodedTokenData) {
+        console.log("🔴 Could not decode token for SignalR verification");
+        return false;
+      }
+      
+      // Kiểm tra token còn hiệu lực không
+      const currentTime = Math.floor(Date.now() / 1000);
+      if (decodedTokenData.exp && decodedTokenData.exp < currentTime) {
+        console.warn("🔴 SignalR token expired, attempting to refresh");
+        const refreshed = await this.refreshAuthToken();
+        return refreshed;
+      }
+      
+      logDebug("🟢 Token valid for SignalR connection");
+      return true;
+    } catch (error) {
+      console.error("🔴 Error verifying token for SignalR:", error);
+      return false;
+    }
+  }
+
+  /**
+   * Special method for SignalR to get user ID without triggering full auth check
+   * This prevents circular calls when SignalR needs user ID for connection
+   */
+  getUserIdForSignalR(): number | null {
+    try {
+      // Chỉ lấy user ID từ cache, không gọi API
+      if (cachedUserId !== null) {
+        logDebug("🟢 Using cached user ID for SignalR:", cachedUserId);
+        return cachedUserId;
+      }
+      
+      // Nếu có decoded token data nhưng chưa có user ID
+      if (decodedTokenData) {
+        const userId = decodedTokenData?.nameid 
+          ? parseInt(decodedTokenData.nameid, 10) 
+          : (decodedTokenData?.sub ? parseInt(decodedTokenData.sub, 10) : null);
+        
+        if (userId) {
+          cachedUserId = userId;
+          lastUserIdFetch = Date.now();
+          logDebug("🟢 Extracted user ID for SignalR from decoded token:", userId);
+          return userId;
+        }
+      }
+      
+      console.log("🔴 Could not get user ID for SignalR");
+      return null;
+    } catch (error) {
+      console.error("🔴 Error getting user ID for SignalR:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Check if token is expired
+   * Used by SignalR services to proactively refresh token before connection
+   */
+  isTokenExpired(): boolean {
+    try {
+      if (!decodedTokenData || !decodedTokenData.exp) {
+        // If we can't determine, assume it might be expired
+        return true;
+      }
+      
+      const currentTime = Math.floor(Date.now() / 1000);
+      const isExpired = decodedTokenData.exp < currentTime;
+      
+      if (isExpired) {
+        logDebug("🔴 Token is expired");
+      } else {
+        logDebug("🟢 Token is still valid");
+      }
+      
+      return isExpired;
+    } catch (error) {
+      console.error("🔴 Error checking token expiration:", error);
+      return true; // Assume expired on error
+    }
+  }
+
+  /**
+   * Get token expiration time in seconds
+   * Used by SignalR services to schedule reconnects before token expiry
+   */
+  getTokenExpiryTime(): number | null {
+    try {
+      if (!decodedTokenData || !decodedTokenData.exp) {
+        return null;
+      }
+      
+      return decodedTokenData.exp;
+    } catch (error) {
+      console.error("🔴 Error getting token expiry time:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Handle authentication error from SignalR
+   * Special method to handle "User is not authenticated" errors 
+   */
+  async handleSignalRAuthError(): Promise<boolean> {
+    try {
+      console.warn("🔴 SignalR authentication error detected");
+      
+      // Check if token is expired
+      if (this.isTokenExpired()) {
+        console.log("🔄 Token expired, attempting refresh");
+        return await this.refreshAuthToken();
+      }
+      
+      // Token not expired but still authentication error
+      // Force a new token fetch by clearing cache
+      console.log("🔄 Forcing token refresh due to SignalR auth error");
+      
+      // Clear just the token cache but keep user info
+      cachedToken = null;
+      decodedTokenData = null;
+      
+      // Try to get a fresh token
+      const token = await this.getToken();
+      return !!token;
+    } catch (error) {
+      console.error("🔴 Error handling SignalR auth error:", error);
+      return false;
+    }
+  }
 }
 
 // Create and export a singleton instance
@@ -514,3 +684,11 @@ export const checkIsAuthenticated = () => authService.isUserAuthenticated();
 
 // Helper to toggle debug logging
 export const setAuthDebugLogging = (enabled: boolean) => authService.setDebugLogging(enabled);
+
+// New exports for SignalR support
+export const getFormattedToken = () => authService.getFormattedToken();
+export const verifyTokenForSignalR = () => authService.verifyTokenForSignalR();
+export const getUserIdForSignalR = () => authService.getUserIdForSignalR();
+export const isTokenExpired = () => authService.isTokenExpired();
+export const getTokenExpiryTime = () => authService.getTokenExpiryTime();
+export const handleSignalRAuthError = () => authService.handleSignalRAuthError();

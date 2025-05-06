@@ -1,9 +1,9 @@
 import { initApiClient } from "@/config/axiosConfig";
 import { getToken } from "@/services/auth";
-import { LogBox } from "react-native";
+// import { LogBox } from "react-native";
 
 // Ignore specific warnings related to Axios error codes
-LogBox.ignoreLogs(["AxiosError: Request failed with status code 400"]);
+// LogBox.ignoreLogs(["AxiosError: Request failed with status code 400"]);
 
 export interface IAddress {
   id: string;

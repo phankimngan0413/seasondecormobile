@@ -54,7 +54,6 @@ export const getDecorServicesAPI = async (): Promise<IDecor[]> => {
         };
       });
 
-      console.log("🟢 Decor Services:", decorServices);
       return decorServices;
     } else {
       throw new Error("Failed to fetch decor services: Invalid response format.");
@@ -65,41 +64,33 @@ export const getDecorServicesAPI = async (): Promise<IDecor[]> => {
   }
 };
 // Fetches a single decor service by ID
-export const getDecorServiceByIdAPI = async (id: number): Promise<IDecor> => {
+export const getDecorServiceByIdAPI = async (id: number): Promise<IDecor | null> => {
   const apiClient = await initApiClient();
-
+  
   try {
-    // Make GET request to fetch a specific decor service by ID
     const response = await apiClient.get(`/api/DecorService/${id}`);
-
-    // Log the response to inspect its structure
-    console.log("API Response:", response); // Log the entire response
-
-    // Check if response contains the expected data structure
-    if (response.data) {
-      const service = response.data; // Now directly accessing response.data
-
-      // Ensure that the images array contains valid image URLs
-      const validImages = service.images.map((image: any) => {
-        // Check if image is an object and extract the imageURL property
-        return image?.imageURL ? image.imageURL : 'https://via.placeholder.com/150'; // Fallback to placeholder if invalid
-      });
-
-      // Process the seasons array
-      const validSeasons = service.seasons.map((season: any) => season.seasonName || 'No Season');
-
-      // Return updated decor service with valid image URIs and season names
-      return {
-        ...service,
-        images: validImages,
-        seasons: validSeasons, // Add season names to seasons array
-      };
-    } else {
-      throw new Error("Failed to fetch decor service: Invalid response format.");
-    }
+    const service = response.data;
+    
+    // Xử lý mảng images
+    const images = service.images?.map((img: any) => 
+      img?.imageURL || 'https://via.placeholder.com/150'
+    ) || [];
+    
+    // Xử lý mảng seasons
+    const seasons = service.seasons?.map((season: any) => 
+      season?.seasonName || 'No Season'
+    ) || [];
+    
+    return {
+      ...service,
+      images,
+      seasons
+    };
+    
   } catch (error: any) {
-    console.error("🔴 Fetch Decor Service by ID Error:", error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || "Failed to fetch decor service by ID.");
+    // Trả về null thay vì throw error
+    console.log('Decor service fetch failed silently');
+    return null;
   }
 };
 export const getDecorServiceByProviderAPI = async (slug: string): Promise<any> => {
@@ -124,7 +115,6 @@ export const getDecorServiceByProviderAPI = async (slug: string): Promise<any> =
       const response = await apiClient.get(endpoint);
       
       // More comprehensive response logging
-      console.log("🟢 Full API Response:", response.data);
 
       // Handle empty arrays or null/undefined response data
       if (!response.data || (Array.isArray(response.data) && response.data.length === 0)) {

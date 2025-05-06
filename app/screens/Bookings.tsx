@@ -154,17 +154,20 @@ const canBookingBeCancelled = (statusCode: number): boolean => {
   return [0, 1].includes(statusCode); // Pending, Planning
 };
 
-const doesBookingNeedConfirmation = (statusCode: number): boolean => {
-  return statusCode === 3; // Contracting
-};
+// const doesBookingNeedConfirmation = (statusCode: number): boolean => {
+//   return statusCode === 3; // Contracting
+// };
 
-const doesBookingNeedDeposit = (statusCode: number): boolean => {
-  return statusCode === 4; // Confirm
+// const doesBookingNeedDeposit = (statusCode: number): boolean => {
+//   return statusCode === 4; // Confirm
+// };
+const canShowQuotationActions = (statusCode: number): boolean => {
+  // Only show quotation actions for status codes 0, 1, and 2
+  return statusCode === 0 || statusCode === 1 || statusCode === 2 || statusCode === 3|| statusCode === 4 || statusCode === 5 || statusCode === 6|| statusCode === 7;
 };
-
 // Check if booking is in progress (status=8) to show tracking button
 const hasTrackingAvailable = (statusCode: number): boolean => {
-  return statusCode === 8 || statusCode === 9; // Progressing or statusCode 9
+  return statusCode === 8 || statusCode === 9 || statusCode === 10 || statusCode === 11; // Progressing or statusCode 9
 };
 const doesBookingNeedFinalPayment = (statusCode: number): boolean => {
   return statusCode === 9; // AllDone status
@@ -535,12 +538,12 @@ const BookingListScreen: React.FC = () => {
     const statusStage = getStatusStage(statusCode);
     
     const canCancel = canBookingBeCancelled(statusCode);
-    const needsConfirmation = doesBookingNeedConfirmation(statusCode);
-    const needsDeposit = doesBookingNeedDeposit(statusCode);
+    // const needsConfirmation = doesBookingNeedConfirmation(statusCode);
+    // const needsDeposit = doesBookingNeedDeposit(statusCode);
     const hasTracking = hasTrackingAvailable(statusCode);
     const needsFinalPayment = doesBookingNeedFinalPayment(statusCode);
     // Check if booking has a quotation code
-    const hasQuotation = item.quotationCode && item.quotationCode.trim() !== '';
+    const hasQuotationActions = canShowQuotationActions(statusCode);
     
     // Use either id or bookingId depending on which is available
     const bookingId = item.id || item.bookingId;
@@ -571,7 +574,7 @@ const BookingListScreen: React.FC = () => {
         ) : null}
 
         {/* Quotation Code - Show if available */}
-        {hasQuotation && (
+        {hasQuotationActions && (
           <View style={styles.bookingDetail}>
             <Ionicons name="document-text-outline" size={18} color={PRIMARY_COLOR} />
             <Text style={[styles.detailText, { color: colors.textSecondary }]}>
@@ -650,7 +653,7 @@ const BookingListScreen: React.FC = () => {
             )}
             
             {/* View Quotation button - Show if quotation exists */}
-            {hasQuotation && (
+            {hasQuotationActions && (
               <TouchableOpacity
                 style={styles.quotationViewButton}
                 onPress={() => handleViewQuotation(item.quotationCode || '')}
@@ -659,23 +662,23 @@ const BookingListScreen: React.FC = () => {
               </TouchableOpacity>
             )}
             
-            {needsConfirmation && (
+            {/* {needsConfirmation && (
               <TouchableOpacity
                 style={styles.confirmButton}
                 onPress={() => handleConfirmBooking(item)}
               >
                 <Text style={styles.confirmButtonText}>Confirm</Text>
               </TouchableOpacity>
-            )}
+            )} */}
             
-            {needsDeposit && (
+            {/* {needsDeposit && (
               <TouchableOpacity
                 style={styles.depositButton}
                 onPress={() => handleMakeDeposit(item)}
               >
                 <Text style={styles.depositButtonText}>Pay Deposit</Text>
               </TouchableOpacity>
-            )}
+            )} */}
              {needsFinalPayment && (
       <TouchableOpacity
         style={styles.finalPaymentButton}

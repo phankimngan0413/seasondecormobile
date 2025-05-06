@@ -10,70 +10,149 @@ import {
   StatusBar,
   Linking,
   Alert,
-  Modal
+  Modal,
+  Image,
+  Dimensions,
+  TextInput
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@/constants/ThemeContext';
 import { Colors } from '@/constants/Colors';
-import { getQuotationDetailByCustomerAPI, confirmQuotationAPI } from '@/utils/quotationsAPI';
+import { getQuotationDetailByCustomerAPI, confirmQuotationAPI,removeProductFromQuotationAPI, rejectQuotationAPI } from '@/utils/quotationsAPI';
 import { WebView } from 'react-native-webview';
+import ProductCatalog from '@/components/RelatedProductsSection';
 
 const PRIMARY_COLOR = "#5fc1f1";
 const QUOTATION_COLOR = "#34c759"; // Green color for quotation elements
 
-// Updated interface to match the actual API response
+// Updated interface to match the actual API response structure
+interface Provider {
+  id: number;
+  businessName: string;
+  slug: string | null;
+  bio: string | null;
+  avatar: string;
+  phone: string | null;
+  address: string | null;
+  skillName: string | null;
+  decorationStyleName: string | null;
+  yearsOfExperience: string | null;
+  pastWorkPlaces: string | null;
+  pastProjects: string | null;
+  certificateImageUrls: string | null;
+  isProvider: boolean;
+  providerVerified: boolean;
+  providerStatus: number;
+  joinedDate: string | null;
+  followersCount: number;
+  followingsCount: number;
+}
+
+interface MaterialDetail {
+  id: number;
+  materialName: string;
+  quantity: number;
+  cost: number;
+  note: string;
+  totalCost: number;
+}
+
+interface ConstructionDetail {
+  id: number;
+  taskName: string;
+  cost: number;
+  unit: string;
+  area: number;
+  note: string;
+}
+
+interface ProductDetail {
+  id: number;
+  productId: number;
+  productName: string;
+  image: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+}
+
 interface IQuotationDetail {
   id: number;
   quotationCode: string;
-  provider: {
-    id: number;
-    businessName: string;
-    avatar: string;
-    phone?: string;
-    isProvider: boolean;
-    providerVerified: boolean;
-    providerStatus: number;
-    followersCount: number;
-    followingsCount: number;
-  };
+  provider: Provider;
   style: string;
   materialCost: number;
   constructionCost: number;
+  productCost: number;
   depositPercentage: number;
   isQuoteExisted: boolean;
   isContractExisted: boolean;
   isSigned: boolean;
   createdAt: string;
   status: number;
-  quotationFilePath: string;
-  materials: Array<{
-    id: number;
-    materialName: string;
-    quantity: number;
-    cost: number;
-    totalCost: number;
-  }>;
-  constructionTasks: Array<{
-    id: number;
-    taskName: string;
-    cost: number;
-    unit: string;
-    area: number;
-  }>;
-  totalCost: number;
-  bookingId: number;
+  filePath: string | null; // Changed from quotationFilePath to match API
+  quotationFilePath: string | null; // Include both for compatibility
+  materialDetails: MaterialDetail[]; // Updated field names
+  constructionDetails: ConstructionDetail[]; // Updated field names
+  productDetails: ProductDetail[]; // Added product details
+  materials?: MaterialDetail[]; // For backward compatibility
+  constructionTasks?: ConstructionDetail[]; // For backward compatibility
+  totalCost?: number; // Optional field, will calculate if missing
 }
 
-// Status mapping utilities
+// Type definition for Ionicons names
+type IoniconsName = 
+  | "business-outline" 
+  | "color-palette-outline" 
+  | "calendar-outline"
+  | "document-text-outline"
+  | "cart-outline"
+  | "calculator-outline"
+  | "settings-outline"
+  | "notifications-outline"
+  | "time-outline"
+  | "checkmark-circle-outline"
+  | "close-circle-outline"
+  | "help-circle-outline"
+  | "document-text"
+  | "open-outline"
+  | "arrow-back"
+  | "alert-circle-outline"
+  | "card-outline"
+  | "information-circle"
+  | "chatbox-ellipses"
+  | "chevron-forward"
+  | "close";
+
 const mapStatusCodeToString = (statusCode: number): string => {
   const statusMap: Record<number, string> = {
-    0: 'Pending',     // Pending quotation
-    1: 'Confirmed',   // Customer agreed to quotation
-    2: 'Denied'       // Customer rejected quotation
+    0: 'Pending',           // Pending quotation
+    1: 'Confirmed',         // Customer agreed to quotation
+    2: 'PendingChanged',    // Từ chối bảng báo giá
+    3: 'PendingCancel',     // Pending cancellation
+    4: 'Closed'             // Closed quotation
   };
   
   return statusMap[statusCode] || 'Unknown';
+};
+
+// Define your getStatusIcon function with the proper return type
+const getStatusIcon = (statusCode: number): IoniconsName => {
+  switch (statusCode) {
+    case 0: // Pending
+      return "time-outline";
+    case 1: // Confirmed
+      return "checkmark-circle-outline";
+    case 2: // PendingChanged
+      return "alert-circle-outline";
+    case 3: // PendingCancel
+      return "close-circle-outline";
+    case 4: // Closed
+      return "close";
+    default:
+      return "help-circle-outline";
+  }
 };
 
 const getStatusColor = (statusCode: number): string => {
@@ -82,26 +161,16 @@ const getStatusColor = (statusCode: number): string => {
       return '#ff9500'; // Orange
     case 1: // Confirmed
       return '#4caf50'; // Green
-    case 2: // Denied
+    case 2: // PendingChanged
       return '#ff3b30'; // Red
+    case 3: // PendingCancel
+      return '#ff6b6b'; // Light Red
+    case 4: // Closed
+      return '#8e8e93'; // Gray
     default:
       return '#8e8e93'; // Gray
   }
 };
-
-const getStatusIcon = (statusCode: number): string => {
-  switch (statusCode) {
-    case 0: // Pending
-      return 'time-outline';
-    case 1: // Confirmed
-      return 'checkmark-circle-outline';
-    case 2: // Denied
-      return 'close-circle-outline';
-    default:
-      return 'help-circle-outline';
-  }
-};
-
 const canQuotationBeConfirmed = (statusCode: number): boolean => {
   return statusCode === 0; // Only Pending quotations can be confirmed
 };
@@ -118,7 +187,11 @@ const QuotationDetailScreen: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [showPdfModal, setShowPdfModal] = useState<boolean>(false);
   const [pdfLoading, setPdfLoading] = useState<boolean>(true);
-
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [imageLoading, setImageLoading] = useState<boolean>(false);
+  const [showRejectReasonModal, setShowRejectReasonModal] = useState<boolean>(false);
+  const [rejectReason, setRejectReason] = useState<string>('');
+  
   useEffect(() => {
     fetchQuotationDetails();
   }, [quotationCode]);
@@ -129,7 +202,7 @@ const QuotationDetailScreen: React.FC = () => {
       setLoading(false);
       return;
     }
-
+  
     try {
       setLoading(true);
       setError('');
@@ -137,10 +210,30 @@ const QuotationDetailScreen: React.FC = () => {
       console.log('📘 Fetching quotation details for:', quotationCode);
       const response = await getQuotationDetailByCustomerAPI(quotationCode);
       
-      // The API returns the data directly, not wrapped in a success/data structure
+      // Log the response for debugging
+      console.log('📘 Response structure:', JSON.stringify(response, null, 2).substring(0, 200) + '...');
+      
       if (response && response.quotationCode) {
         console.log('📘 Found quotation data in response');
-        setQuotation(response);
+        
+        // Map any necessary fields for backward compatibility
+        const processedQuotation = {
+          ...response,
+          filePath: response.filePath || response.quotationFilePath,
+          materialDetails: response.materialDetails || response.materials,
+          constructionDetails: response.constructionDetails || response.constructionTasks
+        };
+        
+        // Calculate total cost if not provided
+        if (!processedQuotation.totalCost) {
+          processedQuotation.totalCost = 
+            (processedQuotation.materialCost || 0) + 
+            (processedQuotation.constructionCost || 0) +
+            (processedQuotation.productCost || 0);
+        }
+        
+        console.log('📘 Processed quotation data successfully');
+        setQuotation(processedQuotation);
       } else {
         console.log('📘 No usable data found, setting error');
         setError('Failed to load quotation details');
@@ -151,6 +244,134 @@ const QuotationDetailScreen: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+// Updated handleRemoveProduct function to use productId instead of id
+// Update the success condition in the handleRemoveProduct function
+const handleRemoveProduct = (productId: number) => {
+  // First check if quotation exists
+  if (!quotation) {
+    Alert.alert("Error", "Quotation details not available");
+    return;
+  }
+
+  // Find the product in the quotation, looking for a match with productId property
+  const product = quotation.productDetails.find(p => p.productId === productId);
+  
+  if (!product) {
+    Alert.alert("Error", "This product does not exist in the quotation");
+    return;
+  }
+  
+  // Proceed with confirmation and removal
+  Alert.alert(
+    "Remove Product",
+    "Are you sure you want to remove this product from the quotation?",
+    [
+      {
+        text: "Cancel",
+        style: "cancel"
+      },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            // Show loading indicator
+            setLoading(true);
+            
+            // Use the correct product ID field (productId instead of id)
+            console.log(`Attempting to remove product ${product.productId} from quotation ${quotation.quotationCode}`);
+            
+            // Call the API with the productId parameter
+            const result = await removeProductFromQuotationAPI(quotation.quotationCode, product.productId);
+            
+            // Check for success based on removedProduct property - this is the key change
+            // The API returns the removed product info on success, not a success flag
+            if (result && result.removedProduct) {
+              console.log("🟢 Product removal successful, updating UI");
+              
+              // Update the local state to reflect the change
+              setQuotation(prevQuotation => {
+                if (!prevQuotation) return prevQuotation;
+                
+                // Filter out the removed product using productId
+                const updatedProducts = prevQuotation.productDetails.filter(
+                  p => p.productId !== product.productId
+                );
+                
+                // If the API returns updated productCost, use that, otherwise calculate
+                const newProductCost = typeof result.productCost === 'number' 
+                  ? result.productCost
+                  : updatedProducts.reduce((sum, p) => sum + p.totalPrice, 0);
+                
+                // Update the quotation with new products and costs
+                return {
+                  ...prevQuotation,
+                  productDetails: updatedProducts,
+                  productCost: newProductCost,
+                  totalCost: (prevQuotation.materialCost || 0) + 
+                             (prevQuotation.constructionCost || 0) + 
+                             newProductCost
+                };
+              });
+              
+              // Show success message
+              Alert.alert("Success", "Product removed from quotation");
+            } else {
+              // Show error message - more detailed error reporting
+              const errorMessage = result.message || "Failed to remove product from quotation";
+              console.error("🔴 Product removal API error:", errorMessage);
+              Alert.alert("Error", errorMessage);
+            }
+          } catch (error: any) {
+            console.error("Error removing product:", error);
+            Alert.alert(
+              "Error", 
+              error.message || "Failed to remove product from quotation"
+            );
+          } finally {
+            // Hide loading indicator
+            setLoading(false);
+            
+            // Optionally refresh the quotation data to ensure UI is in sync with backend
+            fetchQuotationDetails();
+          }
+        }
+      }
+    ]
+  );
+};
+const handleRejectQuotation = async (): Promise<void> => {
+  if (!quotation) return;
+
+  // Show confirmation dialog
+  Alert.alert(
+    'Reject Quotation',
+    'Are you sure you want to reject this quotation?',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Reject',
+        style: 'destructive',
+        onPress: () => {
+          // Show modal for rejection reason
+          setShowRejectReasonModal(true);
+        }
+      }
+    ]
+  );
+};
+  // Function to handle image preview
+  const handleImagePreview = (imageUrl: string) => {
+    if (imageUrl) {
+      setSelectedImage(imageUrl);
+      setImageLoading(true);
+    }
+  };
+
+  // Function to close image preview
+  const closeImagePreview = () => {
+    setSelectedImage(null);
   };
   
   const createPdfHtml = (pdfUrl: string) => {
@@ -476,7 +697,14 @@ const QuotationDetailScreen: React.FC = () => {
   };
   
   const openQuotationFile = () => {
-    if (!quotation || !quotation.quotationFilePath) return;
+    // Check both possible field names for the file path
+    const pdfPath = quotation?.filePath || quotation?.quotationFilePath;
+    
+    if (!quotation || !pdfPath) {
+      Alert.alert("Error", "No document available for this quotation");
+      return;
+    }
+    
     setShowPdfModal(true);
     setPdfLoading(true);
   };
@@ -485,26 +713,49 @@ const QuotationDetailScreen: React.FC = () => {
     if (!quotation) return;
   
     Alert.alert(
-      'Confirm Quotation',
-      'Are you sure you want to confirm this quotation?',
+      'Accept Quotation',
+      'Are you sure you want to accept this quotation?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Confirm',
+          text: 'Accept',
           onPress: async () => {
             try {
               setLoading(true);
-              const result = await confirmQuotationAPI(quotation.quotationCode);
+              console.log(`Attempting to accept quotation: ${quotation.quotationCode}`);
               
+              const result = await confirmQuotationAPI(quotation.quotationCode);
+              console.log(`Accept result:`, result);
+              
+              // Special handling for null/undefined result
+              if (result === null || result === undefined) {
+                console.log("API result is null/undefined, treating as success");
+                Alert.alert('Success', 'Quotation accepted successfully');
+                fetchQuotationDetails();
+                return;
+              }
+              
+              // Special handling for HTTP result without success property
+              if (result && typeof result === 'object' && !('success' in result)) {
+                console.log("API result doesn't have success property, checking status code");
+                // Assume success based on result being an object without error message
+                if (!result.message && !result.error) {
+                  Alert.alert('Success', 'Quotation accepted successfully');
+                  fetchQuotationDetails();
+                  return;
+                }
+              }
+              
+              // Normal handling for standard result
               if (result && result.success) {
-                Alert.alert('Success', result.message || 'Quotation confirmed successfully');
+                Alert.alert('Success', result.message || 'Quotation accepted successfully');
                 fetchQuotationDetails();
               } else {
-                Alert.alert('Error', (result && result.message) || 'Failed to confirm quotation');
+                Alert.alert('Error', (result && result.message) || 'Failed to accept quotation');
               }
             } catch (err: any) {
-              console.error('Error confirming quotation:', err);
-              Alert.alert('Error', err.message || 'Failed to confirm quotation. Please try again.');
+              console.error('Error accepting quotation:', err);
+              Alert.alert('Error', err.message || 'Failed to accept quotation. Please try again.');
             } finally {
               setLoading(false);
             }
@@ -513,23 +764,8 @@ const QuotationDetailScreen: React.FC = () => {
       ]
     );
   };
-  const handleExternalOpen = async () => {
-    if (!quotation || !quotation.quotationFilePath) return;
-    
-    try {
-      const supported = await Linking.canOpenURL(quotation.quotationFilePath);
-      
-      if (supported) {
-        await Linking.openURL(quotation.quotationFilePath);
-      } else {
-        Alert.alert('Error', 'Cannot open the quotation file');
-      }
-    } catch (error) {
-      console.error('Error opening quotation file:', error);
-      Alert.alert('Error', 'Failed to open quotation file');
-    }
-  };
-
+  
+  
   const renderHeader = (): React.ReactElement => (
     <View style={[styles.header, { borderBottomColor: colors.border }]}>
       <TouchableOpacity
@@ -593,10 +829,12 @@ const QuotationDetailScreen: React.FC = () => {
             </View>
           )}
           
-          {quotation && quotation.quotationFilePath && (
+          {quotation && (quotation.filePath || quotation.quotationFilePath) && (
             <WebView
               originWhitelist={['*']}
-              source={{ html: createPdfHtml(quotation.quotationFilePath) }}
+              source={{ 
+                html: createPdfHtml(quotation.filePath || quotation.quotationFilePath || '') 
+              }}
               style={styles.webView}
               onLoadStart={() => setPdfLoading(true)}
               onLoadEnd={() => setPdfLoading(false)}
@@ -615,6 +853,43 @@ const QuotationDetailScreen: React.FC = () => {
       </View>
     </Modal>
   );
+  
+  // Image preview modal
+  const renderImageModal = (): React.ReactElement => (
+    <Modal
+      visible={selectedImage !== null}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={closeImagePreview}
+      statusBarTranslucent={true}
+    >
+      <View style={styles.imageModalContainer}>
+        <TouchableOpacity
+          style={styles.closeModalButton}
+          onPress={closeImagePreview}
+        >
+          <Ionicons name="close" size={24} color="white" />
+        </TouchableOpacity>
+        
+        {imageLoading && (
+          <ActivityIndicator 
+            size="large" 
+            color={QUOTATION_COLOR} 
+            style={{ position: 'absolute' }} 
+          />
+        )}
+        
+        {selectedImage && (
+          <Image
+            source={{ uri: selectedImage }}
+            style={styles.fullImage}
+            onLoadStart={() => setImageLoading(true)}
+            onLoadEnd={() => setImageLoading(false)}
+          />
+        )}
+      </View>
+    </Modal>
+  );
 
   // Handle different view states
   if (loading) {
@@ -627,7 +902,11 @@ const QuotationDetailScreen: React.FC = () => {
 
   const statusColor = getStatusColor(quotation.status);
   const statusText = mapStatusCodeToString(quotation.status);
-  const depositAmount = quotation.totalCost * (quotation.depositPercentage / 100);
+  const totalCost = quotation.totalCost || 
+                   ((quotation.materialCost || 0) + 
+                    (quotation.constructionCost || 0) + 
+                    (quotation.productCost || 0));
+  const depositAmount = totalCost * (quotation.depositPercentage / 100);
   const canConfirm = canQuotationBeConfirmed(quotation.status);
 
   return (
@@ -644,9 +923,7 @@ const QuotationDetailScreen: React.FC = () => {
             </Text>
             <View style={[styles.statusBadge, { backgroundColor: `${statusColor}20` }]}>
               <Ionicons
-                name={quotation.status === 3 ? "checkmark-circle-outline" : 
-                       quotation.status === 4 ? "close-circle-outline" : 
-                       "document-text-outline"}
+                name={getStatusIcon(quotation.status)}
                 size={14}
                 color={statusColor}
                 style={styles.statusIcon}
@@ -683,119 +960,241 @@ const QuotationDetailScreen: React.FC = () => {
             </View>
           </View>
         </View>
+{/* Price summary section */}
+<View style={[styles.section, { backgroundColor: colors.card }]}>
+  <Text style={[styles.sectionTitle, { color: colors.text }]}>Price Summary</Text>
+  
+  <View style={styles.costSummaryContainer}>
+    {/* Material Cost */}
+    <View style={styles.costRow}>
+      <Text style={[styles.costLabel, { color: colors.textSecondary }]}>Material Cost:</Text>
+      <Text style={[styles.costValue, { color: colors.text }]}>
+        {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(quotation.materialCost || 0)}
+      </Text>
+    </View>
 
-        {/* Price summary section */}
-        <View style={[styles.section, { backgroundColor: colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Price Summary</Text>
-          
-          <View style={styles.costRow}>
-            <Text style={[styles.costLabel, { color: colors.textSecondary }]}>Material Cost:</Text>
-            <Text style={[styles.costValue, { color: colors.text }]}>
-              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(quotation.materialCost)}
-            </Text>
-          </View>
-          
-          <View style={styles.costRow}>
-            <Text style={[styles.costLabel, { color: colors.textSecondary }]}>Construction Cost:</Text>
-            <Text style={[styles.costValue, { color: colors.text }]}>
-              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(quotation.constructionCost)}
-            </Text>
-          </View>
-          
-          <View style={[styles.divider, { backgroundColor: colors.border }]} />
-          
-          <View style={styles.costRow}>
-            <Text style={[styles.totalLabel, { color: colors.text }]}>Total:</Text>
-            <Text style={[styles.totalValue, { color: colors.text }]}>
-              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(quotation.totalCost)}
-            </Text>
-          </View>
-          
-          <View style={styles.costRow}>
-            <Text style={[styles.costLabel, { color: colors.textSecondary }]}>Deposit ({quotation.depositPercentage}%):</Text>
-            <Text style={[styles.costValue, { color: colors.text }]}>
-              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(depositAmount)}
-            </Text>
-          </View>
+    {/* Construction Cost */}
+    <View style={styles.costRow}>
+      <Text style={[styles.costLabel, { color: colors.textSecondary }]}>Construction Cost:</Text>
+      <Text style={[styles.costValue, { color: colors.text }]}>
+        {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(quotation.constructionCost || 0)}
+      </Text>
+    </View>
+
+    {/* Product Cost - Show only if there are products */}
+    {quotation.productCost > 0 && (
+      <View style={styles.costRow}>
+        <Text style={[styles.costLabel, { color: colors.textSecondary }]}>Product Cost:</Text>
+        <Text style={[styles.costValue, { color: colors.text }]}>
+          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(quotation.productCost || 0)}
+        </Text>
+      </View>
+    )}
+
+    {/* Divider line before total */}
+    <View style={[styles.costDivider, { backgroundColor: colors.border }]} />
+
+    {/* Total Cost */}
+    <View style={styles.totalCostRow}>
+      <Text style={[styles.totalCostLabel, { color: colors.text }]}>Total Cost:</Text>
+      <Text style={[styles.totalCostValue, { color: colors.primary }]}>
+        {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
+          (quotation.materialCost || 0) + 
+          (quotation.constructionCost || 0) + 
+          (quotation.productCost || 0)
+        )}
+      </Text>
+    </View>
+  </View>
+</View>
+
+{/* Materials section */}
+<View style={[styles.section, { backgroundColor: colors.card }]}>
+  <Text style={[styles.sectionTitle, { color: colors.text }]}>Materials</Text>
+  
+  {quotation.materialDetails && quotation.materialDetails.length > 0 ? (
+    <>
+      {/* Table header */}
+      <View style={styles.tableHeader}>
+        <Text style={[styles.tableHeaderText, styles.materialNameColumn, { color: colors.textSecondary }]}>
+          MATERIAL NAME
+        </Text>
+        <Text style={[styles.tableHeaderText, styles.quantityColumn, { color: colors.textSecondary }]}>
+          QUANTITY
+        </Text>
+        <Text style={[styles.tableHeaderText, styles.costColumn, { color: colors.textSecondary }]}>
+          COST
+        </Text>
+        <Text style={[styles.tableHeaderText, styles.totalCostColumn, { color: colors.textSecondary }]}>
+          TOTAL COST
+        </Text>
+      </View>
+
+      {/* Table rows */}
+      {quotation.materialDetails.map((material, index) => (
+        <View 
+          key={`material-${material.id || index}`} 
+          style={[
+            styles.tableRow,
+            index === quotation.materialDetails.length - 1 ? {} : 
+            { borderBottomWidth: 1, borderBottomColor: colors.border }
+          ]}
+        >
+          <Text style={[styles.tableCell, styles.materialNameColumn, { color: colors.text }]}>
+            {material.materialName}
+          </Text>
+          <Text style={[styles.tableCell, styles.quantityColumn, { color: colors.text }]}>
+            {material.quantity}
+          </Text>
+          <Text style={[styles.tableCell, styles.costColumn, { color: colors.text }]}>
+            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(material.cost)}
+          </Text>
+          <Text style={[styles.tableCell, styles.totalCostColumn, { color: colors.text }]}>
+            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(material.totalCost)}
+          </Text>
         </View>
+      ))}
+    </>
+  ) : (
+    <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
+      No materials listed for this quotation
+    </Text>
+  )}
+</View>
 
-        {/* Materials section */}
-        <View style={[styles.section, { backgroundColor: colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Materials</Text>
-          
-          {quotation.materials.length > 0 ? (
-            quotation.materials.map((material, index) => (
-              <View 
-                key={`material-${material.id || index}`} 
-                style={[
-                  styles.itemContainer, 
-                  index === quotation.materials.length - 1 ? {} : { borderBottomWidth: 1, borderBottomColor: colors.border }
-                ]}
-              >
-                <View style={styles.itemHeader}>
-                  <Text style={[styles.itemName, { color: colors.text }]}>
-                    {material.materialName}
-                  </Text>
-                  <Text style={[styles.itemQuantity, { color: colors.textSecondary }]}>
-                    x{material.quantity}
-                  </Text>
-                </View>
-                
-                <View style={styles.itemCostContainer}>
-                  <Text style={[styles.itemUnitCost, { color: colors.textSecondary }]}>
-                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(material.cost)} each
-                  </Text>
-                  <Text style={[styles.itemTotalCost, { color: colors.text }]}>
-                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(material.totalCost)}
-                  </Text>
-                </View>
-              </View>
-            ))
+{/* Construction Tasks section (Labor) */}
+<View style={[styles.section, { backgroundColor: colors.card }]}>
+  <Text style={[styles.sectionTitle, { color: colors.text }]}>Labour Tasks</Text>
+  
+  {quotation.constructionDetails && quotation.constructionDetails.length > 0 ? (
+    <>
+      {/* Table header */}
+      <View style={styles.tableHeader}>
+        <Text style={[styles.tableHeaderText, styles.taskNameColumn, { color: colors.textSecondary }]}>
+          TASK NAME
+        </Text>
+        <Text style={[styles.tableHeaderText, styles.unitColumn, { color: colors.textSecondary }]}>
+          UNIT
+        </Text>
+        <Text style={[styles.tableHeaderText, styles.taskCostColumn, { color: colors.textSecondary }]}>
+          COST
+        </Text>
+      </View>
+
+      {/* Table rows */}
+      {quotation.constructionDetails.map((task, index) => (
+        <View 
+          key={`task-${task.id || index}`} 
+          style={[
+            styles.tableRow,
+            index === quotation.constructionDetails.length - 1 ? {} : 
+            { borderBottomWidth: 1, borderBottomColor: colors.border }
+          ]}
+        >
+          <Text style={[styles.tableCell, styles.taskNameColumn, { color: colors.text }]}>
+            {task.taskName}
+          </Text>
+          <Text style={[styles.tableCell, styles.unitColumn, { color: colors.text }]}>
+            {task.unit}
+          </Text>
+          <Text style={[styles.tableCell, styles.taskCostColumn, { color: colors.text }]}>
+            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(task.cost)}
+          </Text>
+        </View>
+      ))}
+    </>
+  ) : (
+    <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
+      No construction tasks listed for this quotation
+    </Text>
+  )}
+</View>
+
+      
+
+{/* Compact Products section */}
+{quotation.productDetails && quotation.productDetails.length > 0 && (
+  <View style={[styles.section, { backgroundColor: colors.card }]}>
+    <View style={styles.sectionHeaderRow}>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>Products</Text>
+      <Text style={[styles.productsTotalAmount, { color: colors.text }]}>
+        Total: {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(quotation.productCost || 0)}
+      </Text>
+    </View>
+    
+    {quotation.productDetails.map((product, index) => (
+      <View 
+        key={`product-${product.productId || index}`} 
+        style={[
+          styles.compactProductItem, 
+          index === quotation.productDetails.length - 1 ? {} : { borderBottomWidth: 1, borderBottomColor: colors.border }
+        ]}
+      >
+        <View style={styles.compactProductRow}>
+          {/* Product image (if available) */}
+          {product.image ? (
+            <TouchableOpacity 
+              activeOpacity={0.7}
+              onPress={() => handleImagePreview(product.image)}
+              style={styles.compactImageContainer}
+            >
+              <Image 
+                source={{ uri: product.image }}
+                style={styles.compactProductImage}
+                resizeMode="cover"
+              />
+            </TouchableOpacity>
           ) : (
-            <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
-              No materials listed for this quotation
-            </Text>
+            <View style={styles.compactImagePlaceholder}>
+              <Ionicons name="image-outline" size={18} color={colors.textSecondary} />
+            </View>
           )}
-        </View>
-
-        {/* Construction details section */}
-        <View style={[styles.section, { backgroundColor: colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Construction Tasks</Text>
           
-          {quotation.constructionTasks.length > 0 ? (
-            quotation.constructionTasks.map((task, index) => (
-              <View 
-                key={`task-${task.id || index}`}
-                style={[
-                  styles.itemContainer, 
-                  index === quotation.constructionTasks.length - 1 ? {} : { borderBottomWidth: 1, borderBottomColor: colors.border }
-                ]}
-              >
-                <View style={styles.itemHeader}>
-                  <Text style={[styles.itemName, { color: colors.text }]}>
-                    {task.taskName}
-                  </Text>
-                  <Text style={[styles.itemQuantity, { color: colors.textSecondary }]}>
-                    {task.area} {task.unit}
-                  </Text>
-                </View>
-                
-                <View style={styles.itemCostContainer}>
-                  <Text style={[styles.itemTotalCost, { color: colors.text }]}>
-                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(task.cost)}
-                  </Text>
-                </View>
-              </View>
-            ))
-          ) : (
-            <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
-              No construction tasks listed for this quotation
+          {/* Product number and name */}
+          <View style={styles.compactProductInfo}>
+            <Text style={[styles.compactProductNumber, { color: colors.textSecondary }]}>
+              {index + 1}
             </Text>
-          )}
+            <Text style={[styles.compactProductName, { color: colors.text }]} numberOfLines={1}>
+              {product.productName}
+            </Text>
+            <Text style={[styles.compactProductQuantity, { color: colors.textSecondary }]}>
+              Quantity: {product.quantity}
+            </Text>
+          </View>
+          
+          {/* Product price */}
+          <View style={styles.compactPriceColumn}>
+            <Text style={[styles.compactPriceLabel, { color: colors.textSecondary }]}>
+              Unit Price:
+            </Text>
+            <Text style={[styles.compactPrice, { color: colors.text }]}>
+              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(product.unitPrice)}
+            </Text>
+            <Text style={[styles.compactPriceLabel, { color: colors.textSecondary, marginTop: 4 }]}>
+              Total:
+            </Text>
+            <Text style={[styles.compactPriceTotal, { color: colors.text }]}>
+              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(product.totalPrice)}
+            </Text>
+          </View>
+          
+          {/* Delete button */}
+          <TouchableOpacity 
+            style={styles.deleteButton}
+            onPress={() => handleRemoveProduct(product.productId)}
+            hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+          >
+            <Ionicons name="trash-outline" size={18} color="#FF6B6B" />
+          </TouchableOpacity>
         </View>
+      </View>
+    ))}
+  </View>
+)}
 
         {/* Quotation file button */}
-        {quotation.quotationFilePath ? (
+        {(quotation.filePath || quotation.quotationFilePath) ? (
           <TouchableOpacity 
             style={[styles.fileButton, { backgroundColor: colors.card }]}
             onPress={openQuotationFile}
@@ -815,174 +1214,166 @@ const QuotationDetailScreen: React.FC = () => {
             </Text>
           </View>
         )}
-
-      {/* Action buttons */}
+{/* Rejection Reason Modal */}
+<Modal
+  visible={showRejectReasonModal}
+  transparent={true}
+  animationType="fade"
+  onRequestClose={() => setShowRejectReasonModal(false)}
+>
+  <View style={styles.modalOverlay}>
+    <View style={[styles.modalContainer, { backgroundColor: colors.card }]}>
+      <Text style={[styles.modalTitle, { color: colors.text }]}>Rejection Reason</Text>
+      <Text style={[styles.modalDescription, { color: colors.textSecondary }]}>
+        Please provide a reason for rejection (optional):
+      </Text>
+      
+      <TextInput
+        style={[styles.rejectReasonInput, { 
+          color: colors.text,
+          borderColor: colors.border,
+          backgroundColor: colors.background
+        }]}
+        value={rejectReason}
+        onChangeText={setRejectReason}
+        multiline={true}
+        numberOfLines={3}
+        placeholder="Enter reason here..."
+        placeholderTextColor={colors.textSecondary}
+      />
+      
+      <View style={styles.modalButtonsContainer}>
+        <TouchableOpacity
+          style={[styles.modalButton, styles.cancelButton, { borderColor: colors.border }]}
+          onPress={() => {
+            setShowRejectReasonModal(false);
+            setRejectReason('');
+          }}
+        >
+          <Text style={[styles.cancelButtonText, { color: colors.text }]}>Cancel</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.modalButton, styles.confirmRejectButton]}
+          // Modified onPress handler for the Confirm Rejection button
+onPress={async () => {
+  try {
+    setShowRejectReasonModal(false);
+    setLoading(true);
+    const result = await rejectQuotationAPI(quotation.quotationCode, rejectReason);
+    
+    // Handle null response case
+    if (result === null) {
+      console.log("API returned null response, treating as success");
+      Alert.alert('Success', 'Quotation rejected successfully');
+      setRejectReason('');
+      fetchQuotationDetails(); // Refresh the data
+      return;
+    }
+    
+    // Handle normal response case
+    if (result && result.success) {
+      Alert.alert('Success', result.message || 'Quotation rejected successfully');
+      setRejectReason('');
+      fetchQuotationDetails();
+    } else {
+      Alert.alert('Error', (result && result.message) || 'Failed to reject quotation');
+    }
+  } catch (err: any) {
+    console.error('Error rejecting quotation:', err);
+    Alert.alert('Error', err.message || 'Failed to reject quotation. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+}}
+        >
+          <Text style={styles.confirmRejectButtonText}>Confirm Rejection</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </View>
+</Modal>
 {canConfirm && (
-  <TouchableOpacity
-    style={styles.confirmButton}
-    onPress={handleConfirmQuotation}
-    activeOpacity={0.8}
-  >
-    <Text style={styles.confirmButtonText}>Confirm Quotation</Text>
-  </TouchableOpacity>
+  <View style={styles.actionButtonsContainer}>
+    <TouchableOpacity
+      style={styles.acceptButton}
+      onPress={handleConfirmQuotation}
+      activeOpacity={0.8}
+    >
+      <Text style={styles.buttonText}>Accept</Text>
+    </TouchableOpacity>
+    
+    <TouchableOpacity
+      style={styles.rejectButton}
+      onPress={handleRejectQuotation}
+      activeOpacity={0.8}
+    >
+      <Text style={styles.buttonText}>Reject</Text>
+    </TouchableOpacity>
+  </View>
+)}
+       
+
+        {/* Contact Provider */}
+        <TouchableOpacity 
+          style={[styles.contactButton, { backgroundColor: colors.card }]}
+          activeOpacity={0.7}
+          onPress={() => {
+            // Implement contact functionality here
+            Alert.alert(
+              "Contact Provider",
+              "Would you like to contact the provider?",
+              [
+                {
+                  text: "Cancel",
+                  style: "cancel"
+                },
+               
+                { 
+                  text: "Message", 
+                  onPress: () => {
+                    // Navigate to messaging screen
+                    router.push({
+                      pathname: "/chat",
+                      params: { providerId: quotation.provider.id.toString() }
+                    });
+                  }
+                }
+              ]
+            );
+          }}
+        >
+          <Ionicons name="chatbox-ellipses" size={24} color={QUOTATION_COLOR} />
+          <Text style={[styles.contactButtonText, { color: colors.text }]}>
+            Contact Provider
+          </Text>
+          <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
+
+        {/* Additional Info */}
+        <View style={[styles.infoContainer, { backgroundColor: `${QUOTATION_COLOR}15` }]}>
+          <Ionicons name="information-circle" size={24} color={QUOTATION_COLOR} />
+          <Text style={[styles.infoText, { color: colors.text }]}>
+            This quotation is valid for 30 days from the creation date. Please contact the provider if you have any questions or need modifications.
+          </Text>
+        </View>
+        {quotation && (
+  <ProductCatalog 
+    quotationCode={quotation.quotationCode}
+    onProductAdded={fetchQuotationDetails}
+  />
 )}
 
-{/* NEW SECTION: Payment Information */}
-<View style={[styles.section, { backgroundColor: colors.card }]}>
-  <Text style={[styles.sectionTitle, { color: colors.text }]}>Payment Information</Text>
-  
-  <View style={styles.paymentInfoRow}>
-    <Ionicons name="card-outline" size={20} color={QUOTATION_COLOR} />
-    <Text style={[styles.paymentInfoLabel, { color: colors.textSecondary }]}>Payment Method:</Text>
-    <Text style={[styles.paymentInfoValue, { color: colors.text }]}>Bank Transfer</Text>
-  </View>
-  
-  <View style={styles.paymentInfoRow}>
-    <Ionicons name="calendar-outline" size={20} color={QUOTATION_COLOR} />
-    <Text style={[styles.paymentInfoLabel, { color: colors.textSecondary }]}>Due Date:</Text>
-    <Text style={[styles.paymentInfoValue, { color: colors.text }]}>
-      {new Date(new Date(quotation.createdAt).getTime() + 7*24*60*60*1000).toLocaleDateString()}
-    </Text>
-  </View>
-  
-  <View style={styles.paymentInfoRow}>
-    <Ionicons name="alert-circle-outline" size={20} color={QUOTATION_COLOR} />
-    <Text style={[styles.paymentInfoLabel, { color: colors.textSecondary }]}>Note:</Text>
-    <Text style={[styles.paymentInfoValue, { color: colors.text }]}>
-      Please include the quotation code as reference
-    </Text>
-  </View>
-  
-  <View style={[styles.divider, { backgroundColor: colors.border, marginVertical: 12 }]} />
-  
-  <Text style={[styles.paymentInstructions, { color: colors.textSecondary }]}>
-    After confirming the quotation, you will need to pay a deposit of {quotation.depositPercentage}% 
-    ({new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(depositAmount)}) 
-    to start the project.
-  </Text>
-</View>
-
-{/* NEW SECTION: Timeline */}
-<View style={[styles.section, { backgroundColor: colors.card }]}>
-  <Text style={[styles.sectionTitle, { color: colors.text }]}>Project Timeline</Text>
-  
-  <View style={styles.timelineContainer}>
-    <View style={styles.timelineItem}>
-      <View style={[styles.timelineCircle, { backgroundColor: QUOTATION_COLOR }]}>
-        <Text style={styles.timelineNumber}>1</Text>
-      </View>
-      <View style={styles.timelineContent}>
-        <Text style={[styles.timelineTitle, { color: colors.text }]}>Quotation Approval</Text>
-        <Text style={[styles.timelineDescription, { color: colors.textSecondary }]}>
-          Review and confirm the quotation
-        </Text>
-      </View>
-    </View>
-    
-    <View style={[styles.timelineConnector, { backgroundColor: colors.border }]} />
-    
-    <View style={styles.timelineItem}>
-      <View style={[styles.timelineCircle, { backgroundColor: colors.border }]}>
-        <Text style={styles.timelineNumber}>2</Text>
-      </View>
-      <View style={styles.timelineContent}>
-        <Text style={[styles.timelineTitle, { color: colors.text }]}>Deposit Payment</Text>
-        <Text style={[styles.timelineDescription, { color: colors.textSecondary }]}>
-          Pay {quotation.depositPercentage}% deposit to start the project
-        </Text>
-      </View>
-    </View>
-    
-    <View style={[styles.timelineConnector, { backgroundColor: colors.border }]} />
-    
-    <View style={styles.timelineItem}>
-      <View style={[styles.timelineCircle, { backgroundColor: colors.border }]}>
-        <Text style={styles.timelineNumber}>3</Text>
-      </View>
-      <View style={styles.timelineContent}>
-        <Text style={[styles.timelineTitle, { color: colors.text }]}>Contract Signing</Text>
-        <Text style={[styles.timelineDescription, { color: colors.textSecondary }]}>
-          Sign the contract to formalize the agreement
-        </Text>
-      </View>
-    </View>
-    
-    <View style={[styles.timelineConnector, { backgroundColor: colors.border }]} />
-    
-    <View style={styles.timelineItem}>
-      <View style={[styles.timelineCircle, { backgroundColor: colors.border }]}>
-        <Text style={styles.timelineNumber}>4</Text>
-      </View>
-      <View style={styles.timelineContent}>
-        <Text style={[styles.timelineTitle, { color: colors.text }]}>Project Execution</Text>
-        <Text style={[styles.timelineDescription, { color: colors.textSecondary }]}>
-          Work begins according to the agreed specifications
-        </Text>
-      </View>
-    </View>
-  </View>
-</View>
-{/* NEW SECTION: Contact Provider */}
-<TouchableOpacity 
-  style={[styles.contactButton, { backgroundColor: colors.card }]}
-  activeOpacity={0.7}
-  onPress={() => {
-    // Implement contact functionality here
-    Alert.alert(
-      "Contact Provider",
-      "Would you like to contact the provider?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel"
-        },
-        { 
-          text: "Call", 
-          onPress: () => {
-            // Check if provider exists and has phone property before accessing
-            const providerPhone = quotation?.provider?.phone;
-            if (providerPhone) {
-              Linking.openURL(`tel:${providerPhone}`);
-            } else {
-              Alert.alert("Contact Information", "Provider phone number is not available");
-            }
-          }
-        },
-        { 
-          text: "Message", 
-          onPress: () => {
-            // Navigate to messaging screen
-            router.push({
-              pathname: "/chat",
-              params: { providerId: quotation.provider.id.toString() }
-            });
-          }
-        }
-      ]
-    );
-  }}
->
-  <Ionicons name="chatbox-ellipses" size={24} color={QUOTATION_COLOR} />
-  <Text style={[styles.contactButtonText, { color: colors.text }]}>
-    Contact Provider
-  </Text>
-  <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-</TouchableOpacity>
-
-{/* NEW SECTION: Additional Info */}
-<View style={[styles.infoContainer, { backgroundColor: `${QUOTATION_COLOR}15` }]}>
-  <Ionicons name="information-circle" size={24} color={QUOTATION_COLOR} />
-  <Text style={[styles.infoText, { color: colors.text }]}>
-    This quotation is valid for 30 days from the creation date. Please contact the provider if you have any questions or need modifications.
-  </Text>
-</View>
-
-<View style={styles.bottomSpace} />
+        <View style={styles.bottomSpace} />
         
       </ScrollView>
 
       {/* PDF Viewer Modal */}
       {renderPdfModal()}
+      
+      {/* Image Viewer Modal */}
+      {renderImageModal()}
+
     </SafeAreaView>
   );
 };
@@ -1072,12 +1463,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 10,
   },
-  costRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
+
   costLabel: {
     fontSize: 14,
   },
@@ -1280,7 +1666,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
-  // Add these new styles to the StyleSheet
   // Payment Information styles
   paymentInfoRow: {
     flexDirection: 'row',
@@ -1300,49 +1685,6 @@ const styles = StyleSheet.create({
   paymentInstructions: {
     fontSize: 14,
     lineHeight: 20,
-  },
-  
-  // Timeline styles
-  timelineContainer: {
-    marginTop: 5,
-  },
-  timelineItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 5,
-  },
-  timelineCircle: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-    marginTop: 2,
-  },
-  timelineNumber: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  timelineContent: {
-    flex: 1,
-    paddingVertical: 3,
-  },
-  timelineTitle: {
-    fontSize: 15,
-    fontWeight: '500',
-    marginBottom: 2,
-  },
-  timelineDescription: {
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  timelineConnector: {
-    width: 2,
-    height: 20,
-    marginLeft: 12,
-    marginVertical: 2,
   },
   
   // Contact button styles
@@ -1379,6 +1721,281 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     flex: 1,
     marginLeft: 10,
+  },
+  
+  // Image preview modal styles
+  imageModalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullImage: {
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').width, // Square aspect ratio
+    resizeMode: 'contain',
+  },
+  closeModalButton: {
+    position: 'absolute',
+    top: 40,
+    right: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  compactProductItem: {
+    paddingVertical: 10,
+    marginBottom: 5,
+  },
+  compactProductRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  compactImageContainer: {
+    marginRight: 10,
+  },
+  compactProductImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 4,
+    backgroundColor: '#f5f5f5',
+  },
+  compactImagePlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 4,
+    backgroundColor: '#f5f5f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  compactProductInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  compactProductNumber: {
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  compactProductName: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  compactProductQuantity: {
+    fontSize: 12,
+  },
+  compactPriceColumn: {
+    alignItems: 'flex-end',
+    minWidth: 100,
+  },
+  compactPriceLabel: {
+    fontSize: 10,
+  },
+  compactPrice: {
+    fontSize: 12,
+  },
+  compactPriceTotal: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  deleteButton: {
+    padding: 5,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  productsTotalAmount: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+  },
+  acceptButton: {
+    flex: 1,
+    backgroundColor: '#4caf50', // Green
+    padding: 15,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginRight: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  rejectButton: {
+    flex: 1,
+    backgroundColor: '#ff3b30', // Red
+    padding: 15,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginLeft: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContainer: {
+    width: '100%',
+    borderRadius: 12,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+
+  modalDescription: {
+    fontSize: 14,
+    marginBottom: 15,
+  },
+  rejectReasonInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    textAlignVertical: 'top',
+    minHeight: 80,
+    marginBottom: 20,
+  },
+  modalButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  modalButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButton: {
+    borderWidth: 1,
+    marginRight: 8,
+  },
+  confirmRejectButton: {
+    backgroundColor: '#ff3b30',
+    marginLeft: 8,
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  confirmRejectButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  costSummaryContainer: {
+    paddingTop: 10,
+  },
+  costRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  costDivider: {
+    height: 1,
+    marginVertical: 12,
+  },
+  totalCostRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  totalCostLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  totalCostValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: PRIMARY_COLOR,
+  },
+  
+  // Table styles
+  tableHeader: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  tableHeaderText: {
+    fontSize: 10,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+  },
+  tableRow: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  tableCell: {
+    fontSize: 14,
+  },
+  
+  // Column widths for Materials table
+  materialNameColumn: {
+    flex: 3,
+    paddingRight: 8,
+  },
+  quantityColumn: {
+    flex: 1,
+    textAlign: 'center',
+  },
+  costColumn: {
+    flex: 2,
+    textAlign: 'right',
+    paddingHorizontal: 4,
+  },
+  totalCostColumn: {
+    flex: 2,
+    textAlign: 'right',
+  },
+  
+  // Column widths for Labour Tasks table
+  taskNameColumn: {
+    flex: 3,
+    paddingRight: 8,
+  },
+  unitColumn: {
+    flex: 1,
+    textAlign: 'center',
+  },
+  taskCostColumn: {
+    flex: 2,
+    textAlign: 'right',
   },
 });
 

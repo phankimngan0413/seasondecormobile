@@ -68,7 +68,6 @@ export const getCartAPI = async (userId: number) => {
   const apiClient = await initApiClient();
   try {
     const response = await apiClient.get(`/api/Cart/getCart/${userId}`);
-    console.log("🟢 API Response:", response.data);
     return response.data;
   } catch (error: any) {
     console.error("🔴 Get Cart API Error:", error.response?.status, error.response?.data);

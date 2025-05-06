@@ -133,7 +133,6 @@ export const getProductsByProviderAPI = async (
       }
     });
     
-    console.log("🟢 Products by Provider API Response:", response.data);
     
     // ✅ Handle the actual response structure with data and totalCount
     if (response.data && typeof response.data === "object") {

@@ -156,20 +156,13 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
   const fetchDecorDetails = async (id: string) => {
     try {
       setLoading(true);
-      setError("");
+      const result = await fetchDecorServiceById(Number(id));
       
-      // Use our wrapper function instead of the direct API call
-      const apiResult = await fetchDecorServiceById(Number(id));
-      
-      if (apiResult && apiResult.data) {
-        console.log("Decor detail data fetched successfully");
-        setDecorDetail(apiResult.data);
-      } else {
-        setError("Invalid response format from server.");
+      if (result?.data) {
+        setDecorDetail(result.data);
       }
-    } catch (err: any) {
-      console.error("Error fetching decor details:", err);
-      setError(err.message || "Failed to load decor details.");
+    } catch (err) {
+      console.log("Decor service fetch failed");
     } finally {
       setLoading(false);
     }

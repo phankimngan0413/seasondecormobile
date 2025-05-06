@@ -1,8 +1,8 @@
 import { initApiClient } from "@/config/axiosConfig"; // Assuming your axiosConfig is correctly set up
-import { LogBox } from "react-native";
+// import { LogBox } from "react-native";
 
 // Ignoring Axios 400 Errors for cleaner logs
-LogBox.ignoreLogs(["AxiosError: Request failed with status code 400"]);
+// LogBox.ignoreLogs(["AxiosError: Request failed with status code 400"]);
 
 
 interface IAddContactResponse {
@@ -63,10 +63,6 @@ export const getContactsAPI = async (): Promise<IContact[]> => {
   try {
     const response = await apiClient.get(url); // Fetching the data
 
-    // Log the full response for debugging
-    console.log("Full API Response:", response);
-
-    // Check if response contains 'data' and it's an array
     if (response && Array.isArray(response.data)) {
       return response.data; // Return the valid array of contacts
     } else {

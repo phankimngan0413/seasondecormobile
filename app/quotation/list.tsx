@@ -23,8 +23,14 @@ import {
 const PRIMARY_COLOR = "#5fc1f1";
 const QUOTATION_COLOR = "#34c759"; // Green color for quotation elements
 
-// Define quotation status codes
-type QuotationStatusCode = 0 | 1 | 2 | 3 | 4;
+// Updated quotation status codes as specified
+enum QuotationStatusCode {
+  Pending = 0,             // Pending quotation (unchanged)
+  Confirmed = 1,           // Customer agreed to quotation (unchanged)
+  PendingChanged = 2,      // Từ chối bảng báo giá (previously Denied)
+  PendingCancel = 3,       // New status
+  Closed = 4               // New status
+}
 
 // Updated quotation interface based on actual API response
 interface IQuotation {
@@ -48,7 +54,7 @@ interface IQuotation {
   isContractExisted: boolean;
   isSigned: boolean;
   createdAt: string;
-  status: number;
+  status: QuotationStatusCode;
   filePath: string;
   materialDetails: Array<{
     id: number;
@@ -66,13 +72,14 @@ interface IQuotation {
   }>;
 }
 
-// Status mapping utilities
-
+// Status mapping utilities - updated with new status codes
 const mapStatusCodeToString = (statusCode: number): string => {
   const statusMap: Record<number, string> = {
-    0: 'Pending',     // Pending quotation
-    1: 'Confirmed',   // Customer agreed to quotation
-    2: 'Denied'       // Customer rejected quotation
+    [QuotationStatusCode.Pending]: 'Pending',
+    [QuotationStatusCode.Confirmed]: 'Confirmed',
+    [QuotationStatusCode.PendingChanged]: 'Changes Requested',
+    [QuotationStatusCode.PendingCancel]: 'Cancellation Pending',
+    [QuotationStatusCode.Closed]: 'Closed'
   };
   
   return statusMap[statusCode] || 'Unknown';
@@ -80,12 +87,16 @@ const mapStatusCodeToString = (statusCode: number): string => {
 
 const getStatusColor = (statusCode: number): string => {
   switch (statusCode) {
-    case 0: // Pending
+    case QuotationStatusCode.Pending:
       return '#ff9500'; // Orange
-    case 1: // Confirmed
+    case QuotationStatusCode.Confirmed:
       return '#4caf50'; // Green
-    case 2: // Denied
+    case QuotationStatusCode.PendingChanged:
       return '#ff3b30'; // Red
+    case QuotationStatusCode.PendingCancel:
+      return '#ff6b6b'; // Light Red
+    case QuotationStatusCode.Closed:
+      return '#8e8e93'; // Gray
     default:
       return '#8e8e93'; // Gray
   }
@@ -93,23 +104,29 @@ const getStatusColor = (statusCode: number): string => {
 
 const getStatusIcon = (statusCode: number): string => {
   switch (statusCode) {
-    case 0: // Pending
+    case QuotationStatusCode.Pending:
       return 'time-outline';
-    case 1: // Confirmed
+    case QuotationStatusCode.Confirmed:
       return 'checkmark-circle-outline';
-    case 2: // Denied
+    case QuotationStatusCode.PendingChanged:
+      return 'alert-circle-outline';
+    case QuotationStatusCode.PendingCancel:
       return 'close-circle-outline';
+    case QuotationStatusCode.Closed:
+      return 'ellipsis-horizontal-circle-outline';
     default:
       return 'help-circle-outline';
   }
 };
 
 const canQuotationBeConfirmed = (statusCode: number): boolean => {
-  return statusCode === 0; // Only Pending quotations can be confirmed
+  return statusCode === QuotationStatusCode.Pending; // Only Pending quotations can be confirmed
 };
+
 const canViewContract = (statusCode: number): boolean => {
-  return statusCode === 1; // Show "View Contract" button for Denied quotations
+  return statusCode === QuotationStatusCode.Confirmed; // Show "View Contract" button for Confirmed quotations
 };
+
 const QuotationListScreen: React.FC = () => {
   const { theme } = useTheme();
   const colors = Colors[theme as "light" | "dark"];
@@ -121,13 +138,16 @@ const QuotationListScreen: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [selectedStatus, setSelectedStatus] = useState<number | undefined>(undefined);
 
-  // Filter options for status tabs
+  // Updated filter options with new status codes
   const statusFilterOptions = [
     { label: 'All', value: undefined },
-    { label: 'Pending', value: 0 },
-    { label: 'Confirmed', value: 1 },
-    { label: 'Denied', value: 2 }
+    { label: 'Pending', value: QuotationStatusCode.Pending },
+    { label: 'Confirmed', value: QuotationStatusCode.Confirmed },
+    { label: 'Changes Requested', value: QuotationStatusCode.PendingChanged },
+    { label: 'Cancellation Pending', value: QuotationStatusCode.PendingCancel },
+    { label: 'Closed', value: QuotationStatusCode.Closed }
   ];
+
   useEffect(() => {
     fetchQuotations();
   }, [selectedStatus]);
@@ -142,16 +162,23 @@ const QuotationListScreen: React.FC = () => {
       
       setError('');
       
-      // Call the API without any parameters since that works based on our debug logs
+      // Call the API without any parameters since that works based on debug logs
       const response = await getPaginatedQuotationsForCustomerAPI();
       
       if (response && response.data) {
+        // Sort quotations by date (newest first)
+        const sortedData = [...response.data].sort((a, b) => {
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
+        
         // Apply status filter if selected
         if (selectedStatus !== undefined) {
-          const filteredData = response.data.filter((item: { status: number; }) => item.status === selectedStatus);
+          const filteredData = sortedData.filter((item: { status: number; }) => 
+            item.status === selectedStatus
+          );
           setQuotations(filteredData);
         } else {
-          setQuotations(response.data);
+          setQuotations(sortedData);
         }
       } else {
         setQuotations([]);
@@ -240,6 +267,7 @@ const QuotationListScreen: React.FC = () => {
       />
     </View>
   );
+
   const renderQuotationItem = ({ item }: { item: IQuotation }): React.ReactElement => {
     const statusCode = item.status;
     const statusText = mapStatusCodeToString(statusCode);
@@ -247,8 +275,8 @@ const QuotationListScreen: React.FC = () => {
     const statusColor = getStatusColor(statusCode);
     
     const canConfirm = canQuotationBeConfirmed(statusCode);
-    const showViewContract = statusCode === 1 && item.isContractExisted === true;
-        const totalPrice = (item.materialCost || 0) + (item.constructionCost || 0);
+    const showViewContract = statusCode === QuotationStatusCode.Confirmed && item.isContractExisted === true;
+    const totalPrice = (item.materialCost || 0) + (item.constructionCost || 0);
     
     return (
       <TouchableOpacity
@@ -338,6 +366,7 @@ const QuotationListScreen: React.FC = () => {
       </TouchableOpacity>
     );
   };
+
   const renderEmpty = (): React.ReactElement => (
     <View style={styles.emptyContainer}>
       <Ionicons name="document-text" size={60} color={QUOTATION_COLOR} style={{ opacity: 0.5 }} />

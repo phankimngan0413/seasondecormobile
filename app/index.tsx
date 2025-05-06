@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
 import { LogBox } from "react-native";
 
-// Suppress specific error messages globally
+
 LogBox.ignoreLogs([
   "Comprehensive Error in getDecorServiceBy",
   "Failed to fetch decor services",
@@ -11,7 +11,7 @@ LogBox.ignoreLogs([
   "API Request Error:", // Add this to ignore API Request Error messages
   "{}" ,// Include this if the empty object is appearing as a separate message
   "Received invalid data []",
-  "❌ API Error [400]: []",
+  "❌ API Error [400]",
   "❌ API Error [400]: {}",
   
 ]);
