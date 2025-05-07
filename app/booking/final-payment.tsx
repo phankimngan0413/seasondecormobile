@@ -793,7 +793,7 @@ const FinalPaymentScreen: React.FC = () => {
             </View>
           )}
           
-          <TouchableOpacity
+          {/* <TouchableOpacity
             style={[
               styles.contractDetailsButton, 
               { 
@@ -808,7 +808,7 @@ const FinalPaymentScreen: React.FC = () => {
             <Text style={[styles.contractDetailsText, { color: COLORS.PRIMARY }]}>
               View Contract Details
             </Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
       </View>
       

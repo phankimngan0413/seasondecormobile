@@ -387,9 +387,12 @@ function ThemedStack() {
     "/screens/Bookings",
     "/screens/Favorites",
     "/booking/tracking-view",
+    "/booking/rate-booking",
     "/quotation/quotation-detail/[code]",
     "/quotation/list",
-    "/quotation/contract/[code]"
+    "/quotation/contract/[code]",
+    "/booking/initial-deposit",
+    "/booking/deposit-payment",
   ].includes(pathname) || pathname.includes("/quotation/quotation-detail/") || pathname.includes("/quotation/contract/");
 
   // Only enable pull-to-refresh on specific screens

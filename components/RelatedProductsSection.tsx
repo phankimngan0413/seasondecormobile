@@ -461,80 +461,66 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
     );
   }
   
-  return (
-    <View style={styles.container}>
-      <View style={styles.headerRow}>
-        <Text style={styles.sectionTitle}>Products</Text>
-        <TouchableOpacity 
-          style={styles.refreshButton}
-          onPress={onRefresh}
-          disabled={refreshing}
-        >
-          {refreshing ? (
-            <ActivityIndicator size="small" color="#34c759" />
-          ) : (
-            <Ionicons name="refresh-outline" size={18} color="#34c759" />
-          )}
-        </TouchableOpacity>
-      </View>
-      
-      {/* Search bar */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search-outline" size={16} color="#888" style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search products..."
-          value={searchText}
-          onChangeText={setSearchText}
-        />
-        {searchText ? (
-          <TouchableOpacity onPress={() => setSearchText('')}>
-            <Ionicons name="close-circle" size={16} color="#888" />
-          </TouchableOpacity>
-        ) : null}
-      </View>
-      
-      {/* Product list with improved scrolling */}
-      {filteredProducts.length > 0 ? (
-        <View style={styles.scrollContainer}>
-          <ScrollView
-            ref={scrollViewRef}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={["#34c759"]}
-                tintColor="#34c759"
-              />
-            }
-          >
-            {filteredProducts.map((product, index) => renderProduct(product, index))}
-            
-            {/* Extra padding at the bottom to ensure last item visibility */}
-            <View style={styles.scrollBottomPadding} />
-          </ScrollView>
-        </View>
-      ) : (
-        <View style={styles.centerContent}>
-          <Ionicons name="cube-outline" size={40} color="#ccc" />
-          <Text style={styles.emptyText}>
-            {searchText ? "No products match your search" : "No products available"}
-          </Text>
-        </View>
-      )}
-      
-      {/* Modals */}
-      {renderQuantityModal()}
-      <SuccessNotification 
-        visible={showSuccess}
-        message={successMessage}
-        details={successDetails}
-        onClose={() => setShowSuccess(false)}
-      />
+  
+    // Remove the scrollContainer style and let it grow naturally with content
+return (
+  <View style={styles.container}>
+    <View style={styles.headerRow}>
+      <Text style={styles.sectionTitle}>Products</Text>
+      <TouchableOpacity 
+        style={styles.refreshButton}
+        onPress={onRefresh}
+        disabled={refreshing}
+      >
+        {refreshing ? (
+          <ActivityIndicator size="small" color="#34c759" />
+        ) : (
+          <Ionicons name="refresh-outline" size={18} color="#34c759" />
+        )}
+      </TouchableOpacity>
     </View>
-  );
+    
+    {/* Search bar */}
+    <View style={styles.searchContainer}>
+      <Ionicons name="search-outline" size={16} color="#888" style={styles.searchIcon} />
+      <TextInput
+        style={styles.searchInput}
+        placeholder="Search products..."
+        value={searchText}
+        onChangeText={setSearchText}
+      />
+      {searchText ? (
+        <TouchableOpacity onPress={() => setSearchText('')}>
+          <Ionicons name="close-circle" size={16} color="#888" />
+        </TouchableOpacity>
+      ) : null}
+    </View>
+    
+    {/* Product list without fixed height container */}
+    {filteredProducts.length > 0 ? (
+      <View>
+        {filteredProducts.map((product, index) => renderProduct(product, index))}
+      </View>
+    ) : (
+      <View style={styles.emptyContainer}>
+        <Ionicons name="cube-outline" size={40} color="#ccc" />
+        <Text style={styles.emptyText}>
+          {searchText ? "No products match your search" : "No products available"}
+        </Text>
+      </View>
+    )}
+    
+    {/* Modals remain the same */}
+    {renderQuantityModal()}
+    <SuccessNotification 
+      visible={showSuccess}
+      message={successMessage}
+      details={successDetails}
+      onClose={() => setShowSuccess(false)}
+    />
+  </View>
+);
+  
 };
 
 const styles = StyleSheet.create({
@@ -793,7 +779,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: 'white',
   },
-  
+  emptyContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 100, // Fixed minimum height for empty state
+  },
   // Custom Success Notification Styles
   notificationOverlay: {
     flex: 1,

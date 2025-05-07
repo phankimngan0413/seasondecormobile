@@ -25,6 +25,7 @@ const TransactionsScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
+  const [activeTab, setActiveTab] = useState('recent'); // 'all' or 'recent' - default to recent
 
   // Fetch transaction data
   const fetchTransactions = async (isRefreshing = false) => {
@@ -96,6 +97,25 @@ const TransactionsScreen = () => {
     }
   };
 
+  // Filter and sort transactions based on active tab
+  const getFilteredTransactions = () => {
+    // First create a copy to avoid modifying the original array
+    let filteredData = [...transactions];
+    
+    // Apply filter based on tab
+    if (activeTab === 'recent') {
+      // Filter for recent transactions (last 7 days)
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      filteredData = filteredData.filter(item => new Date(item.timestamp) >= sevenDaysAgo);
+    }
+    
+    // Always sort by timestamp (newest first)
+    return filteredData.sort((a, b) => 
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+  };
+
   // Render a transaction
   const renderItem = ({ item }: { item: ITransaction }) => (
     <View style={[styles.itemContainer, { backgroundColor: colors.card }]}>
@@ -115,7 +135,7 @@ const TransactionsScreen = () => {
           <Text style={[styles.amount, { 
             color: item.type === 'credit' ? '#27ae60' : '#e74c3c' 
           }]}>
-            {item.type === 'credit' ? '+' : '-'} {item.amount.toLocaleString()} VND
+            {item.type === 'credit' ? '+' : ''} {item.amount.toLocaleString()} VND
           </Text>
         </View>
         
@@ -164,19 +184,23 @@ const TransactionsScreen = () => {
       );
     }
     
-    // This case is when API succeeded but no transactions exist
+    // This case is when API succeeded but no transactions exist in current filter
     return (
       <View style={styles.emptyContainer}>
         <Ionicons name="wallet-outline" size={40} color={colors.textSecondary} />
         <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-          You don't have any transactions yet
+          {activeTab === 'recent' ? 
+            "No recent transactions found" : 
+            "You don't have any transactions yet"}
         </Text>
-        <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: colors.primary }]}
-          onPress={() => router.push('/screens/payment/add-funds')} // Navigate to your add transaction screen
-        >
-          <Text style={styles.actionButtonText}>Add Transaction</Text>
-        </TouchableOpacity>
+        {activeTab === 'all' && (
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: colors.primary }]}
+            onPress={() => router.push('/screens/payment/add-funds')}
+          >
+            <Text style={styles.actionButtonText}>Add Transaction</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   };
@@ -191,8 +215,41 @@ const TransactionsScreen = () => {
         <View style={styles.placeholder} />
       </View>
       
+      {/* Tab Navigation */}
+      <View style={[styles.tabContainer, { backgroundColor: colors.card }]}>
+        <TouchableOpacity 
+          style={[
+            styles.tab, 
+            activeTab === 'all' && [styles.activeTab, { borderBottomColor: colors.primary }]
+          ]}
+          onPress={() => setActiveTab('all')}
+        >
+          <Text style={[
+            styles.tabText, 
+            { color: activeTab === 'all' ? colors.primary : colors.textSecondary }
+          ]}>
+            All Transactions
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[
+            styles.tab, 
+            activeTab === 'recent' && [styles.activeTab, { borderBottomColor: colors.primary }]
+          ]}
+          onPress={() => setActiveTab('recent')}
+        >
+          <Text style={[
+            styles.tabText, 
+            { color: activeTab === 'recent' ? colors.primary : colors.textSecondary }
+          ]}>
+            Recent
+          </Text>
+        </TouchableOpacity>
+      </View>
+      
       <FlatList
-        data={transactions}
+        data={getFilteredTransactions()}
         renderItem={renderItem}
         keyExtractor={(item) => item.transactionId}
         contentContainerStyle={styles.listContent}
@@ -233,6 +290,24 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     width: 30,
+  },
+  // Tab styles
+  tabContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  activeTab: {
+    borderBottomWidth: 2,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   listContent: {
     padding: 16,

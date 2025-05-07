@@ -1,18 +1,35 @@
 // api-client.ts
 import axios, { AxiosInstance } from "axios";
-import { getToken, handleSessionExpired } from "@/services/auth"; // Token handling
+import { getToken } from "@/services/auth"; // Token handling
 import { Platform } from "react-native";
 import { getUniqueId } from "react-native-device-info";
 
 // API URL configurations
-// const SEASON_DECOR_API = "http://season-decor.somee.com";
+const SEASON_DECOR_API = "https://seasondecor.azurewebsites.net";
 const TUNNEL_API = process.env.REACT_APP_API_URL;
 const LAN_IP = process.env.REACT_APP_LAN_IP || "http://10.0.2.2:5297";
 const EMULATOR_IP = process.env.REACT_APP_EMULATOR_IP || "http://10.0.2.2:5297";
 const LOCALHOST = process.env.REACT_APP_LOCALHOST_URL || "http://localhost:5297";
 
 const isWeb = Platform.OS === "web";
-const isProduction = !__DEV__; // Kiểm tra môi trường production
+const isProduction = !__DEV__; // Check for production environment
+
+// Track Google authentication state to prevent error alerts
+let isProcessingGoogleAuth = false;
+let isHandlingSessionExpiry = false;
+
+// Utility function to set Google auth processing state
+export const setGoogleAuthProcessing = (isProcessing: boolean) => {
+  isProcessingGoogleAuth = isProcessing;
+  console.log(`Google auth processing state: ${isProcessing ? 'ON' : 'OFF'}`);
+  
+  // Auto-reset after timeout
+  if (isProcessing) {
+    setTimeout(() => {
+      isProcessingGoogleAuth = false;
+    }, 10000);
+  }
+};
 
 // Check if running on an emulator
 const isEmulator = async (): Promise<boolean> => {
@@ -27,25 +44,11 @@ const isEmulator = async (): Promise<boolean> => {
 
 // Set up the base URL for API requests
 const setupBaseUrl = async (): Promise<string> => {
-  // Trong môi trường production, luôn sử dụng Season Decor API
-  // if (isProduction) {
-  //   console.log("🌐 Production mode: Using Season Decor API:", SEASON_DECOR_API);
-  //   return SEASON_DECOR_API;
-  // }
-  
-  // // Trong môi trường development, có thể chuyển đổi
-  // const useSeasonDecorApi = true;
-  
-  // if (useSeasonDecorApi) {
-  //   console.log("🌐 Development mode: Using Season Decor API:", SEASON_DECOR_API);
-  //   return SEASON_DECOR_API;
-  // }
-  
-  // Logic cho development environment
+  // Logic for development environment
   let BASE_URL = LAN_IP;
   
-  if (TUNNEL_API) {
-    BASE_URL = TUNNEL_API;
+  if (SEASON_DECOR_API) {
+    BASE_URL = SEASON_DECOR_API;
   } else if (isWeb) {
     BASE_URL = LOCALHOST;
   } else if (await isEmulator()) {
@@ -73,7 +76,7 @@ export const initApiClient = async (): Promise<AxiosInstance> => {
         "Content-Type": "application/json",
         "Accept": "application/json",
       },
-      timeout: 15000, // Tăng thời gian timeout cho mạng chậm
+      timeout: 30000, // Increased timeout for slower networks
     });
     
     // Request Interceptor: Add Authorization token
@@ -99,22 +102,54 @@ export const initApiClient = async (): Promise<AxiosInstance> => {
     apiClient.interceptors.response.use(
       (response) => response.data ?? response,
       async (error) => {
+        // Handle network errors (no response)
         if (!error.response) {
           console.error("❌ API connection error:", error.message);
-          return Promise.reject({ 
-            message: "Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng!" 
-          });
+          const message = error.message.includes("timeout") 
+            ? "Request timed out. Please try again." 
+            : "Cannot connect to the server. Please check your internet connection!";
+          return Promise.reject({ message });
         }
         
         const { status, data } = error.response;
         console.error(`❌ API Error [${status}]:`, data);
         
+        // Handle unauthorized errors (401)
         if (status === 401) {
-          console.warn("⚠️ Token expired, logging out...");
-          await handleSessionExpired();
+          // Skip session expired handling if processing Google auth
+          if (isProcessingGoogleAuth) {
+            console.log("Suppressing 401 error during Google authentication");
+            return Promise.reject(data);
+          }
+          
+          // Prevent multiple session expired handlers
+          if (!isHandlingSessionExpiry) {
+            isHandlingSessionExpiry = true;
+            
+            try {
+              // await handleSessionExpired();
+            } finally {
+              // Reset flag after delay
+              setTimeout(() => {
+                isHandlingSessionExpiry = false;
+              }, 3000);
+            }
+          } else {
+          }
         }
         
-        return Promise.reject(data);
+        // Meaningful error message for bad requests
+        if (status === 400 && data.message) {
+          return Promise.reject({
+            message: data.message || "Invalid request",
+            errors: data.errors || []
+          });
+        }
+        
+        // Return standardized error format
+        return Promise.reject(data || { 
+          message: `Server error (${status})` 
+        });
       }
     );
     
@@ -141,7 +176,6 @@ export const getApiClientSync = (): AxiosInstance => {
     console.warn("⚠️ API client not initialized yet. Initializing now...");
     // Create a temporary client to avoid errors
     const tempClient = axios.create({
-      // baseURL: SEASON_DECOR_API,
       headers: { "Content-Type": "application/json" },
     });
     

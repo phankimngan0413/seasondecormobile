@@ -17,19 +17,35 @@ import { Colors } from '@/constants/Colors';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { 
-  getUserReviewsAPI, 
+  getReviewByAccountDirectAPI, 
   deleteReviewAPI,
   IReview
 } from '@/utils/reviewAPI';
 
 // Interface for product reviews and service reviews
-interface IProductReview extends IReview {
+interface IProductReview {
+  id: number;
+  name: string;
+  userName?: string;
+  avatar: string;
+  rate: number;
+  comment: string;
+  createAt: string;
+  images: string[];
   productId: number;
   productName: string;
   productImage?: string;
 }
 
-interface IServiceReview extends IReview {
+interface IServiceReview {
+  id: number;
+  name: string;
+  userName?: string;
+  avatar: string;
+  rate: number;
+  comment: string;
+  createAt: string;
+  images: string[];
   serviceId: number;
   serviceName: string;
   serviceImage?: string;
@@ -44,50 +60,114 @@ const ReviewScreen = () => {
   
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   const { theme } = useTheme();
   const validTheme = theme as "light" | "dark";
   const colors = Colors[validTheme];
 
   useEffect(() => {
+    // Load reviews when component mounts or tab changes
+    setError(null);
     fetchReviews();
   }, [activeTab]);
 
   const fetchReviews = async () => {
     try {
       setLoading(true);
-      const data = await getUserReviewsAPI();
+      setError(null);
       
-      if (data && Array.isArray(data)) {
-        // Filter and transform product reviews
-        const productData = data
-          .filter(item => item.productId)
-          .map(item => ({
-            ...item,
+      console.log(`📝 Fetching ${activeTab} reviews`);
+      
+      // Get reviews using direct API call
+      const response = await getReviewByAccountDirectAPI();
+      
+      // Log the exact response for debugging
+      console.log('EXACT API RESPONSE:', JSON.stringify(response));
+      
+      // Initialize reviewsArray
+      let reviewsArray = [];
+      
+      // Try to extract reviews from response in various possible formats
+      if (Array.isArray(response)) {
+        reviewsArray = response;
+      } 
+      else if (response && Array.isArray(response.data)) {
+        reviewsArray = response.data;
+      }
+      else if (response && response.data && Array.isArray(response.data.data)) {
+        reviewsArray = response.data.data;
+      }
+      else if (response && response.success === true) {
+        // If success is true but data structure is unclear
+        if (response.data) {
+          if (Array.isArray(response.data)) {
+            reviewsArray = response.data;
+          } 
+          else if (response.data.data && Array.isArray(response.data.data)) {
+            reviewsArray = response.data.data;
+          }
+        }
+      }
+      
+      console.log(`📊 Found ${reviewsArray.length} total reviews after extraction`);
+      
+      // Process the reviews based on active tab
+      if (activeTab === 'products') {
+        // Filter for product reviews - only include items with valid productId
+        const productData = reviewsArray
+          .filter((item: { productId: null | undefined; }) => item.productId !== undefined && item.productId !== null)
+          .map((item: { id: any; name: any; userName: any; avatar: any; rate: any; comment: any; createAt: any; images: any; productId: any; productName: any; productImage: any; }) => ({
+            id: item.id,
+            name: item.name || item.userName || 'Anonymous',
+            userName: item.userName,
+            avatar: item.avatar || '',
+            rate: item.rate || 0,
+            comment: item.comment || '',
+            createAt: item.createAt || new Date().toISOString(),
+            images: item.images || [],
+            productId: Number(item.productId), 
             productName: item.productName || 'Unknown Product',
-            productImage: item.productImage || undefined
-          }));
+            productImage: item.productImage || ''
+          })) as IProductReview[];
+          
+        console.log(`🛍️ Found ${productData.length} product reviews`);
         setProductReviews(productData);
-        
-        // Filter and transform service reviews
-        const serviceData = data
-          .filter(item => item.serviceId)
-          .map(item => ({
-            ...item,
-            serviceName: item.serviceName || 'Unknown Service',
-            serviceImage: item.serviceImage || undefined
-          }));
-        setServiceReviews(serviceData);
       } else {
-        console.warn("Received invalid data format for reviews:", data);
+        // Filter for service reviews - only include items with valid serviceId
+        const serviceData = reviewsArray
+          .filter((item: { serviceId: null | undefined; }) => item.serviceId !== undefined && item.serviceId !== null)
+          .map((item: { id: any; name: any; userName: any; avatar: any; rate: any; comment: any; createAt: any; images: any; serviceId: any; serviceName: any; serviceImage: any; }) => ({
+            id: item.id,
+            name: item.name || item.userName || 'Anonymous',
+            userName: item.userName,
+            avatar: item.avatar || '',
+            rate: item.rate || 0,
+            comment: item.comment || '',
+            createAt: item.createAt || new Date().toISOString(),
+            images: item.images || [],
+            serviceId: Number(item.serviceId), 
+            serviceName: item.serviceName || 'Unknown Service',
+            serviceImage: item.serviceImage || ''
+          })) as IServiceReview[];
+          
+        console.log(`🛎️ Found ${serviceData.length} service reviews`);
+        setServiceReviews(serviceData);
+      }
+    } catch (error: any) {
+      const errorMessage = error.message || 'Failed to load reviews';
+      console.error(`❌ Error fetching reviews: ${errorMessage}`);
+      setError(errorMessage);
+      
+      // Reset data arrays on error
+      if (activeTab === 'products') {
         setProductReviews([]);
+      } else {
         setServiceReviews([]);
       }
-    } catch (error) {
-      console.error('Error fetching reviews:', error);
-      Alert.alert("Error", "Failed to load your reviews. Please try again.");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -126,6 +206,8 @@ const ReviewScreen = () => {
   };
 
   const handleEditReview = (review: IProductReview | IServiceReview) => {
+    // Implementation for editing review
+    // Uncomment and modify as needed
     // if ('productId' in review) {
     //   router.push({
     //     pathname: "/review/edit-product-review/[id]",
@@ -141,8 +223,7 @@ const ReviewScreen = () => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchReviews();
-    setRefreshing(false);
+    fetchReviews();
   };
 
   const renderProductReview = ({ item }: { item: IProductReview }) => {
@@ -295,6 +376,21 @@ const ReviewScreen = () => {
     );
   };
 
+  const renderError = () => (
+    <View style={styles.errorContainer}>
+      <Ionicons name="alert-circle-outline" size={60} color={colors.error || "#FF3B30"} />
+      <Text style={[styles.errorText, { color: colors.error || "#FF3B30" }]}>
+        {error}
+      </Text>
+      <TouchableOpacity 
+        style={[styles.retryButton, { backgroundColor: colors.primary }]}
+        onPress={onRefresh}
+      >
+        <Text style={styles.retryButtonText}>Try Again</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   const renderEmptyProductReviews = () => (
     <View style={styles.emptyContainer}>
       <Ionicons name="star-outline" size={60} color={colors.textSecondary} />
@@ -388,12 +484,17 @@ const ReviewScreen = () => {
                 Loading your product reviews...
               </Text>
             </View>
+          ) : error ? (
+            renderError()
           ) : (
             <FlatList
               data={productReviews}
               renderItem={renderProductReview}
               keyExtractor={(item) => item.id.toString()}
-              contentContainerStyle={styles.listContent}
+              contentContainerStyle={[
+                styles.listContent,
+                productReviews.length === 0 && styles.emptyListContent
+              ]}
               ListEmptyComponent={renderEmptyProductReviews}
               refreshControl={
                 <RefreshControl
@@ -415,12 +516,17 @@ const ReviewScreen = () => {
                 Loading your service reviews...
               </Text>
             </View>
+          ) : error ? (
+            renderError()
           ) : (
             <FlatList
               data={serviceReviews}
               renderItem={renderServiceReview}
               keyExtractor={(item) => item.id.toString()}
-              contentContainerStyle={styles.listContent}
+              contentContainerStyle={[
+                styles.listContent,
+                serviceReviews.length === 0 && styles.emptyListContent
+              ]}
               ListEmptyComponent={renderEmptyServiceReviews}
               refreshControl={
                 <RefreshControl
@@ -485,6 +591,10 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 12,
     paddingBottom: 20,
+    flexGrow: 1,
+  },
+  emptyListContent: {
+    flex: 1,
   },
   reviewCard: {
     borderRadius: 12,
@@ -586,6 +696,29 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 16,
+    fontSize: 14,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    minHeight: 300,
+  },
+  errorText: {
+    fontSize: 16,
+    marginTop: 16,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  retryButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: 'white',
+    fontWeight: '600',
     fontSize: 14,
   }
 });

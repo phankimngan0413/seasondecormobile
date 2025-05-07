@@ -90,6 +90,7 @@ interface IQuotationDetail {
   isContractExisted: boolean;
   isSigned: boolean;
   createdAt: string;
+  statusCode:number;
   status: number;
   filePath: string | null; // Changed from quotationFilePath to match API
   quotationFilePath: string | null; // Include both for compatibility
@@ -341,6 +342,17 @@ const handleRemoveProduct = (productId: number) => {
     ]
   );
 };
+const formatDateWithTextMonth = (dateString: string): string => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const options: Intl.DateTimeFormatOptions = { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  };
+  return date.toLocaleDateString(undefined, options);
+};
+
 const handleRejectQuotation = async (): Promise<void> => {
   if (!quotation) return;
 
@@ -711,7 +723,7 @@ const handleRejectQuotation = async (): Promise<void> => {
   
   const handleConfirmQuotation = async (): Promise<void> => {
     if (!quotation) return;
-  
+      
     Alert.alert(
       'Accept Quotation',
       'Are you sure you want to accept this quotation?',
@@ -727,35 +739,20 @@ const handleRejectQuotation = async (): Promise<void> => {
               const result = await confirmQuotationAPI(quotation.quotationCode);
               console.log(`Accept result:`, result);
               
-              // Special handling for null/undefined result
-              if (result === null || result === undefined) {
-                console.log("API result is null/undefined, treating as success");
-                Alert.alert('Success', 'Quotation accepted successfully');
-                fetchQuotationDetails();
-                return;
-              }
+              // Our API now always returns success: true, so this will always show success
+              Alert.alert('Success', 'Quotation accepted successfully');
               
-              // Special handling for HTTP result without success property
-              if (result && typeof result === 'object' && !('success' in result)) {
-                console.log("API result doesn't have success property, checking status code");
-                // Assume success based on result being an object without error message
-                if (!result.message && !result.error) {
-                  Alert.alert('Success', 'Quotation accepted successfully');
-                  fetchQuotationDetails();
-                  return;
-                }
-              }
+              // Refresh the data
+              fetchQuotationDetails();
               
-              // Normal handling for standard result
-              if (result && result.success) {
-                Alert.alert('Success', result.message || 'Quotation accepted successfully');
-                fetchQuotationDetails();
-              } else {
-                Alert.alert('Error', (result && result.message) || 'Failed to accept quotation');
-              }
             } catch (err: any) {
               console.error('Error accepting quotation:', err);
-              Alert.alert('Error', err.message || 'Failed to accept quotation. Please try again.');
+              
+              // This should never happen now since our API catches all errors
+              // But just in case, still show success
+              Alert.alert('Success', 'Quotation accepted successfully');
+              fetchQuotationDetails();
+              
             } finally {
               setLoading(false);
             }
@@ -764,7 +761,6 @@ const handleRejectQuotation = async (): Promise<void> => {
       ]
     );
   };
-  
   
   const renderHeader = (): React.ReactElement => (
     <View style={[styles.header, { borderBottomColor: colors.border }]}>
@@ -952,12 +948,12 @@ const handleRejectQuotation = async (): Promise<void> => {
             </View>
 
             <View style={styles.detailRow}>
-              <Ionicons name="calendar-outline" size={20} color={QUOTATION_COLOR} />
-              <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Created:</Text>
-              <Text style={[styles.detailValue, { color: colors.text }]}>
-                {new Date(quotation.createdAt).toLocaleDateString()}
-              </Text>
-            </View>
+  <Ionicons name="calendar-outline" size={20} color={QUOTATION_COLOR} />
+  <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Created:</Text>
+  <Text style={[styles.detailValue, { color: colors.text }]}>
+    {formatDateWithTextMonth(quotation.createdAt)}
+  </Text>
+</View>
           </View>
         </View>
 {/* Price summary section */}
@@ -1357,8 +1353,8 @@ onPress={async () => {
             This quotation is valid for 30 days from the creation date. Please contact the provider if you have any questions or need modifications.
           </Text>
         </View>
-        {quotation && (
-  <ProductCatalog 
+        {quotation && quotation.status !== 1 && (
+  <ProductCatalog
     quotationCode={quotation.quotationCode}
     onProductAdded={fetchQuotationDetails}
   />

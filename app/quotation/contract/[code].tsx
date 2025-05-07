@@ -185,7 +185,16 @@ const ContractScreen: React.FC = () => {
     }
   };
 
-
+  const formatDateWithTextMonth = (dateString: string): string => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const options: Intl.DateTimeFormatOptions = { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    };
+    return date.toLocaleDateString(undefined, options);
+  };
   const handleSignContract = async () => {
     if (!contract || !contract.contractCode) return;
     
@@ -700,9 +709,8 @@ const handleMakeDeposit = () => {
 
   const statusColor = getStatusColor(contract.status);
   const statusText = mapStatusCodeToString(contract.status);
-  const formattedSurveyDate = new Date(contract.surveyDate).toLocaleDateString();
-  const formattedConstructionDate = new Date(contract.constructionDate).toLocaleDateString();
-
+  const formattedSurveyDate = formatDateWithTextMonth(contract.surveyDate);
+  const formattedConstructionDate = formatDateWithTextMonth(contract.constructionDate);
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={theme === 'dark' ? 'light-content' : 'dark-content'} />

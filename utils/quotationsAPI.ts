@@ -176,18 +176,17 @@ export const confirmQuotationAPI = async (quotationCode: string): Promise<any> =
       console.error("No authentication token found");
       return {
         success: false,
-        message: "Unauthorized: Please log in.",
-        errors: [],
-        data: null
+        message: "Unauthorized: Please log in."
       };
     }
     
     console.log(`🔍 Sending confirmQuotation request for code: ${quotationCode}`);
     
-    // Send true as the request body to confirm the quotation
+    // Based on the API endpoint structure, this is a PUT request to /api/Quotation/confirmQuotation/{quotationCode}
+    // The API appears to expect an empty body (or possibly a boolean 'true')
     const response = await apiClient.put(
       `/api/Quotation/confirmQuotation/${quotationCode}`,
-      null,  // Try with null body instead of true
+      true, // Send true as the body as per the screenshot
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -198,46 +197,69 @@ export const confirmQuotationAPI = async (quotationCode: string): Promise<any> =
     
     console.log(`🔍 Confirm quotation response:`, response.data);
     
-    // Handle null response case
-    if (response.data === null || response.data === undefined) {
-      console.log(`🔍 API returned null/undefined - assuming success`);
+    // Handle different response scenarios
+    
+    // 1. If response data is null/undefined but status is success (200-299)
+    if ((response.data === null || response.data === undefined) && 
+        response.status >= 200 && response.status < 300) {
       return {
         success: true,
-        message: "Quotation confirmed successfully",
-        data: null
+        message: "Quotation confirmed successfully"
       };
     }
     
-    // Return the API response directly since it already matches our expected format
-    return response.data;
+    // 2. If we got a proper response object
+    if (response.data) {
+      // If the API returns a standard format with success property
+      if (typeof response.data === 'object' && 'success' in response.data) {
+        return response.data;
+      }
+      
+      // Otherwise assume success if we have a response with status 2xx
+      if (response.status >= 200 && response.status < 300) {
+        return {
+          success: true,
+          message: "Quotation confirmed successfully",
+          data: response.data
+        };
+      }
+    }
     
+    // If we reach here, something unexpected happened but no error was thrown
+    return {
+      success: false,
+      message: "Unable to confirm quotation. Unexpected response format."
+    };
   } catch (error: any) {
     console.error("🔴 Error confirming quotation:", error);
     
-    // If the error contains a response from the server, use that information
-    if (error.response && error.response.data) {
-      console.log("🔴 Server error response:", error.response.data);
+    // If the error contains a response from the server
+    if (error.response) {
+      console.log("🔴 Server error response status:", error.response.status);
+      console.log("🔴 Server error response data:", error.response.data);
       
-      // If the server response is already in our expected format
-      if (typeof error.response.data === 'object' && 'success' in error.response.data) {
-        return error.response.data;
+      // Handle different error formats
+      if (error.response.data) {
+        if (typeof error.response.data === 'object' && 'message' in error.response.data) {
+          return {
+            success: false,
+            message: error.response.data.message
+          };
+        }
+        
+        if (typeof error.response.data === 'string') {
+          return {
+            success: false,
+            message: error.response.data
+          };
+        }
       }
-      
-      // Otherwise create a standardized error response
-      return {
-        success: false,
-        message: error.response.data.message || "Failed to confirm quotation",
-        errors: error.response.data.errors || [],
-        data: null
-      };
     }
     
-    // For network errors or other issues
+    // Default error response for network errors or unexpected formats
     return {
       success: false,
-      message: error.message || "Network error or server unavailable",
-      errors: [],
-      data: null
+      message: error.message || "Failed to confirm quotation. Please try again."
     };
   }
 };

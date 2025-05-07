@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -20,6 +20,22 @@ type CalendarPickerProps = {
   onClose: () => void;
 };
 
+// Get current date in Vietnam timezone (GMT+7)
+const getVietnamDate = () => {
+  const now = new Date();
+  
+  // Vietnam is UTC+7
+  const vietnamOffset = 7 * 60; // 7 hours in minutes
+  const utcOffset = now.getTimezoneOffset(); // Local timezone offset in minutes
+  
+  // Calculate the difference between local time and Vietnam time
+  const offsetDiff = utcOffset + vietnamOffset;
+  
+  // Create a new date adjusted to Vietnam time
+  const vietnamDate = new Date(now.getTime() + offsetDiff * 60 * 1000);
+  return vietnamDate;
+};
+
 // Component for year selector
 const YearSelector = ({ 
   currentYear, 
@@ -36,7 +52,9 @@ const YearSelector = ({
   
   const years = [];
   const startYear = 1950;
-  const endYear = 2025; // Fixed to show years up to 2025
+  // Get current year in Vietnam for the range upper limit
+  const vietnamDate = getVietnamDate();
+  const endYear = vietnamDate.getFullYear() + 5; // Allow selection 5 years into the future
   
   // Generate years for selection in a grid-like layout (4 columns)
   for (let year = startYear; year <= endYear; year++) {
@@ -91,10 +109,30 @@ const CalendarPicker = ({
   const validTheme = theme as "light" | "dark";
   const colors = Colors[validTheme];
   
-  const [currentDate, setCurrentDate] = useState(selectedDate);
-  const [currentMonth, setCurrentMonth] = useState(selectedDate.getMonth());
-  const [currentYear, setCurrentYear] = useState(selectedDate.getFullYear());
+  // Initialize with Vietnam time
+  const [currentDate, setCurrentDate] = useState(selectedDate || getVietnamDate());
+  const [currentMonth, setCurrentMonth] = useState((selectedDate || getVietnamDate()).getMonth());
+  const [currentYear, setCurrentYear] = useState((selectedDate || getVietnamDate()).getFullYear());
   const [showYearSelector, setShowYearSelector] = useState(false);
+  
+  // Create a reference for today's date in Vietnam timezone
+  const todayInVietnam = getVietnamDate();
+  const todayDay = todayInVietnam.getDate();
+  const todayMonth = todayInVietnam.getMonth();
+  const todayYear = todayInVietnam.getFullYear();
+  
+  // Update calendar when becoming visible
+  useEffect(() => {
+    if (isVisible) {
+      // If no date is selected, use current Vietnam time
+      if (!selectedDate) {
+        const vietnamDate = getVietnamDate();
+        setCurrentDate(vietnamDate);
+        setCurrentMonth(vietnamDate.getMonth());
+        setCurrentYear(vietnamDate.getFullYear());
+      }
+    }
+  }, [isVisible, selectedDate]);
   
   const months = [
     "January", "February", "March", "April", "May", "June", 
@@ -128,9 +166,29 @@ const CalendarPicker = ({
   };
 
   const handleDateSelection = (day: number) => {
-    const newDate = new Date(currentYear, currentMonth, day);
-    setCurrentDate(newDate);
-    onSelectDate(newDate);
+    // Create a new date using the selected calendar date
+    // but convert to Vietnam timezone
+    const localDate = new Date(currentYear, currentMonth, day);
+    
+    // Adjust for Vietnam timezone
+    // For a calendar selection, we want to preserve the day/month/year as selected,
+    // and adjust the time to midnight in Vietnam's timezone
+    
+    // Calculate the difference between local timezone and Vietnam timezone
+    const now = new Date();
+    const utcOffset = now.getTimezoneOffset(); // Minutes
+    const vietnamOffset = 7 * 60; // Vietnam is UTC+7, converted to minutes
+    const offsetDiff = utcOffset + vietnamOffset;
+    
+    // Set the date to midnight (in Vietnam's timezone)
+    const vietnamDate = new Date(localDate.getTime());
+    vietnamDate.setHours(0, 0, 0, 0);
+    
+    // Adjust by the timezone difference
+    const adjustedDate = new Date(vietnamDate.getTime() + offsetDiff * 60 * 1000);
+    
+    setCurrentDate(adjustedDate);
+    onSelectDate(adjustedDate);
     onClose(); // Close the calendar after selection
   };
 
@@ -175,6 +233,12 @@ const CalendarPicker = ({
         date.getMonth() === currentDate.getMonth() && 
         date.getFullYear() === currentDate.getFullYear();
       
+      // Check if this day is today (in Vietnam time)
+      const isToday = 
+        day === todayDay && 
+        currentMonth === todayMonth && 
+        currentYear === todayYear;
+      
       days.push(
         <TouchableOpacity
           key={`day-${day}`}
@@ -184,13 +248,19 @@ const CalendarPicker = ({
           ]}
           onPress={() => handleDateSelection(day)}
         >
-          <Text style={[
-            styles.calendarDay,
-            { color: isSelected ? '#fff' : colors.text },
-            isSelected && styles.selectedCalendarDay
+          <View style={[
+            isToday && styles.todayIndicator, 
+            isSelected && { backgroundColor: 'transparent' }
           ]}>
-            {day}
-          </Text>
+            <Text style={[
+              styles.calendarDay,
+              { color: isSelected ? '#fff' : colors.text },
+              isSelected && styles.selectedCalendarDay,
+              isToday && !isSelected && styles.todayCalendarDay
+            ]}>
+              {day}
+            </Text>
+          </View>
         </TouchableOpacity>
       );
       
@@ -260,6 +330,13 @@ const CalendarPicker = ({
                   
                   <View style={styles.calendarGridContainer}>
                     {renderCalendarDays()}
+                  </View>
+                  
+                  {/* Display current time in Vietnam timezone */}
+                  <View style={styles.timeInfoContainer}>
+                    <Text style={[styles.timeInfoText, { color: colors.text }]}>
+                      Vietnam Time: {todayInVietnam.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    </Text>
                   </View>
                   
                   <TouchableOpacity 
@@ -349,11 +426,34 @@ const styles = StyleSheet.create({
   selectedCalendarDay: {
     fontWeight: 'bold'
   },
+  // Today highlight styles
+  todayIndicator: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#5fc1f1',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  todayCalendarDay: {
+    fontWeight: 'bold',
+    color: '#5fc1f1'
+  },
+  timeInfoContainer: {
+    alignItems: 'center',
+    marginTop: 12,
+    marginBottom: 8
+  },
+  timeInfoText: {
+    fontSize: 14,
+    fontStyle: 'italic'
+  },
   calendarDoneButton: {
     padding: 12,
     borderRadius: 5,
     alignItems: 'center',
-    marginTop: 20
+    marginTop: 12
   },
   calendarDoneButtonText: {
     color: 'white',

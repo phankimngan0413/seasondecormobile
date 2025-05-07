@@ -15,7 +15,7 @@ import {
   RefreshControl
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
-import { getDecorServicesAPI, IDecor } from "@/utils/decorserviceAPI";
+import { getDecorServicesAPI, searchDecorServicesAPI, IDecor } from "@/utils/decorserviceAPI";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
@@ -56,6 +56,7 @@ const DecorListScreen = () => {
   const [filteredServices, setFilteredServices] = useState<IDecor[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -88,7 +89,6 @@ const DecorListScreen = () => {
       
       if (shouldRefresh) {
         fetchDecorServices();
-      } else {
       }
       
       return () => {
@@ -99,14 +99,16 @@ const DecorListScreen = () => {
 
   // Apply filters whenever selectedSeason or searchQuery changes
   useEffect(() => {
-    filterServices();
-  }, [selectedSeason, searchQuery, decorServices]);
+    if (decorServices.length > 0) {
+      filterServices();
+    }
+  }, [selectedSeason, searchQuery]);
 
-  // Debounced search function
+  // Debounced search function with longer delay
   const debouncedSearch = useCallback(
     debounce((text: string) => {
       setSearchQuery(text);
-    }, 300),
+    }, 500),
     []
   );
 
@@ -155,38 +157,53 @@ const DecorListScreen = () => {
   // Handler for pull-to-refresh
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    // Reset filters on refresh to show all results
-    // setSelectedSeason(null);
-    // clearSearch();
     fetchDecorServices();
   }, []);
 
-  const filterServices = () => {
-    let results = [...decorServices];
-    
-    // Filter by season if selected
-    if (selectedSeason) {
-      results = results.filter((decor) =>
-        Array.isArray(decor.seasons) &&
-        decor.seasons.some(season => 
-          getSeasonName(season).toLowerCase() === selectedSeason.toLowerCase()
-        )
-      );
+  // API-based filtering
+  const filterServices = async () => {
+    try {
+      // Determine if we should use search API
+      const hasFilters = selectedSeason || searchQuery.trim().length > 0;
+      
+      if (hasFilters) {
+        setSearching(true);
+        
+        // Prepare search parameters
+        const searchParams: {
+          style?: string;
+          sublocation?: string;
+          categoryName?: string;
+          seasonNames?: string[];
+        } = {};
+        
+        // Add search query to style parameter if present
+        if (searchQuery.trim()) {
+          searchParams.style = searchQuery.trim();
+        }
+        
+        // Add selected season if present
+        if (selectedSeason) {
+          searchParams.seasonNames = [selectedSeason];
+        }
+        
+        // Call the search API with our parameters
+        console.log("📊 Searching with params:", searchParams);
+        const results = await searchDecorServicesAPI(searchParams);
+        console.log(`🔍 Found ${results.length} services via API search`);
+        
+        setFilteredServices(results);
+      } else {
+        // No filters active, show all services
+        setFilteredServices(decorServices);
+      }
+    } catch (err: any) {
+      console.error('❌ Error searching decor services:', err);
+      // Don't show error to user, just fallback to showing all services
+      setFilteredServices(decorServices);
+    } finally {
+      setSearching(false);
     }
-    
-    // Filter by search query if present
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      results = results.filter(decor => 
-        decor.style?.toLowerCase().includes(query) || 
-        decor.description?.toLowerCase().includes(query) ||
-        decor.sublocation?.toLowerCase().includes(query) ||
-        decor.province?.toLowerCase().includes(query)
-      );
-    }
-    
-    console.log(`Filtered to ${results.length} services`);
-    setFilteredServices(results);
   };
 
   const renderDecorCard = ({ item }: { item: IDecor }) => {
@@ -398,8 +415,16 @@ const DecorListScreen = () => {
         </ScrollView>
       </View>
       
-      {/* Status info - shows when pulling to refresh */}
-      {refreshing && (
+      {/* Search Status Indicator */}
+      {searching && (
+        <View style={styles.refreshingInfoContainer}>
+          <ActivityIndicator size="small" color={PRIMARY_COLOR} style={{marginRight: 8}} />
+          <Text style={styles.refreshingInfoText}>Searching...</Text>
+        </View>
+      )}
+      
+      {/* Refresh Status Indicator */}
+      {refreshing && !searching && (
         <View style={styles.refreshingInfoContainer}>
           <Text style={styles.refreshingInfoText}>Refreshing data...</Text>
         </View>
@@ -657,9 +682,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   refreshingInfoContainer: {
+    flexDirection: 'row',
     padding: 8,
     backgroundColor: `${PRIMARY_COLOR}20`,
     alignItems: 'center',
+    justifyContent: 'center',
     marginHorizontal: 16,
     borderRadius: 8,
     marginBottom: 8,

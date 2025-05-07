@@ -1,7 +1,7 @@
 // src/services/apiClient.ts
 import axios, { AxiosInstance, AxiosError } from "axios";
 import { BASE_URL } from "../config/apiConfig";
-import { getToken, handleSessionExpired } from "@/services/auth"; // Token handling
+import { getToken } from "@/services/auth"; // Token handling
 import { Platform } from "react-native";
 
 let apiClient: AxiosInstance | null = null;
@@ -76,7 +76,6 @@ export const initApiClient = async (force = false): Promise<AxiosInstance> => {
         
         if (status === 401) {
           console.warn("⚠️ Token expired, logging out...");
-          await handleSessionExpired();
         }
         
         return Promise.reject(data);

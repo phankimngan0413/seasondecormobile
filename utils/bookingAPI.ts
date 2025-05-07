@@ -354,38 +354,85 @@ export const confirmBookingAPI = async (
 ): Promise<IBookingResponse> => {
   const url = `/api/Booking/confirm/${bookingCode}`;
   
+  console.log(`🔍 Attempting to confirm booking: ${bookingCode}`);
+  
   const apiClient = await initApiClient();
   try {
-    const response: AxiosResponse<IBookingResponse> = await apiClient.put(url);
+    const response: AxiosResponse = await apiClient.put(url);
     
-    if (response && response.data) {
+    console.log(`🟢 Booking confirmation response:`, response.data);
+    
+    // If we have response data with defined success property, return it directly
+    if (response.data && typeof response.data.success === 'boolean') {
       return response.data;
-    } else {
-      console.error("🔴 Invalid booking confirmation response:", response);
+    }
+    
+    // For any 2xx status code, treat as success even if response format is unexpected
+    if (response.status >= 200 && response.status < 300) {
       return {
-        success: false,
-        message: "Failed to confirm booking"
+        success: true,
+        message: "Booking confirmed successfully",
+        data: response.data
       };
     }
+    
+    console.error("🔴 Invalid booking confirmation response:", response);
+    return {
+      success: false,
+      message: "Failed to confirm booking"
+    };
   } catch (error: any) {
     console.error("🔴 Error confirming booking:", error);
     
+    // Special handling for error response that might actually indicate success
+    if (error.response && error.response.status >= 200 && error.response.status < 300) {
+      console.log("✅ Received 2xx status in error response - treating as success");
+      return {
+        success: true,
+        message: "Booking confirmed successfully"
+      };
+    }
+    
+    // Check if error response contains a success:true indicator
+    if (error.response && error.response.data && error.response.data.success === true) {
+      console.log("✅ Found success:true in error response - treating as success");
+      return error.response.data;
+    }
+    
     if (error.response) {
       console.error("API Error Response:", error.response.data);
+      
+      // For specific error status codes
+      if (error.response.status === 401) {
+        return {
+          success: false,
+          message: "Please log in to confirm this booking"
+        };
+      } else if (error.response.status === 403) {
+        return {
+          success: false,
+          message: "You don't have permission to confirm this booking"
+        };
+      } else if (error.response.status === 404) {
+        return {
+          success: false,
+          message: "Booking not found or already processed"
+        };
+      }
+      
       return {
         success: false,
-        message: error.response.data.message || "Failed to confirm booking",
-        errors: error.response.data.errors
+        message: error.response.data?.message || "Failed to confirm booking",
+        errors: error.response.data?.errors
       };
     }
     
     return {
       success: false,
-      message: "Network error or server unavailable"
+      message: error.message || "Network error or server unavailable"
     };
   }
 };
-
 /**
  * Make a deposit payment for a booking
  * @param bookingCode Booking code to make deposit for
@@ -487,6 +534,108 @@ export const getAllCancelTypesAPI = async (): Promise<ICancelTypeResponse> => {
       };
     }
     
+    return {
+      success: false,
+      message: error.message || "Network error or server unavailable"
+    };
+  }
+};
+export const processCommitDepositAPI = async (
+  bookingCode: string
+): Promise<IBookingResponse> => {
+  const url = `/api/Booking/processCommitDeposit/${bookingCode}`;
+  
+  console.log(`🔍 Processing initial commitment deposit for booking: ${bookingCode}`);
+  
+  const apiClient = await initApiClient();
+  try {
+    // Using POST method as indicated in the Swagger documentation
+    const response: AxiosResponse = await apiClient.post(url);
+    
+    console.log(`🟢 Deposit processing response:`, response.data);
+    
+    // Check if the response contains success property and it's true
+    if (response.data && typeof response.data.success === 'boolean') {
+      // Important fix: directly return the original response data
+      // This preserves the original success and message properties
+      return response.data;
+    }
+    
+    // For backward compatibility or unusual response formats
+    if (response.status >= 200 && response.status < 300) {
+      // If response has data object with booking info
+      if (response.data && (response.data.id || response.data.bookingId)) {
+        return {
+          success: true,
+          message: "Deposit processed successfully",
+          data: response.data
+        };
+      }
+      
+      // Even with empty/null data but 2xx status, consider success
+      return {
+        success: true,
+        message: "Deposit processed successfully"
+      };
+    }
+    
+    // If we reach here, something unexpected happened
+    console.error("🔴 Invalid deposit processing response:", response.data);
+    return {
+      success: false,
+      message: "Failed to process deposit commitment"
+    };
+  } catch (error: any) {
+    console.error("🔴 Error processing initial deposit:", error);
+    
+    // Check if the error contains a successful response
+    // This is crucial based on your error log showing success:true in an error
+    if (error.response && error.response.data) {
+      // Critical fix: Some APIs return success:true in the error object
+      if (error.response.data.success === true) {
+        console.log("✅ Found success:true in error response - treating as success");
+        return {
+          success: true,
+          message: error.response.data.message || "Deposit processed successfully",
+          data: error.response.data.data
+        };
+      }
+      
+      // If explicit success:false is present, return that with the message
+      if (error.response.data.success === false) {
+        return {
+          success: false,
+          message: error.response.data.message || "Failed to process deposit commitment"
+        };
+      }
+    }
+    
+    // Handle other error scenarios with proper status code checking
+    if (error.response) {
+      console.error("API Error Response:", error.response.data);
+      
+      // Status code-based error messages
+      if (error.response.status === 401) {
+        return {
+          success: false,
+          message: "Authentication required to process this deposit"
+        };
+      } else if (error.response.status === 403) {
+        return {
+          success: false,
+          message: "You don't have permission to process this deposit"
+        };
+      }
+      
+      // Return server error message if available
+      return {
+        success: false,
+        message: error.response.data?.message || "Failed to process initial deposit",
+        errors: error.response.data?.errors
+      };
+    }
+    
+    // Network errors
     return {
       success: false,
       message: error.message || "Network error or server unavailable"

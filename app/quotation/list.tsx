@@ -195,7 +195,16 @@ const QuotationListScreen: React.FC = () => {
   const handleRefresh = (): void => {
     fetchQuotations(true);
   };
-
+  const formatDateWithTextMonth = (dateString: string): string => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const options: Intl.DateTimeFormatOptions = { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    };
+    return date.toLocaleDateString(undefined, options);
+  };
   const handleConfirmQuotation = async (quotationCode: string): Promise<void> => {
     Alert.alert(
       'Confirm Quotation',
@@ -336,19 +345,18 @@ const QuotationListScreen: React.FC = () => {
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
   
         <View style={styles.quotationFooter}>
-          <Text style={[styles.dateText, { color: colors.textSecondary }]}>
-            Created on {new Date(item.createdAt).toLocaleDateString()}
-          </Text>
-          
+        <Text style={[styles.dateText, { color: colors.textSecondary }]}>
+  Created on {formatDateWithTextMonth(item.createdAt)}
+</Text>
           <View style={styles.actionButtonsContainer}>
-            {canConfirm && (
+            {/* {canConfirm && (
               <TouchableOpacity
                 style={styles.confirmButton}
                 onPress={() => handleConfirmQuotation(item.quotationCode)}
               >
                 <Text style={styles.confirmButtonText}>Confirm</Text>
               </TouchableOpacity>
-            )}
+            )} */}
             
             {showViewContract && (
               <TouchableOpacity

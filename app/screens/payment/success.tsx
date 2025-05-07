@@ -66,7 +66,7 @@ export default function PaymentSuccessScreen() {
             </Text>
           </TouchableOpacity>
           
-          <TouchableOpacity
+          {/* <TouchableOpacity
             style={[
               styles.button,
               {
@@ -82,7 +82,7 @@ export default function PaymentSuccessScreen() {
             ]}>
               Continue to Checkout
             </Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
           
           <TouchableOpacity
             style={[

@@ -172,3 +172,91 @@ export const getDecorServiceByProviderAPI = async (slug: string): Promise<any> =
     throw error;
   }
 };
+// Search decor services with filter parameters
+export const searchDecorServicesAPI = async (
+  params: {
+    style?: string;
+    sublocation?: string;
+    categoryName?: string;
+    seasonNames?: string[];
+  }
+): Promise<IDecor[]> => {
+  const apiClient = await initApiClient();
+  
+  try {
+    // Create URLSearchParams object for query parameters
+    const queryParams = new URLSearchParams();
+    
+    // Add parameters only if they exist and have value
+    if (params.style) queryParams.append('Style', params.style);
+    if (params.sublocation) queryParams.append('Sublocation', params.sublocation);
+    if (params.categoryName) queryParams.append('CategoryName', params.categoryName);
+    
+    // Handle array of season names
+    if (params.seasonNames && params.seasonNames.length > 0) {
+      params.seasonNames.forEach(season => {
+        queryParams.append('SeasonNames', season);
+      });
+    }
+    
+    // Make the GET request with query parameters
+    const url = `/api/DecorService/search?${queryParams.toString()}`;
+    console.log("🔍 Searching decor services with URL:", url);
+    
+    const response = await apiClient.get(url);
+    
+    // Handle response data
+    if (response.data && Array.isArray(response.data)) {
+      // Process each decor service
+      const decorServices = response.data.map((service: IDecor) => {
+        // Process images (handle both string[] and object[] formats)
+        const validImages = Array.isArray(service.images) 
+          ? service.images.map((image: any) => {
+              return typeof image === 'string' 
+                ? image 
+                : (image && image.imageURL) 
+                  ? image.imageURL 
+                  : 'https://via.placeholder.com/150';
+            })
+          : ['https://via.placeholder.com/150'];
+        
+        // Process seasons (handle both string[] and object[] formats)
+        const validSeasons = Array.isArray(service.seasons)
+          ? service.seasons.map((season: any) => {
+              if (typeof season === 'string') return season;
+              return season.seasonName || season.name || "No Season";
+            })
+          : ["No Season"];
+        
+        // Return processed service
+        return {
+          ...service,
+          images: validImages,
+          seasons: validSeasons,
+        };
+      });
+      
+      return decorServices;
+    } else {
+      // If response.data is not an array, return an empty array
+      console.log("ℹ️ No matching decor services found");
+      return [];
+    }
+  } catch (error: any) {
+    // Log error details
+    console.error("🔴 Search Decor Services Error:", {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    });
+    
+    // Return empty array for 404 (Not Found) responses
+    if (error.response?.status === 404) {
+      console.log("ℹ️ No matching decor services found (404 response)");
+      return [];
+    }
+    
+    // Throw error for other errors
+    throw new Error(error.response?.data?.message || "Failed to search decor services.");
+  }
+};

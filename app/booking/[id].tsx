@@ -88,6 +88,16 @@ const BookingScreen = () => {
   const [note, setNote] = useState<string>("");
   const [expectedCompletion, setExpectedCompletion] = useState<string>("");
   
+// Format date with text month (e.g., "May 7, 2025")
+const formatDateWithTextMonth = (date: Date) => {
+  const options: Intl.DateTimeFormatOptions = { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  };
+  return date.toLocaleDateString(undefined, options);
+};
+  
   // Keep track of service info on mount and when params change
   useEffect(() => {
     // Keep track of service information in global state
@@ -374,12 +384,12 @@ const BookingScreen = () => {
         // Refresh addresses to get any potential new addresses
         await fetchAddresses();
         
-        // Format the returned date consistently for display
+        // Format the returned date consistently for display with text month
         let displayDate = '';
         if (response.data.timeSlots && response.data.timeSlots.length > 0) {
-          // Convert the date string to a Date object and format it consistently
+          // Convert the date string to a Date object and format it with text month
           const dateObj = new Date(response.data.timeSlots[0].surveyDate);
-          displayDate = dateObj.toLocaleDateString();
+          displayDate = formatDateWithTextMonth(dateObj);
         }
         
         Alert.alert(
@@ -618,7 +628,7 @@ Thank you for your booking. We'll be in touch soon.`,
                     style={styles.inputIcon}
                   />
                   <Text style={[styles.dateText, { color: colors.text }]}>
-                    {surveyDate.toLocaleDateString()}
+                    {formatDateWithTextMonth(surveyDate)}
                   </Text>
                   <Ionicons 
                     name="chevron-down" 
@@ -635,34 +645,6 @@ Thank you for your booking. We'll be in touch soon.`,
                   onClose={() => setShowDatePicker(false)}
                 />
               </View>
-              
-              {/* Expected Completion
-              <View style={styles.formGroup}>
-                <Text style={[styles.label, { color: colors.text }]}>
-                  <Ionicons name="time-outline" size={18} color={colors.primary} /> 
-                  {" "}Expected Completion
-                </Text>
-                <View style={[styles.textInputWrapper, { 
-                  borderColor: colors.border,
-                  backgroundColor: `${colors.primary}10`,
-                }]}>
-                  <Ionicons 
-                    name="calendar-outline" 
-                    size={20} 
-                    color={colors.primary} 
-                    style={styles.inputIcon}
-                  />
-                  <TextInput
-                    style={[styles.textInput, { 
-                      color: colors.text,
-                    }]}
-                    placeholder="When do you expect this to be completed?"
-                    placeholderTextColor={colors.textSecondary}
-                    value={expectedCompletion}
-                    onChangeText={setExpectedCompletion}
-                  />
-                </View>
-              </View> */}
               
               {/* Notes */}
               <View style={styles.formGroup}>
@@ -998,4 +980,5 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
+
 export default BookingScreen;

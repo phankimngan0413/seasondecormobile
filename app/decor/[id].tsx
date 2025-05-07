@@ -19,6 +19,7 @@ import { Colors } from "@/constants/Colors";
 import CustomButton from "@/components/ui/Button/Button";
 import { addFavoriteServiceAPI } from "@/utils/favoriteAPI";
 import { getUserIdFromToken } from "@/services/auth";
+import { getReviewByServiceIdAPI, IReview } from "@/utils/reviewAPI";
 const { width } = Dimensions.get("window");
 
 // Define proper interfaces based on actual API response
@@ -88,6 +89,9 @@ const DecorDetailScreen = () => {
   const [showFullSublocation, setShowFullSublocation] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
 const [favoriteLoading, setFavoriteLoading] = useState(false);
+const [reviews, setReviews] = useState<IReview[]>([]);
+const [reviewsLoading, setReviewsLoading] = useState(false);
+const [reviewsError, setReviewsError] = useState<string | null>(null);
   const { theme } = useTheme();
   const validTheme = theme as "light" | "dark";
   const colors = Colors[validTheme];
@@ -135,12 +139,21 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
   };
   const PRIMARY_COLOR = colors.primary || "#5fc1f1";
 
-  useEffect(() => {
-    if (id) {
-      fetchDecorDetails(id as string); 
-    }
-  }, [id]);
-
+  const renderStarRating = (rating: number) => {
+    return (
+      <View style={styles.starsRow}>
+        {[1, 2, 3, 4, 5].map((star) => (
+          <Ionicons
+            key={`star-${star}`}
+            name={star <= rating ? "star" : "star-outline"}
+            size={16}
+            color="#FFD700"
+            style={{ marginRight: 2 }}
+          />
+        ))}
+      </View>
+    );
+  };
   // Create a more specific wrapper for the API call
   const fetchDecorServiceById = async (decorId: number) => {
     // This wrapper ensures the return type matches what we need
@@ -152,7 +165,51 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
       errors: []
     };
   };
+// 3. Sửa hàm fetchReviews để sử dụng serviceId
+const fetchReviews = async (serviceId: number) => {
+  try {
+    setReviewsLoading(true);
+    setReviewsError(null);
+    
+    const reviewsData = await getReviewByServiceIdAPI(serviceId);
+    if (reviewsData) {
+      setReviews(Array.isArray(reviewsData) ? reviewsData : []);
+    } else {
+      setReviews([]);
+    }
+  } catch (error: any) {
+    console.error("Failed to fetch reviews:", error.message);
+    setReviewsError("Failed to load reviews");
+    setReviews([]);
+  } finally {
+    setReviewsLoading(false);
+  }
+};
+// 4. Sửa useEffect để gọi fetchReviews với serviceId
+useEffect(() => {
+  if (id) {
+    fetchDecorDetails(id as string);
+    // Fetch reviews khi id thay đổi - đảm bảo sử dụng đúng serviceId
+    fetchReviews(Number(id));
+  }
+}, [id]);
 
+// Khi đã có dữ liệu decorDetail, có thể cập nhật để sử dụng decorDetail.id
+useEffect(() => {
+  if (decorDetail && decorDetail.id) {
+    // Sử dụng ID của dịch vụ từ decorDetail để lấy reviews
+    fetchReviews(decorDetail.id);
+  }
+}, [decorDetail]);
+
+// Hoặc nếu bạn chỉ muốn sửa trong một useEffect, có thể gộp lại:
+useEffect(() => {
+  if (id) {
+    fetchDecorDetails(id as string);
+    // Fetch reviews khi id thay đổi
+    fetchReviews(Number(id)); // Sử dụng id từ URL params
+  }
+}, [id]);
   const fetchDecorDetails = async (id: string) => {
     try {
       setLoading(true);
@@ -565,7 +622,101 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
             />
           </View>
         )}
-
+<View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+  <View style={styles.sectionHeader}>
+    <Text style={[styles.sectionTitle, { color: colors.text }]}>
+      <Ionicons name="star-outline" size={20} color={PRIMARY_COLOR} /> Reviews
+    </Text>
+    
+    {reviews.length > 0 && (
+      <View style={styles.reviewRatingSummary}>
+        <Text style={[styles.ratingAverage, { color: colors.text }]}>
+          {(reviews.reduce((sum, review) => sum + review.rate, 0) / reviews.length).toFixed(1)}
+        </Text>
+        <Text style={[styles.reviewCount, { color: colors.textSecondary }]}>
+          ({reviews.length})
+        </Text>
+      </View>
+    )}
+  </View>
+  
+  <View style={[styles.divider, { backgroundColor: colors.border }]} />
+  
+  {reviewsLoading ? (
+    <View style={styles.reviewsLoadingContainer}>
+      <ActivityIndicator size="small" color={PRIMARY_COLOR} />
+      <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+        Loading reviews...
+      </Text>
+    </View>
+  ) : reviewsError ? (
+    <Text style={[styles.errorText, { color: colors.error || '#FF5252' }]}>
+      {reviewsError}
+    </Text>
+  ) : reviews.length === 0 ? (
+    <Text style={[styles.noDataText, { color: colors.textSecondary }]}>
+      No reviews yet. Be the first to review!
+    </Text>
+  ) : (
+    <>
+      {/* Reviews List */}
+      {reviews.slice(0, 3).map((review, index) => (
+        <View 
+          key={`review-${review.id || index}`}
+          style={[
+            styles.reviewItem,
+            index < reviews.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border }
+          ]}
+        >
+          <View style={styles.reviewHeader}>
+            <View style={styles.reviewUser}>
+              <View style={[styles.reviewAvatar, { backgroundColor: PRIMARY_COLOR }]}>
+                <Text style={styles.reviewInitial}>
+                  {review.userName?.charAt(0)?.toUpperCase() || "U"}
+                </Text>
+              </View>
+              <View>
+                <Text style={[styles.reviewUsername, { color: colors.text }]}>
+                  {review.userName || "Anonymous"}
+                </Text>
+                <Text style={[styles.reviewDate, { color: colors.textSecondary }]}>
+                  {new Date(review.createAt).toLocaleDateString()}
+                </Text>
+              </View>
+            </View>
+            {renderStarRating(review.rate)}
+          </View>
+          
+          <Text style={[styles.reviewComment, { color: colors.text }]}>
+            {review.comment}
+          </Text>
+          
+          {/* Review Images (if available) */}
+          {review.images && review.images.length > 0 && (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.reviewImagesContainer}
+            >
+               {review.images.map((imageUrl, imgIndex) => (
+                                    <View key={imgIndex} style={styles.reviewImage}>
+                                      <Image 
+                                        source={{ uri: imageUrl }} 
+                                        style={styles.reviewImage}
+                                        resizeMode="cover"
+                                      />
+                                    </View>
+                                  ))}
+            </ScrollView>
+          )}
+        </View>
+      ))}
+      
+      {/* Show More Reviews Button (if there are more than 3) */}
+      
+    </>
+  )}
+</View>
         {/* Main Booking Button */}
         <View style={styles.bookingContainer}>
           <CustomButton
@@ -903,6 +1054,84 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 18,
     zIndex: 10,
+  },
+  reviewsLoadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  reviewRatingSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ratingAverage: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  reviewCount: {
+    fontSize: 14,
+    marginLeft: 4,
+  },
+  reviewItem: {
+    paddingVertical: 12,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  reviewUser: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reviewAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  reviewInitial: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  reviewUsername: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  reviewDate: {
+    fontSize: 12,
+  },
+  starsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reviewComment: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  reviewImagesContainer: {
+    flexDirection: 'row',
+    marginTop: 8,
+  },
+  reviewImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  showMoreButton: {
+    marginTop: 12,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    alignItems: 'center',
+  },
+  showMoreText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
 

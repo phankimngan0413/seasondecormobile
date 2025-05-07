@@ -48,7 +48,6 @@ export const getAllNotificationsAPI = async (): Promise<INotification[]> => {
       return [];
     }
   } catch (error) {
-    console.error("❌ Error fetching notifications:", error);
     return [];
   }
 };

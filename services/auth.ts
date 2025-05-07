@@ -295,53 +295,13 @@ class AuthService {
    * - Shows alert
    * - Redirects to login
    */
-  async handleSessionExpired(): Promise<void> {
-    // Prevent multiple alerts if already handling an expired session
-    if ('handleSessionExpired' in pendingPromises) {
-      logDebug("⚠️ Already handling expired session");
-      return pendingPromises['handleSessionExpired'];
-    }
-    
-    try {
-      pendingPromises['handleSessionExpired'] = this._handleSessionExpiredInternal();
-      await pendingPromises['handleSessionExpired'];
-      delete pendingPromises['handleSessionExpired'];
-    } catch (error) {
-      delete pendingPromises['handleSessionExpired'];
-      this.redirectToLogin();
-    }
-  }
+
 
   /**
    * Internal method for handling expired sessions
    * @private
    */
-  private async _handleSessionExpiredInternal(): Promise<void> {
-    try {
-      console.warn("⚠️ Token expired, logging out...");
-      await this.removeToken();
-      
-      // Show alert and redirect
-      return new Promise<void>((resolve) => {
-        Alert.alert(
-          "Phiên đăng nhập hết hạn", 
-          "Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.", 
-          [{ 
-            text: "OK", 
-            onPress: () => {
-              this.redirectToLogin();
-              resolve();
-            }
-          }]
-        );
-      });
-    } catch (error) {
-      console.error("🔴 Error handling expired session:", error);
-      this.redirectToLogin();
-      throw error;
-    }
-  }
-
+  
   /**
    * Redirect to login screen
    * @private
@@ -509,7 +469,7 @@ class AuthService {
         return null;
       }
       
-      // Đảm bảo token có tiền tố "Bearer "
+      // Ensure token has "Bearer " prefix
       const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
       logDebug("🟢 Formatted token for SignalR:", formattedToken);
       return formattedToken;
@@ -531,8 +491,8 @@ class AuthService {
         return false;
       }
       
-      // Kiểm tra token còn hiệu lực dựa vào decoded data
-      // Nếu không có decoded data, decode lại
+      // Check if token is still valid based on decoded data
+      // If no decoded data, decode it again
       if (!decodedTokenData) {
         this.decodeToken(token);
       }
@@ -542,7 +502,7 @@ class AuthService {
         return false;
       }
       
-      // Kiểm tra token còn hiệu lực không
+      // Check if token is still valid
       const currentTime = Math.floor(Date.now() / 1000);
       if (decodedTokenData.exp && decodedTokenData.exp < currentTime) {
         console.warn("🔴 SignalR token expired, attempting to refresh");
@@ -564,13 +524,13 @@ class AuthService {
    */
   getUserIdForSignalR(): number | null {
     try {
-      // Chỉ lấy user ID từ cache, không gọi API
+      // Only get user ID from cache, don't call API
       if (cachedUserId !== null) {
         logDebug("🟢 Using cached user ID for SignalR:", cachedUserId);
         return cachedUserId;
       }
       
-      // Nếu có decoded token data nhưng chưa có user ID
+      // If we have decoded token data but no user ID
       if (decodedTokenData) {
         const userId = decodedTokenData?.nameid 
           ? parseInt(decodedTokenData.nameid, 10) 
@@ -677,7 +637,6 @@ export const getToken = () => authService.getToken();
 export const setToken = (token: string) => authService.setToken(token);
 export const removeToken = () => authService.removeToken();
 export const getUserIdFromToken = () => authService.getUserId();
-export const handleSessionExpired = () => authService.handleSessionExpired();
 export const checkAuthStatus = () => authService.checkAuthStatus();
 export const refreshAuthToken = () => authService.refreshAuthToken();
 export const checkIsAuthenticated = () => authService.isUserAuthenticated();

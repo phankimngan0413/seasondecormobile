@@ -163,7 +163,7 @@ const canBookingBeCancelled = (statusCode: number): boolean => {
 // };
 const canShowQuotationActions = (statusCode: number): boolean => {
   // Only show quotation actions for status codes 0, 1, and 2
-  return statusCode === 0 || statusCode === 1 || statusCode === 2 || statusCode === 3|| statusCode === 4 || statusCode === 5 || statusCode === 6|| statusCode === 7;
+  return  statusCode === 2 || statusCode === 3|| statusCode === 4 || statusCode === 5 || statusCode === 6|| statusCode === 7;
 };
 // Check if booking is in progress (status=8) to show tracking button
 const hasTrackingAvailable = (statusCode: number): boolean => {
@@ -172,7 +172,18 @@ const hasTrackingAvailable = (statusCode: number): boolean => {
 const doesBookingNeedFinalPayment = (statusCode: number): boolean => {
   return statusCode === 9; // AllDone status
 };
-
+// Updated function to check if booking allows early deposit
+const canMakeEarlyDeposit = (booking: IBooking): boolean => {
+  // Chỉ hiển thị nút đặt cọc sớm khi booking có status = 1 (Planning)
+  // và chưa thanh toán đặt cọc sớm (isCommitDepositPaid = false)
+  return booking.status === 1 && booking.isCommitDepositPaid === false;
+};
+// Update the function to check if booking allows rating
+const canRateBooking = (booking: any): boolean => {
+  // Chỉ cho phép đánh giá khi booking có status code là 11 (Completed) 
+  // và chưa được đánh giá (isReviewed === false)
+  return booking.status === 11 && booking.isReviewed === false;
+};
 // Define the booking interface with proper typing
 interface IBooking {
   id?: number;
@@ -193,6 +204,8 @@ interface IBooking {
   serviceItems?: string;
   isQuoteExisted?: boolean; // Optional property to check if quotation exists
   isContractSigned?: boolean; // Optional property to check if contract is signed
+  isCommitDepositPaid?:boolean;
+  isReviewed?:boolean;
   decorService?: {
     id: number;
     style: string;
@@ -362,7 +375,16 @@ const BookingListScreen: React.FC = () => {
       setRefreshing(false);
     }
   };
-
+// Add this handler function for the rating button
+const handleRateBooking = (booking: IBooking): void => {
+  console.log('📘 Navigating to rating screen for booking:', booking.bookingId);
+  
+  // Navigate to rating screen
+  router.push({
+    pathname: '/booking/rate-booking',
+    params: { bookingId: booking.bookingId }
+  });
+};
   const handleRefresh = (): void => {
     fetchBookings(true);
   };
@@ -401,6 +423,16 @@ const BookingListScreen: React.FC = () => {
         bookingCode: booking.bookingCode 
       }
     });
+  };
+  const formatDateWithTextMonth = (dateString: string): string => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const options: Intl.DateTimeFormatOptions = { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    };
+    return date.toLocaleDateString(undefined, options);
   };
   const handleConfirmBooking = async (booking: IBooking): Promise<void> => {
     Alert.alert(
@@ -442,10 +474,10 @@ const BookingListScreen: React.FC = () => {
   };
 
   const handleMakeDeposit = (booking: IBooking): void => {
-    console.log('📘 Navigating to deposit payment screen for booking:', booking.bookingCode);
+    console.log('📘 Navigating to initial deposit screen for booking:', booking.bookingCode);
     
     // Log booking details that might be useful for the deposit screen
-    console.log('📘 Booking details for deposit:', {
+    console.log('📘 Booking details for initial deposit:', {
       id: booking.id || booking.bookingId,
       code: booking.bookingCode,
       status: booking.status,
@@ -453,10 +485,10 @@ const BookingListScreen: React.FC = () => {
       totalPrice: booking.totalPrice
     });
     
-    // Navigate to deposit payment screen
+    // Navigate to initial deposit screen with booking code
     router.push({
-      pathname: '/booking/deposit-payment',
-      params: { contractCode: booking.bookingCode }
+      pathname: '/booking/initial-deposit',
+      params: { bookingCode: booking.bookingCode }
     });
   };
 
@@ -544,10 +576,10 @@ const BookingListScreen: React.FC = () => {
     const needsFinalPayment = doesBookingNeedFinalPayment(statusCode);
     // Check if booking has a quotation code
     const hasQuotationActions = canShowQuotationActions(statusCode);
-    
+    const allowEarlyDeposit = canMakeEarlyDeposit(item);
     // Use either id or bookingId depending on which is available
     const bookingId = item.id || item.bookingId;
-    
+    const canRate = canRateBooking(item);
     return (
       <TouchableOpacity
         style={[styles.bookingCard, { backgroundColor: colors.card }]}
@@ -595,14 +627,13 @@ const BookingListScreen: React.FC = () => {
 
         {/* Survey date if available */}
         {item.surveyDate ? (
-          <View style={styles.bookingDetail}>
-            <Ionicons name="calendar-outline" size={18} color={PRIMARY_COLOR} />
-            <Text style={[styles.detailText, { color: colors.textSecondary }]}>
-              Survey Date: {new Date(item.surveyDate).toLocaleDateString()} {item.surveyTime || ''}
-            </Text>
-          </View>
-        ) : null}
-
+  <View style={styles.bookingDetail}>
+    <Ionicons name="calendar-outline" size={18} color={PRIMARY_COLOR} />
+    <Text style={[styles.detailText, { color: colors.textSecondary }]}>
+      Survey Date: {formatDateWithTextMonth(item.surveyDate)} {item.surveyTime || ''}
+    </Text>
+  </View>
+) : null}
         {/* Address */}
         <View style={styles.bookingDetail}>
           <Ionicons name="location-outline" size={18} color={PRIMARY_COLOR} />
@@ -637,10 +668,9 @@ const BookingListScreen: React.FC = () => {
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
         <View style={styles.bookingFooter}>
-          <Text style={[styles.dateText, { color: colors.textSecondary }]}>
-            Booked on {new Date(item.createdAt).toLocaleDateString()}
-          </Text>
-          
+        <Text style={[styles.dateText, { color: colors.textSecondary }]}>
+  Booked on {formatDateWithTextMonth(item.createdAt)}
+</Text>
           <View style={styles.actionButtonsContainer}>
             {/* View Tracking button - Only show for status 8 (Progressing) */}
             {hasTracking && (
@@ -651,7 +681,14 @@ const BookingListScreen: React.FC = () => {
                 <Text style={styles.trackingButtonText}>View Tracking</Text>
               </TouchableOpacity>
             )}
-            
+            {allowEarlyDeposit && (
+      <TouchableOpacity
+        style={styles.earlyDepositButton}
+        onPress={() => handleMakeDeposit(item)}
+      >
+        <Text style={styles.earlyDepositButtonText}>Make Deposit</Text>
+      </TouchableOpacity>
+    )}
             {/* View Quotation button - Show if quotation exists */}
             {hasQuotationActions && (
               <TouchableOpacity
@@ -679,6 +716,14 @@ const BookingListScreen: React.FC = () => {
                 <Text style={styles.depositButtonText}>Pay Deposit</Text>
               </TouchableOpacity>
             )} */}
+            {canRate && (
+      <TouchableOpacity
+        style={styles.rateButton}
+        onPress={() => handleRateBooking(item)}
+      >
+        <Text style={styles.rateButtonText}>Rate Service</Text>
+      </TouchableOpacity>
+    )}
              {needsFinalPayment && (
       <TouchableOpacity
         style={styles.finalPaymentButton}
@@ -1085,6 +1130,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
+  // Add these to your styles object
+earlyDepositButton: {
+  backgroundColor: '#ff9500', // Orange color for early deposit
+  paddingVertical: 6,
+  paddingHorizontal: 12,
+  borderRadius: 6,
+},
+earlyDepositButtonText: {
+  color: '#fff',
+  fontSize: 12,
+  fontWeight: '500',
+},
+// Add these to your styles object
+rateButton: {
+  backgroundColor: '#5856d6', // Purple color for rating
+  paddingVertical: 6,
+  paddingHorizontal: 12,
+  borderRadius: 6,
+},
+rateButtonText: {
+  color: '#fff',
+  fontSize: 12,
+  fontWeight: '500',
+},
 });
 
 export default BookingListScreen;

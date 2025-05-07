@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   StatusBar,
   RefreshControl,
+  Alert
 } from "react-native";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -40,6 +41,7 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [isRedirecting, setIsRedirecting] = useState<boolean>(false);
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -48,7 +50,7 @@ export default function ProfileScreen() {
 
       const token = await getToken();
       if (!token) {
-        router.replace("/(auth)/login");
+        // handleRedirectToLogin();
         return;
       }
 
@@ -78,9 +80,35 @@ export default function ProfileScreen() {
     fetchProfile();
   }, [fetchProfile]);
 
+  
+
   const handleLogout = async () => {
-    await removeToken();
-    router.replace("/(auth)/login");
+    // Prevent multiple logout attempts
+    if (isRedirecting) return;
+    
+    setIsRedirecting(true);
+    
+    Alert.alert(
+      "Logout",
+      "Are you sure you want to logout?",
+      [
+        {
+          text: "Cancel",
+          onPress: () => setIsRedirecting(false),
+          style: "cancel"
+        },
+        {
+          text: "Logout",
+          onPress: async () => {
+            await removeToken();
+            // Using replace instead of push to prevent going back to profile
+            router.replace("/(auth)/login");
+          },
+          style: "destructive"
+        }
+      ],
+      { cancelable: true }
+    );
   };
 
   if (loading && !refreshing) {
@@ -92,19 +120,19 @@ export default function ProfileScreen() {
     );
   }
 
-  if (error) {
-    return (
-      <View style={[styles.errorContainer, { backgroundColor: colors.background }]}>
-        <Ionicons name="alert-circle-outline" size={48} color={colors.error || "#e74c3c"} />
-        <Text style={[styles.errorText, { color: colors.text }]}>Account error, please log in again</Text>
-        <CustomButton 
-          title="Logout" 
-          onPress={handleLogout} 
-          style={{ backgroundColor: colors.primary, marginTop: 20 }} 
-        />
-      </View>
-    );
-  }
+  // if (error) {
+  //   return (
+  //     <View style={[styles.errorContainer, { backgroundColor: colors.background }]}>
+  //       <Ionicons name="alert-circle-outline" size={48} color={colors.error || "#e74c3c"} />
+  //       <Text style={[styles.errorText, { color: colors.text }]}>Account error, please log in again</Text>
+  //       <CustomButton 
+  //         title="Log in" 
+  //         onPress={handleRedirectToLogin} 
+  //         style={{ backgroundColor: colors.primary, marginTop: 20 }} 
+  //       />
+  //     </View>
+  //   );
+  // }
 
   return (
     <>
@@ -166,24 +194,6 @@ export default function ProfileScreen() {
             </View>
           </LinearGradient>
 
-          {/* Account Stats */}
-          {/* <View style={[styles.statsContainer, { backgroundColor: colors.card }]}>
-            <View style={styles.statItem}>
-              <Text style={[styles.statNumber, { color: colors.text }]}>12</Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Orders</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={[styles.statNumber, { color: colors.text }]}>3</Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Reviews</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={[styles.statNumber, { color: colors.text }]}>5</Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Wishlists</Text>
-            </View>
-          </View> */}
-
           {/* Wallet Balance */}
           <WalletBalance />
 
@@ -192,24 +202,6 @@ export default function ProfileScreen() {
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Account Settings</Text>
             <ProfileMenu />
           </View>
-
-          {/* Order Tracking Section */}
-          {/* <View style={[styles.orderTrackingContainer, { backgroundColor: colors.card }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Order Tracking</Text>
-            <TouchableOpacity 
-              style={styles.trackingItem}
-              onPress={() => router.push("/screens/Orders")}
-            >
-              <View style={styles.trackingIconContainer}>
-                <Ionicons name="cube-outline" size={24} color={colors.primary} />
-              </View>
-              <View style={styles.trackingContent}>
-                <Text style={[styles.trackingTitle, { color: colors.text }]}>Recent Order #SC8742</Text>
-                <Text style={[styles.trackingSubtitle, { color: colors.textSecondary }]}>In transit - Arriving Mar 31</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View> */}
 
           {/* Logout Button */}
           <View style={styles.logoutContainer}>
@@ -319,38 +311,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   
-  // Stats Container
-  statsContainer: {
-    flexDirection: 'row',
-    marginHorizontal: 16,
-    marginTop: -20,
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-  },
-  statDivider: {
-    width: 1,
-    height: '70%',
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
-    marginHorizontal: 10,
-  },
-  
   // Menu Container
   menuContainer: {
     marginHorizontal: 16,
@@ -367,44 +327,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
     marginBottom: 16,
-  },
-  
-  // Order Tracking
-  orderTrackingContainer: {
-    marginHorizontal: 16,
-    marginTop: 20,
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  trackingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  trackingIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0, 150, 255, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  trackingContent: {
-    flex: 1,
-  },
-  trackingTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  trackingSubtitle: {
-    fontSize: 14,
   },
   
   // Logout

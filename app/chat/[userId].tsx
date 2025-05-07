@@ -12,39 +12,124 @@ import {
   KeyboardAvoidingView,
   SafeAreaView,
   AppState,
-  AppStateStatus
+  AppStateStatus,
+  Linking,
+  Alert,
+  ClipboardStatic,
+  GestureResponderEvent
 } from "react-native";
 import { signalRService } from "@/services/SignalRService";
 import { Colors } from "@/constants/Colors";
 import { useTheme } from "@/constants/ThemeContext";
 import { useRouter } from "expo-router";
 import { useLocalSearchParams } from "expo-router";
-import { launchImageLibrary } from 'react-native-image-picker';
-import { Ionicons } from "@expo/vector-icons";
+import { launchImageLibrary, ImagePickerResponse, Asset } from 'react-native-image-picker';
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { getChatHistoryAPI } from "@/utils/chatAPI";
 import { getUserIdFromToken, getToken } from "@/services/auth";
 
-// Improved Message interface
+// Import Clipboard with correct type
+const Clipboard: ClipboardStatic = require('react-native').Clipboard;
+
+// Define interfaces for better type checking
+interface FileObject {
+  fileUrl?: string;
+  file_url?: string;
+  url?: string;
+  uri?: string;
+  path?: string;
+  file?: {
+    [key: string]: any;  // This allows accessing properties with bracket notation
+    fileUrl?: string;
+    file_url?: string;
+    url?: string;
+    uri?: string;
+    path?: string;
+  };
+  fileName?: string;
+  contentType?: string;
+  mimeType?: string;
+  name?: string;
+  [key: string]: any;  // This allows accessing properties with bracket notation
+}
+
+// Improved Message interface with proper types
 interface Message {
-  id: number | string | null;  // Updated to explicitly allow null
+  id: number | string | null;
   senderId: number;
   receiverId: number;
   message: string;
   sentTime: string;
-  files?: Array<{fileUrl?: string}>;
+  files?: Array<FileObject>;
   isRead?: boolean;
 }
 
-// Utility function to extract image URL from various possible formats
-const getImageUrl = (fileObject: any): string | null => {
+// Type for file info
+interface FileInfo {
+  url: string | null;
+  fileType: string;
+  fileName: string;
+}
+
+// Check if URL is a PDF
+const isPdfUrl = (url: string | null): boolean => {
+  if (!url) return false;
+  
+  // Check file extension
+  const lowercaseUrl = url.toLowerCase();
+  if (lowercaseUrl.endsWith('.pdf')) return true;
+  
+  // Check for PDF in path
+  if (lowercaseUrl.includes('/pdf/')) return true;
+  
+  // Check for common PDF hosting patterns
+  if (lowercaseUrl.includes('cloudinary') && lowercaseUrl.includes('.pdf')) return true;
+  
+  return false;
+};
+
+// Extract file name from URL
+const getFileNameFromUrl = (url: string | null): string => {
+  if (!url) return 'document.pdf';
+  
+  try {
+    // Split by slashes and get last part
+    const parts = url.split('/');
+    let fileName = parts[parts.length - 1];
+    
+    // Remove query parameters if any
+    if (fileName.includes('?')) {
+      fileName = fileName.split('?')[0];
+    }
+    
+    // Try to decode URL encoding
+    try {
+      fileName = decodeURIComponent(fileName);
+    } catch (e) {
+      // Ignore decoding errors
+    }
+    
+    return fileName || 'document.pdf';
+  } catch (e) {
+    return 'document.pdf';
+  }
+};
+
+// Utility function to extract file URL from various possible formats
+const getFileUrl = (fileObject: FileObject | string | null): string | null => {
   if (!fileObject) return null;
   
+  // Check if the object itself is a string (might be directly the URL)
+  if (typeof fileObject === 'string') {
+    return fileObject;
+  }
+  
   // Check for various common URL property names
-  const possibleUrlProps = ['fileUrl', 'file_url', 'url', 'uri', 'path'];
+  const possibleUrlProps: Array<keyof FileObject> = ['fileUrl', 'file_url', 'url', 'uri', 'path'];
   
   for (const prop of possibleUrlProps) {
     if (fileObject[prop] && typeof fileObject[prop] === 'string') {
-      return fileObject[prop];
+      return fileObject[prop] as string;
     }
   }
   
@@ -52,31 +137,53 @@ const getImageUrl = (fileObject: any): string | null => {
   if (fileObject.file && typeof fileObject.file === 'object') {
     for (const prop of possibleUrlProps) {
       if (fileObject.file[prop] && typeof fileObject.file[prop] === 'string') {
-        return fileObject.file[prop];
+        return fileObject.file[prop] as string;
       }
     }
   }
   
-  // Check if the object itself is a string (might be directly the URL)
-  if (typeof fileObject === 'string') {
-    return fileObject;
+  return null;
+};
+
+// Function to handle PDF opening/downloading
+const handleOpenPdf = (pdfUrl: string | null): void => {
+  if (!pdfUrl) {
+    Alert.alert("Error", "Invalid PDF URL");
+    return;
   }
   
-  // Log the structure to debug
-  return null;
+  Linking.canOpenURL(pdfUrl)
+    .then(supported => {
+      if (supported) {
+        return Linking.openURL(pdfUrl);
+      } else {
+        Alert.alert(
+          "Cannot Open URL",
+          "Your device doesn't support opening this URL directly. Would you like to copy it to your clipboard?",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Copy URL", onPress: () => Clipboard.setString(pdfUrl) }
+          ]
+        );
+      }
+    })
+    .catch(error => {
+      console.error("Error opening PDF URL:", error);
+      Alert.alert("Error", "Could not open the PDF file");
+    });
 };
 
 export default function ChatScreen() {
   const router = useRouter();
   const searchParams = useLocalSearchParams();
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const { theme } = useTheme();
   const validTheme = theme as "light" | "dark";
   const colors = Colors[validTheme];
-  const [selectedImage, setSelectedImage] = useState<any>(null);
-  const [sendingMessage, setSendingMessage] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [selectedImage, setSelectedImage] = useState<Asset | null>(null);
+  const [sendingMessage, setSendingMessage] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
   const flatListRef = useRef<FlatList<Message>>(null);
   const mainInputRef = useRef<TextInput>(null);
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
@@ -89,7 +196,7 @@ export default function ChatScreen() {
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
 
   // Debug function to check message structure
-  const debugMessageStructure = (message: any) => {
+  const debugMessageStructure = (message: Message | null): void => {
     try {
       if (!message) return;
       
@@ -114,7 +221,7 @@ export default function ChatScreen() {
     let isMounted = true;
     
     // Setup SignalR connection
-    const setupSignalR = async () => {
+    const setupSignalR = async (): Promise<void> => {
       try {
         if (isMounted) setConnectionStatus('connecting');
         const token = await getToken();
@@ -136,7 +243,7 @@ export default function ChatScreen() {
     };
 
     // Handle app state changes to reconnect when app comes to foreground
-    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+    const handleAppStateChange = (nextAppState: AppStateStatus): void => {
       if (nextAppState === 'active') {
         console.log('App has come to the foreground, checking SignalR connection');
         if (!signalRService.isConnected()) {
@@ -177,7 +284,7 @@ export default function ChatScreen() {
 
   // Fetch user ID on component mount
   useEffect(() => {
-    const fetchUserId = async () => {
+    const fetchUserId = async (): Promise<void> => {
       try {
         const userId = await getUserIdFromToken();
         console.log("Current user ID:", userId);
@@ -190,7 +297,7 @@ export default function ChatScreen() {
   }, []);
 
   useEffect(() => {
-    const messageReceivedHandler = (message: Message) => {
+    const messageReceivedHandler = (message: Message): void => {
       console.log('Message received via SignalR:', message);
       
       if (!message) {
@@ -239,7 +346,7 @@ export default function ChatScreen() {
     signalRService.onMessageReceived(messageReceivedHandler);
     
     // Register message sent handler to update UI
-    const messageSentHandler = (sentMessage: Message) => {
+    const messageSentHandler = (sentMessage: Message): void => {
       console.log('Message sent confirmation received:', sentMessage);
       
       if (!sentMessage) {
@@ -315,7 +422,7 @@ export default function ChatScreen() {
 
   // Initialize chat
   useEffect(() => {
-    const initializeChat = async () => {
+    const initializeChat = async (): Promise<void> => {
       try {
         await fetchChatHistory();
       } catch (error) {
@@ -333,7 +440,7 @@ export default function ChatScreen() {
     }
   }, [chatHistory]);
 
-  const fetchChatHistory = useCallback(async () => {
+  const fetchChatHistory = useCallback(async (): Promise<void> => {
     setLoading(true);
     try {
       const history = await getChatHistoryAPI(receiverId);
@@ -366,8 +473,29 @@ export default function ChatScreen() {
     }
   }, [receiverId]);
 
+  const getBase64FromUri = async (uri: string): Promise<string> => {
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64data = reader.result as string;
+          const base64Content = base64data.split(',')[1] || '';
+          resolve(base64Content);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.error("Failed to convert image to base64", error);
+      throw error;
+    }
+  };
+
   // Handle sending messages with improved image handling
-  const handleSendMessage = async () => {
+  const handleSendMessage = async (): Promise<void> => {
     if (message.trim() === "" && !selectedImage) {
       console.log('No message or image to send');
       return;
@@ -397,7 +525,7 @@ export default function ChatScreen() {
 
       // Create temp message with a prefix to identify it
       const tempMessageId = `temp_${Date.now()}`;
-      const tempMessage = {
+      const tempMessage: Message = {
         id: tempMessageId,
         senderId: userId || 0,
         receiverId: receiverId,
@@ -408,7 +536,12 @@ export default function ChatScreen() {
 
       console.log('Preparing to send message:', tempMessage);
 
-      let fileData = [];
+      let fileData: Array<{
+        FileName: string;
+        Base64Content: string;
+        ContentType: string;
+      }> = [];
+      
       if (selectedImage && selectedImage.uri) {
         try {
           const base64Content = await getBase64FromUri(selectedImage.uri);
@@ -472,28 +605,8 @@ export default function ChatScreen() {
     }
   };
 
-  const getBase64FromUri = async (uri: string) => {
-    try {
-      const response = await fetch(uri);
-      const blob = await response.blob();
-
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const base64data = reader.result as string;
-          resolve(base64data.split(',')[1] || '');
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-    } catch (error) {
-      console.error("Failed to convert image to base64", error);
-      throw error;
-    }
-  };
-
   // Image Picker
-  const pickImage = async () => {
+  const pickImage = async (): Promise<void> => {
     try {
       if (mainInputRef.current) {
         mainInputRef.current.blur();
@@ -520,11 +633,11 @@ export default function ChatScreen() {
     }
   };
 
-  const handleRemoveImage = () => {
+  const handleRemoveImage = (): void => {
     setSelectedImage(null);
   };
 
-  const keyExtractor = useCallback((item: Message, index: number) => {
+  const keyExtractor = useCallback((item: Message, index: number): string => {
     // Enhanced key extractor that won't fail on any input
     if (!item) return `item-${index}-${Math.random().toString(36)}`;
     if (item.id === undefined || item.id === null) return `item-${index}-${Math.random().toString(36)}`;
@@ -536,6 +649,7 @@ export default function ChatScreen() {
     }
   }, []);
 
+  // Enhanced renderMessageItem with PDF support
   const renderMessageItem = useCallback(({ item, index }: { item: Message, index: number }) => {
     if (!item) {
       console.warn('Null item at index', index);
@@ -564,11 +678,51 @@ export default function ChatScreen() {
         ? "#F0F0F0" // Light text for other's messages in dark mode
         : "#000000"; // Dark text for other's messages in light mode
   
-    // Get image URL if exists, using our more robust function
-    let imageUrl = null;
+    // Process file (image or PDF)
+    let fileContent = null;
     if (item.files && Array.isArray(item.files) && item.files.length > 0) {
-      imageUrl = getImageUrl(item.files[0]);
-      if (imageUrl) {
+      const fileUrl = getFileUrl(item.files[0]);
+      
+      if (fileUrl) {
+        // Check if it's a PDF
+        if (isPdfUrl(fileUrl)) {
+          const fileName = getFileNameFromUrl(fileUrl);
+          
+          fileContent = (
+            <TouchableOpacity 
+              style={styles.pdfContainer}
+              onPress={() => handleOpenPdf(fileUrl)}
+            >
+              <View style={styles.pdfContent}>
+                <MaterialCommunityIcons name="file-pdf-box" size={28} color="#D93025" />
+                <View style={styles.pdfTextContainer}>
+                  <Text style={styles.pdfFileName} numberOfLines={1} ellipsizeMode="middle">
+                    {fileName}
+                  </Text>
+                  <Text style={styles.pdfSubtext}>
+                    PDF • Tap to download
+                  </Text>
+                </View>
+                <Ionicons name="download-outline" size={20} color="#505050" />
+              </View>
+            </TouchableOpacity>
+          );
+        } else {
+          // Regular image handling
+          fileContent = (
+            <View style={styles.imageContainer}>
+              <Image 
+                source={{ uri: fileUrl }} 
+                style={styles.messageImage} 
+                resizeMode="cover"
+                onError={(error) => {
+                  console.error(`Image load error for message ${item.id}:`, error.nativeEvent.error || 'Unknown error');
+                  console.log('Failed URL:', fileUrl);
+                }}
+              />
+            </View>
+          );
+        }
       }
     }
   
@@ -586,20 +740,7 @@ export default function ChatScreen() {
             </Text>
           )}
           
-          {imageUrl && (
-            <View style={styles.imageContainer}>
-              <Image 
-                source={{ uri: imageUrl }} 
-                style={styles.messageImage} 
-                resizeMode="cover"
-                onError={(error) => {
-                  console.error(`Image load error for message ${item.id}:`, error.nativeEvent.error || 'Unknown error');
-                  console.log('Failed URL:', imageUrl);
-                }}
-               
-              />
-            </View>
-          )}
+          {fileContent}
         </View>
         <Text style={[styles.messageTime, { color: colors.textSecondary || "#999", alignSelf: isFromMe ? 'flex-end' : 'flex-start' }]}>
           {messageTime}
@@ -740,7 +881,6 @@ export default function ChatScreen() {
   );
 }
 
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -845,6 +985,33 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 12,
     marginVertical: 6,
+  },
+  // PDF specific styles
+  pdfContainer: {
+    marginTop: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  pdfContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+  },
+  pdfTextContainer: {
+    flex: 1,
+    marginLeft: 10,
+    marginRight: 10,
+  },
+  pdfFileName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+  },
+  pdfSubtext: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
   },
   inputContainer: {
     padding: 0, 
