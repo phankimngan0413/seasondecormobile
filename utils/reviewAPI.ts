@@ -518,38 +518,29 @@ export const getReviewByAccountDirectAPI = async () => {
   try {
     console.log(`📝 Fetching reviews using direct endpoint call`);
     
-    // Call API with only minimal required parameters
-    const response = await apiClient.get('/api/Review/getReviewByAccount', {
-      params: {
-        PageIndex: 0, // Always use first page
-        PageSize: 100 // Use large page size to get all records at once
-      }
-    });
+    // Try first with a proper GET request that doesn't use query parameters
+    const response = await apiClient.get('/api/Review/getReviewByAccount');
     
-    // Validate the response
-    if (response.data) {
-      console.log(`✅ Successfully fetched reviews using direct call`);
+    // If we get here, the call was successful
+    console.log(`✅ Successfully fetched reviews without parameters`);
+    return response.data;
+  } catch (firstError) {
+    // First approach failed, try another approach with parameters
+    try {
+      console.log(`⚠️ First attempt failed, trying with parameters`);
+      
+      // Make a second attempt with minimal parameters
+      const response = await apiClient.get('/api/Review/getReviewByAccount', {
+        params: {
+          PageIndex: 0,
+          PageSize: 100
+        }
+      });
+      
+      console.log(`✅ Successfully fetched reviews with parameters`);
       return response.data;
-    } else {
-      throw new Error('Empty response received');
+    } catch (secondError) {
+   
     }
-  } catch (error: any) {
-    // Log error details
-    if (error.response) {
-      console.error(`❌ API Error [${error.response.status}]:`, error.response.data);
-    } else if (error.request) {
-      console.error('❌ No response received:', error.request);
-    } else {
-      console.error('❌ Error setting up request:', error.message);
-    }
-    
-    // Return error object
-    const errorResponse = {
-      success: false,
-      message: error.message || 'Failed to fetch account reviews',
-      data: null
-    };
-    
-    return errorResponse;
   }
 };

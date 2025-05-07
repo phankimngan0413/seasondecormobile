@@ -61,8 +61,7 @@ export interface IBookingRequest {
   decorServiceId: number;
   addressId: number;
   surveyDate: string;
-  note?: string;               // Added note field (optional)
-  expectedCompletion?: string; // Added expectedCompletion field (optional)
+  note?: string;               
 }
 
 // Define response interfaces
@@ -208,46 +207,70 @@ export const createBookingAPI = async (
 ): Promise<IBookingResponse> => {
   const url = "/api/Booking/create";
   
+  // Log the complete request data
+  console.log("📤 BOOKING REQUEST DATA:", JSON.stringify(bookingData, null, 2));
+  
   const apiClient = await initApiClient();
   try {
+    console.log(`🔷 Making POST request to ${url}`);
+    
+    // Additional log of request headers if needed
+    // console.log("📋 Request Headers:", apiClient.defaults.headers);
+    
     const response: AxiosResponse = await apiClient.post(url, bookingData);
+    
+    // Log the raw response
+    console.log("📥 BOOKING RESPONSE:", JSON.stringify(response.data, null, 2));
     
     if (response && response.data) {
       // Check if the response has a success property
       if (response.data.success !== undefined) {
         // Standard wrapped response, return as is
+        console.log(`✅ Booking API call ${response.data.success ? 'succeeded' : 'failed'}: ${response.data.message}`);
         return response.data;
       } else if (response.data.id) {
         // Direct booking object response, wrap it in proper structure
+        console.log(`✅ Booking created with ID: ${response.data.id}`);
         return {
           success: true,
           message: "Booking created successfully",
           data: response.data
         };
       } else {
-        console.error("🔴 Invalid booking response:", response);
+        console.error("🔴 Invalid booking response structure:", response.data);
         return {
           success: false,
           message: "Invalid response from server"
         };
       }
     } else {
-      console.error("🔴 Invalid booking response:", response);
+      console.error("🔴 Empty or invalid booking response");
       return {
         success: false,
         message: "Invalid response from server"
       };
     }
   } catch (error: any) {
-    console.error("🔴 Error creating booking:", error);
+    // Log detailed error information
+    console.error("🔴 Error creating booking:", error.message);
     
-    if (error.response && error.response.data) {
-      // Log the full error response for debugging
-      console.error("API Error Response:", error.response.data);
+    if (error.request) {
+      console.error("📋 Request that caused error:", {
+        url: url,
+        method: 'POST',
+        data: JSON.stringify(bookingData, null, 2)
+      });
+    }
+    
+    if (error.response) {
+      console.error("📋 Error Response Status:", error.response.status);
+      console.error("📋 Error Response Headers:", error.response.headers);
+      console.error("📋 Error Response Data:", JSON.stringify(error.response.data, null, 2));
       
       // Check if we have the specific address-in-use error
       if (error.response.data.message && 
           error.response.data.message.includes("address is currently in use")) {
+        console.error("🚫 Address in use error detected");
         return {
           success: false,
           message: error.response.data.message,
@@ -265,6 +288,7 @@ export const createBookingAPI = async (
     
     // For network errors or when response structure is unexpected
     if (error.message && error.message.includes("Network Error")) {
+      console.error("🌐 Network error detected");
       return {
         success: false,
         message: "Network error or server unavailable"
@@ -579,8 +603,6 @@ export const processCommitDepositAPI = async (
       };
     }
     
-    // If we reach here, something unexpected happened
-    console.error("🔴 Invalid deposit processing response:", response.data);
     return {
       success: false,
       message: "Failed to process deposit commitment"

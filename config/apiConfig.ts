@@ -3,7 +3,7 @@ import Constants from "expo-constants";
 import { Platform } from "react-native";
 
 // API URLs
-const SEASON_DECOR_API = "https://seasondecor.azurewebsites.net";
+// const SEASON_DECOR_API = "https://seasondecor.azurewebsites.net";
 const TUNNEL_API = Constants.expoConfig?.extra?.apiUrl;
 const LOCALHOST = "http://localhost:5297";
 const LAN_IP = "http://10.0.2.2:5297"; // This is for Android Emulator
@@ -15,18 +15,18 @@ const isProduction = !__DEV__; // Kiểm tra xem đây có phải môi trường
 // Function to determine the API base URL dynamically
 export const getBaseUrl = (): string => {
   // Trong môi trường production (APK), luôn sử dụng Season Decor API
-  if (isProduction) {
-    console.log("🌐 Production mode: Using Season Decor API:", SEASON_DECOR_API);
-    return SEASON_DECOR_API;
-  }
+  // if (isProduction) {
+  //   console.log("🌐 Production mode: Using Season Decor API:", SEASON_DECOR_API);
+  //   return SEASON_DECOR_API;
+  // }
   
   // Trong môi trường development
   const useSeasonDecorApi = true;
   
-  if (useSeasonDecorApi) {
-    console.log("🌐 Development mode: Using Season Decor API:", SEASON_DECOR_API);
-    return SEASON_DECOR_API;
-  }
+  // if (useSeasonDecorApi) {
+  //   console.log("🌐 Development mode: Using Season Decor API:", SEASON_DECOR_API);
+  //   return SEASON_DECOR_API;
+  // }
   
   if (TUNNEL_API) {
     return TUNNEL_API; // Use the URL from the Expo config

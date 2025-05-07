@@ -140,20 +140,30 @@ const formatDateWithTextMonth = (date: Date) => {
   }, [selectedAddressIdParam, timestamp]);
 
   // Check for service name in global state when screen is focused
-  useFocusEffect(
-    useCallback(() => {
-      // Get global data
-      const globalData = globalThis as unknown as CustomGlobal;
-      
-      // Check if we have service info in global state
-      if (globalData.currentBookingState && globalData.currentBookingState.serviceId) {
-        // Update service ID from global state
-        const serviceId = globalData.currentBookingState.serviceId;
-        // Save to local variable to use when calling API
-        setServiceId(serviceId);
+ // Add console logs to debug the issue
+useFocusEffect(
+  useCallback(() => {
+    // Get global data
+    const globalData = globalThis as unknown as CustomGlobal;
+    console.log("URL Param ID:", id);
+    console.log("Global State ID:", serviceId);
+    
+    // MODIFIED: Prioritize URL param over global state
+    if (id) {
+      // Always prefer the ID from URL params
+      setServiceId(id);
+      // Update global state with current ID
+      if (globalData.currentBookingState) {
+        globalData.currentBookingState.serviceId = id;
+      } else {
+        globalData.currentBookingState = { serviceId: id };
       }
-    }, [])
-  );
+    } else if (globalData.currentBookingState?.serviceId) {
+      // Only use global state if URL param is missing
+      setServiceId(globalData.currentBookingState.serviceId);
+    }
+  }, [id]) // Add id as dependency
+);
   
   // Check for address updates when screen is focused
   useFocusEffect(
@@ -320,20 +330,19 @@ const formatDateWithTextMonth = (date: Date) => {
 
   // Handle booking - FIXED date handling
   const handleBooking = async () => {
-    // Clear all previous errors
     setError(null);
     
-    // Get the current service ID from state or global state
-    const currentServiceId = serviceId || 
-      (globalThis as unknown as CustomGlobal).currentBookingState?.serviceId || 
-      id;
+    // Ưu tiên sử dụng ID từ URL param
+    const currentServiceId = id || serviceId || 
+      (globalThis as unknown as CustomGlobal).currentBookingState?.serviceId;
     
-    // Validate service ID
+    console.log("Final ID being used:", currentServiceId);
+    
+    // Kiểm tra ID hợp lệ
     if (!currentServiceId) {
       setError("Invalid service ID. Please try selecting the service again.");
       return;
     }
-    
     // Convert to number and check if it's valid
     const numericServiceId = Number(currentServiceId);
     if (isNaN(numericServiceId)) {
@@ -373,7 +382,6 @@ const formatDateWithTextMonth = (date: Date) => {
         addressId: Number(selectedAddress),
         surveyDate: formattedDate, // Using our fixed format function
         note: note.trim() !== "" ? note : undefined,
-        expectedCompletion: expectedCompletion.trim() !== "" ? expectedCompletion : undefined
       };
   
       // Call booking API

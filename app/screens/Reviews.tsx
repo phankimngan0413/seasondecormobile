@@ -9,7 +9,9 @@ import {
   Image,
   RefreshControl,
   Alert,
-  StatusBar
+  StatusBar,
+  Dimensions,
+  Animated
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/constants/ThemeContext';
@@ -22,22 +24,10 @@ import {
   IReview
 } from '@/utils/reviewAPI';
 
-// Interface for product reviews and service reviews
-interface IProductReview {
-  id: number;
-  name: string;
-  userName?: string;
-  avatar: string;
-  rate: number;
-  comment: string;
-  createAt: string;
-  images: string[];
-  productId: number;
-  productName: string;
-  productImage?: string;
-}
+const { width } = Dimensions.get('window');
 
-interface IServiceReview {
+// Modified interfaces to match your API response format
+interface IReviewItem {
   id: number;
   name: string;
   userName?: string;
@@ -46,44 +36,53 @@ interface IServiceReview {
   comment: string;
   createAt: string;
   images: string[];
-  serviceId: number;
-  serviceName: string;
+  productId?: number;
+  productName?: string;
+  productImage?: string;
+  serviceId?: number;
+  serviceName?: string;
   serviceImage?: string;
 }
 
 const ReviewScreen = () => {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState('products');
-  
-  const [productReviews, setProductReviews] = useState<IProductReview[]>([]);
-  const [serviceReviews, setServiceReviews] = useState<IServiceReview[]>([]);
-  
+  const [reviews, setReviews] = useState<IReviewItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expandedReview, setExpandedReview] = useState<number | null>(null);
   
   const { theme } = useTheme();
   const validTheme = theme as "light" | "dark";
   const colors = Colors[validTheme];
+  
+  // Animation values
+  const scrollY = new Animated.Value(0);
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, 50, 100],
+    outputRange: [1, 0.8, 0.6],
+    extrapolate: 'clamp',
+  });
+  
+  const headerTranslate = scrollY.interpolate({
+    inputRange: [0, 100],
+    outputRange: [0, -10],
+    extrapolate: 'clamp',
+  });
 
   useEffect(() => {
-    // Load reviews when component mounts or tab changes
+    // Load reviews when component mounts
     setError(null);
     fetchReviews();
-  }, [activeTab]);
+  }, []);
 
   const fetchReviews = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      console.log(`📝 Fetching ${activeTab} reviews`);
-      
       // Get reviews using direct API call
       const response = await getReviewByAccountDirectAPI();
-      
-      // Log the exact response for debugging
-      console.log('EXACT API RESPONSE:', JSON.stringify(response));
       
       // Initialize reviewsArray
       let reviewsArray = [];
@@ -98,73 +97,33 @@ const ReviewScreen = () => {
       else if (response && response.data && Array.isArray(response.data.data)) {
         reviewsArray = response.data.data;
       }
-      else if (response && response.success === true) {
-        // If success is true but data structure is unclear
-        if (response.data) {
-          if (Array.isArray(response.data)) {
-            reviewsArray = response.data;
-          } 
-          else if (response.data.data && Array.isArray(response.data.data)) {
-            reviewsArray = response.data.data;
-          }
-        }
-      }
       
-      console.log(`📊 Found ${reviewsArray.length} total reviews after extraction`);
+      // Map the reviews to add default properties if missing
+      const mappedReviews = reviewsArray.map((item: any) => ({
+        id: item.id,
+        name: item.name || 'Anonymous',
+        userName: item.userName || item.name,
+        avatar: item.avatar || '',
+        rate: item.rate || 0,
+        comment: item.comment || '',
+        createAt: item.createAt || new Date().toISOString(),
+        images: item.images || [],
+        // Add default product/service properties if not present
+        productId: item.productId,
+        productName: item.productName || 'General Review',
+        productImage: item.productImage,
+        serviceId: item.serviceId,
+        serviceName: item.serviceName,
+        serviceImage: item.serviceImage
+      }));
       
-      // Process the reviews based on active tab
-      if (activeTab === 'products') {
-        // Filter for product reviews - only include items with valid productId
-        const productData = reviewsArray
-          .filter((item: { productId: null | undefined; }) => item.productId !== undefined && item.productId !== null)
-          .map((item: { id: any; name: any; userName: any; avatar: any; rate: any; comment: any; createAt: any; images: any; productId: any; productName: any; productImage: any; }) => ({
-            id: item.id,
-            name: item.name || item.userName || 'Anonymous',
-            userName: item.userName,
-            avatar: item.avatar || '',
-            rate: item.rate || 0,
-            comment: item.comment || '',
-            createAt: item.createAt || new Date().toISOString(),
-            images: item.images || [],
-            productId: Number(item.productId), 
-            productName: item.productName || 'Unknown Product',
-            productImage: item.productImage || ''
-          })) as IProductReview[];
-          
-        console.log(`🛍️ Found ${productData.length} product reviews`);
-        setProductReviews(productData);
-      } else {
-        // Filter for service reviews - only include items with valid serviceId
-        const serviceData = reviewsArray
-          .filter((item: { serviceId: null | undefined; }) => item.serviceId !== undefined && item.serviceId !== null)
-          .map((item: { id: any; name: any; userName: any; avatar: any; rate: any; comment: any; createAt: any; images: any; serviceId: any; serviceName: any; serviceImage: any; }) => ({
-            id: item.id,
-            name: item.name || item.userName || 'Anonymous',
-            userName: item.userName,
-            avatar: item.avatar || '',
-            rate: item.rate || 0,
-            comment: item.comment || '',
-            createAt: item.createAt || new Date().toISOString(),
-            images: item.images || [],
-            serviceId: Number(item.serviceId), 
-            serviceName: item.serviceName || 'Unknown Service',
-            serviceImage: item.serviceImage || ''
-          })) as IServiceReview[];
-          
-        console.log(`🛎️ Found ${serviceData.length} service reviews`);
-        setServiceReviews(serviceData);
-      }
+      setReviews(mappedReviews);
+      
     } catch (error: any) {
       const errorMessage = error.message || 'Failed to load reviews';
       console.error(`❌ Error fetching reviews: ${errorMessage}`);
       setError(errorMessage);
-      
-      // Reset data arrays on error
-      if (activeTab === 'products') {
-        setProductReviews([]);
-      } else {
-        setServiceReviews([]);
-      }
+      setReviews([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -188,11 +147,7 @@ const ReviewScreen = () => {
               await deleteReviewAPI(reviewId);
               
               // Update the lists after successful deletion
-              if (activeTab === 'products') {
-                setProductReviews(prev => prev.filter(r => r.id !== reviewId));
-              } else {
-                setServiceReviews(prev => prev.filter(r => r.id !== reviewId));
-              }
+              setReviews(prev => prev.filter(r => r.id !== reviewId));
               
               Alert.alert("Success", "Review deleted successfully");
             } catch (error) {
@@ -205,182 +160,184 @@ const ReviewScreen = () => {
     );
   };
 
-  const handleEditReview = (review: IProductReview | IServiceReview) => {
-    // Implementation for editing review
-    // Uncomment and modify as needed
-    // if ('productId' in review) {
-    //   router.push({
-    //     pathname: "/review/edit-product-review/[id]",
-    //     params: { id: review.id, productId: review.productId }
-    //   });
-    // } else {
-    //   router.push({
-    //     pathname: "/review/edit-service-review/[id]",
-    //     params: { id: review.id, serviceId: review.serviceId }
-    //   });
-    // }
-  };
-
   const onRefresh = async () => {
     setRefreshing(true);
     fetchReviews();
   };
-
-  const renderProductReview = ({ item }: { item: IProductReview }) => {
-    return (
-      <View style={[styles.reviewCard, { backgroundColor: colors.card }]}>
-        <View style={styles.reviewHeader}>
-          <View style={styles.productInfo}>
-            {item.productImage ? (
-              <Image 
-                source={{ uri: item.productImage }} 
-                style={styles.productImage} 
-                resizeMode="cover" 
-              />
-            ) : (
-              <View style={[styles.imagePlaceholder, { backgroundColor: colors.border }]}>
-                <Ionicons name="image-outline" size={24} color={colors.textSecondary} />
-              </View>
-            )}
-            <Text style={[styles.productName, { color: colors.text }]} numberOfLines={1}>
-              {item.productName}
-            </Text>
-          </View>
-          
-          <View style={styles.ratingContainer}>
-            {[1, 2, 3, 4, 5].map((star) => (
-              <Ionicons 
-                key={star}
-                name={star <= item.rate ? "star" : "star-outline"} 
-                size={16} 
-                color="#FFD700" 
-                style={styles.starIcon}
-              />
-            ))}
-          </View>
-        </View>
-        
-        <Text style={[styles.reviewText, { color: colors.text }]}>
-          {item.comment}
-        </Text>
-        
-        {item.images && item.images.length > 0 && (
-          <View style={styles.imageGallery}>
-            {item.images.map((image, index) => (
-              <Image 
-                key={index} 
-                source={{ uri: image }} 
-                style={styles.reviewImage} 
-              />
-            ))}
-          </View>
-        )}
-        
-        <View style={styles.reviewFooter}>
-          <Text style={[styles.dateText, { color: colors.textSecondary }]}>
-            {new Date(item.createAt).toLocaleDateString()}
-          </Text>
-          
-          <View style={styles.actionButtons}>
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => handleEditReview(item)}
-            >
-              <Ionicons name="pencil-outline" size={20} color={colors.primary} />
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.deleteButton]}
-              onPress={() => handleDeleteReview(item.id)}
-            >
-              <Ionicons name="trash-outline" size={20} color="#FF3B30" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    );
+  
+  const toggleExpandReview = (id: number) => {
+    setExpandedReview(expandedReview === id ? null : id);
   };
 
-  const renderServiceReview = ({ item }: { item: IServiceReview }) => {
+  const renderReviewItem = ({ item, index }: { item: IReviewItem, index: number }) => {
+    const isExpanded = expandedReview === item.id;
+    const isFirst = index === 0;
+    const isLast = index === reviews.length - 1;
+    
+    // Calculate date difference
+    const reviewDate = new Date(item.createAt);
+    const today = new Date();
+    const diffTime = Math.abs(today.getTime() - reviewDate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    let timeText = '';
+    if (diffDays === 0) {
+      timeText = 'Today';
+    } else if (diffDays === 1) {
+      timeText = 'Yesterday';
+    } else if (diffDays < 7) {
+      timeText = `${diffDays} days ago`;
+    } else if (diffDays < 30) {
+      const weeks = Math.floor(diffDays / 7);
+      timeText = `${weeks} ${weeks === 1 ? 'week' : 'weeks'} ago`;
+    } else {
+      timeText = reviewDate.toLocaleDateString('en-US', { 
+        day: 'numeric', 
+        month: 'short', 
+        year: 'numeric' 
+      });
+    }
+    
     return (
-      <View style={[styles.reviewCard, { backgroundColor: colors.card }]}>
-        <View style={styles.reviewHeader}>
-          <View style={styles.productInfo}>
-            {item.serviceImage ? (
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => toggleExpandReview(item.id)}
+        style={[
+          styles.reviewCard, 
+          { 
+            backgroundColor: colors.card,
+            marginTop: isFirst ? 8 : 16,
+            marginBottom: isLast ? 24 : 0,
+          }
+        ]}
+      >
+        <View style={styles.reviewHeaderRow}>
+          <View style={styles.userInfoContainer}>
+            {item.avatar ? (
               <Image 
-                source={{ uri: item.serviceImage }} 
-                style={styles.productImage} 
+                source={{ uri: item.avatar }} 
+                style={styles.userAvatar} 
                 resizeMode="cover" 
               />
             ) : (
-              <View style={[styles.imagePlaceholder, { backgroundColor: colors.border }]}>
-                <Ionicons name="image-outline" size={24} color={colors.textSecondary} />
+              <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
+                <Text style={styles.avatarInitial}>
+                  {item.name.charAt(0).toUpperCase()}
+                </Text>
               </View>
             )}
-            <Text style={[styles.productName, { color: colors.text }]} numberOfLines={1}>
-              {item.serviceName}
-            </Text>
+            
+            <View style={styles.userTextInfo}>
+              <Text style={[styles.userName, { color: colors.text }]} numberOfLines={1}>
+                {item.name}
+              </Text>
+              <Text style={[styles.timeText, { color: colors.textSecondary }]}>
+                {timeText}
+              </Text>
+            </View>
           </View>
           
-          <View style={styles.ratingContainer}>
-            {[1, 2, 3, 4, 5].map((star) => (
-              <Ionicons 
-                key={star}
-                name={star <= item.rate ? "star" : "star-outline"} 
-                size={16} 
-                color="#FFD700" 
-                style={styles.starIcon}
-              />
-            ))}
+          <View style={styles.ratingDisplay}>
+            <Text style={[styles.ratingText, { color: colors.text }]}>{item.rate}.0</Text>
+            <View style={styles.ratingStars}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Ionicons 
+                  key={star}
+                  name={star <= item.rate ? "star" : "star-outline"} 
+                  size={14} 
+                  color="#FFD700" 
+                  style={{ marginHorizontal: 1 }}
+                />
+              ))}
+            </View>
           </View>
         </View>
         
-        <Text style={[styles.reviewText, { color: colors.text }]}>
-          {item.comment}
-        </Text>
-        
-        {item.images && item.images.length > 0 && (
-          <View style={styles.imageGallery}>
-            {item.images.map((image, index) => (
-              <Image 
-                key={index} 
-                source={{ uri: image }} 
-                style={styles.reviewImage} 
-              />
-            ))}
-          </View>
-        )}
-        
-        <View style={styles.reviewFooter}>
-          <Text style={[styles.dateText, { color: colors.textSecondary }]}>
-            {new Date(item.createAt).toLocaleDateString()}
+        <View style={styles.contentContainer}>
+          <Text 
+            style={[
+              styles.reviewComment, 
+              { 
+                color: colors.text,
+                height: isExpanded ? undefined : undefined
+              }
+            ]}
+            numberOfLines={isExpanded ? undefined : 3}
+          >
+            {item.comment}
           </Text>
           
-          <View style={styles.actionButtons}>
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => handleEditReview(item)}
-            >
-              <Ionicons name="pencil-outline" size={20} color={colors.primary} />
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.deleteButton]}
-              onPress={() => handleDeleteReview(item.id)}
-            >
-              <Ionicons name="trash-outline" size={20} color="#FF3B30" />
-            </TouchableOpacity>
-          </View>
+          {item.images && item.images.length > 0 && (
+            <View style={styles.imagesContainer}>
+              {item.images.slice(0, isExpanded ? item.images.length : 1).map((image, imgIndex) => (
+                <Image 
+                  key={imgIndex} 
+                  source={{ uri: image }} 
+                  style={[
+                    styles.reviewImage,
+                    isExpanded ? styles.expandedImage : styles.collapsedImage,
+                    { borderColor: colors.border }
+                  ]} 
+                  resizeMode="cover"
+                />
+              ))}
+              
+              {!isExpanded && item.images.length > 1 && (
+                <View style={styles.moreImagesOverlay}>
+                  <Text style={styles.moreImagesText}>+{item.images.length - 1}</Text>
+                </View>
+              )}
+            </View>
+          )}
         </View>
-      </View>
+        
+        <View style={styles.reviewActions}>
+          <TouchableOpacity 
+            style={[styles.actionButton, { backgroundColor: colors.primary + '10' }]}
+            onPress={(e) => {
+              e.stopPropagation();
+              toggleExpandReview(item.id);
+            }}
+          >
+            <Ionicons 
+              name={isExpanded ? "chevron-up" : "chevron-down"} 
+              size={16} 
+              color={colors.primary} 
+            />
+            <Text style={[styles.actionButtonText, { color: colors.primary }]}>
+              {isExpanded ? "Show Less" : "Show More"}
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.actionButton, { backgroundColor: '#FF3B3010' }]}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleDeleteReview(item.id);
+            }}
+          >
+            <Ionicons name="trash-outline" size={16} color="#FF3B30" />
+            <Text style={[styles.actionButtonText, { color: '#FF3B30' }]}>
+              Delete
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
     );
   };
 
   const renderError = () => (
     <View style={styles.errorContainer}>
-      <Ionicons name="alert-circle-outline" size={60} color={colors.error || "#FF3B30"} />
+      <Ionicons 
+        name="alert-circle-outline" 
+        size={60} 
+        color={colors.error || "#FF3B30"} 
+      />
       <Text style={[styles.errorText, { color: colors.error || "#FF3B30" }]}>
         {error}
+      </Text>
+      <Text style={[styles.errorSubtext, { color: colors.textSecondary }]}>
+        We couldn't load your reviews at this time.
       </Text>
       <TouchableOpacity 
         style={[styles.retryButton, { backgroundColor: colors.primary }]}
@@ -391,20 +348,26 @@ const ReviewScreen = () => {
     </View>
   );
 
-  const renderEmptyProductReviews = () => (
+  const renderEmptyReviews = () => (
     <View style={styles.emptyContainer}>
-      <Ionicons name="star-outline" size={60} color={colors.textSecondary} />
-      <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-        You haven't reviewed any products yet
+      <View style={styles.emptyImageContainer}>
+        <Ionicons 
+          name="star-outline" 
+          size={80} 
+          color={colors.primary + '40'} 
+        />
+        <Ionicons 
+          name="chatbubble-outline" 
+          size={60} 
+          color={colors.primary + '60'} 
+          style={styles.overlappingIcon}
+        />
+      </View>
+      <Text style={[styles.emptyTitle, { color: colors.text }]}>
+        No Reviews Yet
       </Text>
-    </View>
-  );
-
-  const renderEmptyServiceReviews = () => (
-    <View style={styles.emptyContainer}>
-      <Ionicons name="star-outline" size={60} color={colors.textSecondary} />
       <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-        You haven't reviewed any services yet
+        When you review products or services, they'll appear here.
       </Text>
     </View>
   );
@@ -417,8 +380,18 @@ const ReviewScreen = () => {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <StatusBar barStyle={validTheme === 'dark' ? 'light-content' : 'dark-content'} />
       
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+      {/* Animated Header */}
+      <Animated.View 
+        style={[
+          styles.header, 
+          { 
+            backgroundColor: colors.card, 
+            borderBottomColor: colors.border,
+            opacity: headerOpacity,
+            transform: [{ translateY: headerTranslate }]
+          }
+        ]}
+      >
         <TouchableOpacity
           style={styles.backButton}
           onPress={handleBack}
@@ -434,112 +407,51 @@ const ReviewScreen = () => {
           My Reviews
         </Text>
         
-        <View style={styles.headerRight} />
-      </View>
+        <View style={styles.headerRight}>
+          <Text style={[styles.reviewCount, { color: colors.textSecondary }]}>
+            {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
+          </Text>
+        </View>
+      </Animated.View>
       
-      {/* Tabs */}
-      <View style={[styles.tabContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <TouchableOpacity
-          style={[
-            styles.tabButton,
-            activeTab === 'products' && [styles.activeTabButton, { backgroundColor: colors.primary }]
-          ]}
-          onPress={() => setActiveTab('products')}
-        >
-          <Text
-            style={[
-              styles.tabButtonText,
-              { color: activeTab === 'products' ? '#FFFFFF' : colors.textSecondary }
-            ]}
-          >
-            Product Reviews
-          </Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[
-            styles.tabButton,
-            activeTab === 'services' && [styles.activeTabButton, { backgroundColor: colors.primary }]
-          ]}
-          onPress={() => setActiveTab('services')}
-        >
-          <Text
-            style={[
-              styles.tabButtonText,
-              { color: activeTab === 'services' ? '#FFFFFF' : colors.textSecondary }
-            ]}
-          >
-            Service Reviews
-          </Text>
-        </TouchableOpacity>
-      </View>
-
       {/* Content */}
-      {activeTab === 'products' ? (
-        <View style={styles.content}>
-          {loading && productReviews.length === 0 ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-                Loading your product reviews...
-              </Text>
-            </View>
-          ) : error ? (
-            renderError()
-          ) : (
-            <FlatList
-              data={productReviews}
-              renderItem={renderProductReview}
-              keyExtractor={(item) => item.id.toString()}
-              contentContainerStyle={[
-                styles.listContent,
-                productReviews.length === 0 && styles.emptyListContent
-              ]}
-              ListEmptyComponent={renderEmptyProductReviews}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={onRefresh}
-                  colors={[colors.primary]}
-                  tintColor={colors.primary}
-                />
-              }
-            />
-          )}
-        </View>
-      ) : (
-        <View style={styles.content}>
-          {loading && serviceReviews.length === 0 ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-                Loading your service reviews...
-              </Text>
-            </View>
-          ) : error ? (
-            renderError()
-          ) : (
-            <FlatList
-              data={serviceReviews}
-              renderItem={renderServiceReview}
-              keyExtractor={(item) => item.id.toString()}
-              contentContainerStyle={[
-                styles.listContent,
-                serviceReviews.length === 0 && styles.emptyListContent
-              ]}
-              ListEmptyComponent={renderEmptyServiceReviews}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={onRefresh}
-                  colors={[colors.primary]}
-                  tintColor={colors.primary}
-                />
-              }
-            />
-          )}
-        </View>
-      )}
+      <View style={styles.content}>
+        {loading && reviews.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+              Loading your reviews...
+            </Text>
+          </View>
+        ) : error ? (
+          renderError()
+        ) : (
+          <Animated.FlatList
+            data={reviews}
+            renderItem={renderReviewItem}
+            keyExtractor={(item) => item.id.toString()}
+            contentContainerStyle={[
+              styles.listContent,
+              reviews.length === 0 && styles.emptyListContent
+            ]}
+            ListEmptyComponent={renderEmptyReviews}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={[colors.primary]}
+                tintColor={colors.primary}
+              />
+            }
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+              { useNativeDriver: false }
+            )}
+            scrollEventThrottle={16}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
+      </View>
     </SafeAreaView>
   );
 };
@@ -555,6 +467,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     borderBottomWidth: 1,
+    zIndex: 10,
   },
   headerTitle: {
     fontSize: 18,
@@ -564,135 +477,177 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   headerRight: {
-    width: 40, // Balance the header
+    minWidth: 60,
+    alignItems: 'flex-end',
   },
-  tabContainer: {
-    flexDirection: 'row',
-    padding: 8,
-    borderBottomWidth: 1,
-  },
-  tabButton: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderRadius: 25,
-    marginHorizontal: 4,
-  },
-  activeTabButton: {
-    borderBottomWidth: 0,
-  },
-  tabButtonText: {
+  reviewCount: {
     fontSize: 14,
-    fontWeight: '600',
   },
   content: {
     flex: 1,
   },
   listContent: {
-    padding: 12,
-    paddingBottom: 20,
-    flexGrow: 1,
+    paddingHorizontal: 16,
+    paddingBottom: 32,
   },
   emptyListContent: {
     flex: 1,
+    justifyContent: 'center',
   },
   reviewCard: {
-    borderRadius: 12,
-    marginBottom: 16,
+    borderRadius: 16,
     padding: 16,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  reviewHeader: {
+  reviewHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: 12,
   },
-  productInfo: {
+  userInfoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
-  productImage: {
+  userAvatar: {
     width: 40,
     height: 40,
-    borderRadius: 8,
+    borderRadius: 20,
     marginRight: 12,
   },
-  imagePlaceholder: {
+  avatarPlaceholder: {
     width: 40,
     height: 40,
-    borderRadius: 8,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
-  productName: {
-    fontSize: 16,
-    fontWeight: '500',
+  avatarInitial: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  userTextInfo: {
     flex: 1,
   },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  userName: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
   },
-  starIcon: {
-    marginLeft: 2,
-  },
-  reviewText: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  imageGallery: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 12,
-  },
-  reviewImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    margin: 4,
-  },
-  reviewFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  dateText: {
+  timeText: {
     fontSize: 12,
   },
-  actionButtons: {
+  ratingDisplay: {
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  ratingText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  ratingStars: {
     flexDirection: 'row',
   },
-  actionButton: {
-    padding: 8,
-    marginLeft: 8,
+  contentContainer: {
+    marginBottom: 12,
   },
-  deleteButton: {
-    marginLeft: 8,
+  reviewComment: {
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 12,
   },
-  emptyContainer: {
-    flex: 1,
+  imagesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    position: 'relative',
+  },
+  reviewImage: {
+    borderRadius: 12,
+    borderWidth: 1,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  collapsedImage: {
+    width: 120,
+    height: 120,
+  },
+  expandedImage: {
+    width: (width - 48) / 2,
+    height: (width - 48) / 2,
+  },
+  moreImagesOverlay: {
+    position: 'absolute',
+    right: 8,
+    bottom: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
-    minHeight: 300,
+  },
+  moreImagesText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  reviewActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    marginLeft: 8,
+  },
+  actionButtonText: {
+    fontSize: 13,
+    fontWeight: '500',
+    marginLeft: 4,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    padding: 32,
+  },
+  emptyImageContainer: {
+    width: 120,
+    height: 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    marginBottom: 24,
+  },
+  overlappingIcon: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    textAlign: 'center',
   },
   emptyText: {
     fontSize: 16,
-    marginTop: 12,
     textAlign: 'center',
+    maxWidth: 280,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    minHeight: 300,
   },
   loadingText: {
     marginTop: 16,
@@ -702,19 +657,24 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
-    minHeight: 300,
+    padding: 32,
   },
   errorText: {
-    fontSize: 16,
+    fontSize: 18,
+    fontWeight: 'bold',
     marginTop: 16,
-    marginBottom: 20,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  errorSubtext: {
+    fontSize: 14,
+    marginBottom: 24,
     textAlign: 'center',
   },
   retryButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 24,
   },
   retryButtonText: {
     color: 'white',

@@ -77,7 +77,17 @@ interface ApiResponse {
   message: string;
   errors: any[];
 }
-
+interface CustomGlobal {
+  currentBookingState?: {
+    serviceId?: string;
+    style?: string;
+    price?: string;
+  };
+  addressSelection?: any;
+  selectedAddressId?: string;
+  selectedAddressDetails?: any;
+  addressTimestamp?: string;
+}
 const DecorDetailScreen = () => {
   const { id } = useLocalSearchParams();
   const router = useRouter();
@@ -264,26 +274,33 @@ useEffect(() => {
     }
   };
 
-  const handleBooking = () => {
-    if (decorDetail) {
-      try {
-        console.log("Booking decor service:", decorDetail.id);
-        
-        // Sử dụng chuỗi đường dẫn đơn giản thay vì object params
-        const serviceId = String(decorDetail.id);
-        const style = encodeURIComponent(decorDetail.style || "");
-        const price = encodeURIComponent(String(decorDetail.basePrice || 0));
-        
-        // Navigate with query parameters
-        router.push(`/booking/${serviceId}?style=${style}&price=${price}`);
-      } catch (err) {
-        console.error("Navigation error:", err);
-        Alert.alert("Error", "Unable to navigate to booking page. Please try again.");
-      }
-    } else {
-      Alert.alert("Error", "Service details are not available.");
+  // In your DecorDetailScreen, modify the handleBooking function:
+const handleBooking = () => {
+  if (decorDetail) {
+    try {
+      console.log("Booking decor service:", decorDetail.id);
+      
+      // IMPORTANT: Update the global state before navigation
+      const globalData = globalThis as unknown as CustomGlobal;
+      globalData.currentBookingState = {
+        serviceId: String(decorDetail.id),
+        style: decorDetail.style || ""
+      };
+      
+      // Now navigate with the same parameters
+      const serviceId = String(decorDetail.id);
+      const style = encodeURIComponent(decorDetail.style || "");
+      const price = encodeURIComponent(String(decorDetail.basePrice || 0));
+      
+      router.push(`/booking/${serviceId}?style=${style}&price=${price}`);
+    } catch (err) {
+      console.error("Navigation error:", err);
+      Alert.alert("Error", "Unable to navigate to booking page. Please try again.");
     }
-  };
+  } else {
+    Alert.alert("Error", "Service details are not available.");
+  }
+};
 
   const toggleDescription = () => {
     setShowFullDescription(!showFullDescription);
