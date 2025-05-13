@@ -12,10 +12,16 @@ import {
   TextInput,
   StatusBar,
   ScrollView,
-  RefreshControl
+  RefreshControl,
+  Modal
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
-import { getDecorServicesAPI, searchDecorServicesAPI, IDecor } from "@/utils/decorserviceAPI";
+import { 
+  getDecorServicesAPI, 
+  searchDecorServicesAPI, 
+  IDecor
+} from "@/utils/decorserviceAPI";
+import { getSeasonsAPI } from "@/utils/seasonAPI";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
@@ -23,6 +29,13 @@ import debounce from 'lodash/debounce';
 
 const { width } = Dimensions.get("window");
 const PRIMARY_COLOR = "#5fc1f1";
+
+// Interface để phù hợp với dữ liệu từ API
+interface ApiSeason {
+  id: number;
+  seasonName: string;
+  decorServiceSeasons: any[] | null;
+}
 
 // Helper function to get image URL safely
 const getImageUrl = (imageItem: any): string => {
@@ -35,7 +48,10 @@ const getImageUrl = (imageItem: any): string => {
 // Helper function to extract season name safely
 const getSeasonName = (season: any): string => {
   if (typeof season === 'string') return season;
-  if (season && typeof season === 'object' && 'seasonName' in season) return season.seasonName;
+  if (season && typeof season === 'object') {
+    if ('seasonName' in season) return season.seasonName;
+    if ('name' in season) return season.name;
+  }
   return 'Unknown Season';
 };
 
@@ -61,23 +77,38 @@ const DecorListScreen = () => {
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchInputText, setSearchInputText] = useState("");
+  const [seasons, setSeasons] = useState<ApiSeason[]>([]);
+  const [loadingSeasons, setLoadingSeasons] = useState(true);
+  const [seasonDropdownVisible, setSeasonDropdownVisible] = useState(false);
+  
   const router = useRouter();
 
   const { theme } = useTheme();
   const validTheme = theme as "light" | "dark";
   const colors = Colors[validTheme];
 
-  // Seasons with icons
-  const seasons = [
-    { name: "Spring", icon: "leaf-outline" },
-    { name: "Summer", icon: "sunny-outline" },
-    { name: "Autumn", icon: "umbrella-outline" },
-    { name: "Winter", icon: "snow-outline" }
-  ];
+  // Get selected season icon
+  const getSeasonIcon = (seasonName?: string) => {
+    if (!seasonName) return "calendar-outline";
+    
+    switch (seasonName.toLowerCase()) {
+      case 'spring':
+        return "leaf-outline";
+      case 'summer':
+        return "sunny-outline";
+      case 'autumn':
+        return "umbrella-outline";
+      case 'winter':
+        return "snow-outline";
+      default:
+        return "calendar-outline";
+    }
+  };
 
   // Initial load
   useEffect(() => {
     fetchDecorServices();
+    fetchSeasons();
   }, []);
 
   // Refresh when screen is focused
@@ -123,6 +154,29 @@ const DecorListScreen = () => {
     setSearchInputText("");
     setSearchQuery("");
   };
+
+  // Fetch all seasons from API
+  const fetchSeasons = async () => {
+  try {
+    setLoadingSeasons(true);
+    
+    // Use the imported getSeasonsAPI function instead of direct fetch
+    const data = await getSeasonsAPI();
+    
+    if (data && Array.isArray(data)) {
+      console.log(`✅ Retrieved ${data.length} seasons successfully`);
+      setSeasons(data);
+    } else {
+      console.error('❌ Failed to retrieve seasons:', 'Invalid data format');
+      setSeasons([]);
+    }
+  } catch (err) {
+    console.error('❌ Error fetching seasons:', err);
+    setSeasons([]);
+  } finally {
+    setLoadingSeasons(false);
+  }
+};
 
   const fetchDecorServices = async () => {
     try {
@@ -213,10 +267,16 @@ const DecorListScreen = () => {
     return (
       <TouchableOpacity 
         style={[styles.decorCard, { backgroundColor: colors.card }]}
-        onPress={() => router.push({
-          pathname: "/decor/[id]",
-          params: { id: item.id.toString() },
-        })}
+        onPress={() => {
+          // Đảm bảo item.id là string
+          const id = typeof item.id === 'number' ? item.id.toString() : item.id;
+          console.log(`🔍 Navigating to decor detail: ${id}`);
+          
+          router.push({
+            pathname: "/decor/[id]",
+            params: { id }
+          });
+        }}
         activeOpacity={0.7}
         testID={`decor-card-${item.id}`}
       >
@@ -269,6 +329,134 @@ const DecorListScreen = () => {
     );
   };
 
+  // Season dropdown component
+  const SeasonDropdown = () => {
+    // Get selected season icon
+    const getSelectedSeasonIcon = () => {
+      if (!selectedSeason) return "apps-outline";
+      const found = seasons.find(s => s.seasonName === selectedSeason);
+      return found ? getSeasonIcon(found.seasonName) : "apps-outline";
+    };
+
+    return (
+      <View style={styles.dropdownContainer}>
+        <TouchableOpacity 
+          style={[styles.dropdownButton, { backgroundColor: colors.card }]}
+          onPress={() => setSeasonDropdownVisible(true)}
+          testID="season-dropdown-button"
+        >
+          <Ionicons 
+            name={getSelectedSeasonIcon() as any} 
+            size={18} 
+            color={PRIMARY_COLOR} 
+            style={styles.dropdownIcon}
+          />
+          <Text style={[styles.dropdownButtonText, { color: colors.text }]}>
+            {selectedSeason || 'All Seasons'}
+          </Text>
+          <Ionicons name="chevron-down" size={18} color={colors.textSecondary || '#666'} />
+        </TouchableOpacity>
+
+        {/* Dropdown Modal */}
+        <Modal
+          visible={seasonDropdownVisible}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setSeasonDropdownVisible(false)}
+        >
+          <TouchableOpacity 
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setSeasonDropdownVisible(false)}
+          >
+            <View 
+              style={[styles.dropdownModal, { backgroundColor: colors.card }]}
+            >
+              {/* Season options */}
+              {!loadingSeasons ? (
+                seasons.length > 0 ? (
+                  <>
+                    <TouchableOpacity 
+                      style={[
+                        styles.dropdownItem,
+                        selectedSeason === null && styles.selectedDropdownItem
+                      ]}
+                      onPress={() => {
+                        setSelectedSeason(null);
+                        setSeasonDropdownVisible(false);
+                      }}
+                    >
+                      <Ionicons 
+                        name="apps-outline" 
+                        size={20} 
+                        color={selectedSeason === null ? PRIMARY_COLOR : colors.text} 
+                        style={styles.dropdownItemIcon}
+                      />
+                      <Text 
+                        style={[
+                          styles.dropdownItemText, 
+                          { color: colors.text },
+                          selectedSeason === null && { color: PRIMARY_COLOR, fontWeight: 'bold' }
+                        ]}
+                      >
+                        All Seasons
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    {seasons.map((season) => (
+                      <TouchableOpacity 
+                        key={season.id}
+                        style={[
+                          styles.dropdownItem,
+                          selectedSeason === season.seasonName && styles.selectedDropdownItem
+                        ]}
+                        onPress={() => {
+                          setSelectedSeason(season.seasonName);
+                          setSeasonDropdownVisible(false);
+                        }}
+                      >
+                        <Ionicons 
+                          name={getSeasonIcon(season.seasonName) as any} 
+                          size={20} 
+                          color={selectedSeason === season.seasonName ? PRIMARY_COLOR : colors.text} 
+                          style={styles.dropdownItemIcon}
+                        />
+                        <Text 
+                          style={[
+                            styles.dropdownItemText, 
+                            { color: colors.text },
+                            selectedSeason === season.seasonName && { color: PRIMARY_COLOR, fontWeight: 'bold' }
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {season.seasonName}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </>
+                ) : (
+                  <View style={styles.dropdownEmptyContainer}>
+                    <Ionicons name="calendar-outline" size={30} color={colors.textSecondary} />
+                    <Text style={[styles.dropdownEmptyText, { color: colors.textSecondary }]}>
+                      No seasons available
+                    </Text>
+                  </View>
+                )
+              ) : (
+                <View style={styles.dropdownLoadingContainer}>
+                  <ActivityIndicator size="small" color={PRIMARY_COLOR} />
+                  <Text style={[styles.dropdownLoadingText, { color: colors.textSecondary }]}>
+                    Loading seasons...
+                  </Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      </View>
+    );
+  };
+
   // Empty state component
   const EmptyState = () => (
     <View style={styles.emptyContainer}>
@@ -278,7 +466,7 @@ const DecorListScreen = () => {
       </Text>
       <Text style={[styles.emptyText, { color: colors.textSecondary || '#666' }]}>
         {selectedSeason 
-          ? `No decor services available for ${selectedSeason} season${searchQuery ? ' matching your search' : ''}` 
+          ? `No decor services available for "${selectedSeason}"${searchQuery ? ' matching your search' : ''}` 
           : "No decor services match your search criteria"}
       </Text>
       <View style={styles.emptyActionButtons}>
@@ -337,82 +525,32 @@ const DecorListScreen = () => {
         </Text>
       </View>
       
-      {/* Search Bar */}
-      <View style={[styles.searchContainer, { backgroundColor: colors.card }]}>
-        <Ionicons name="search" size={20} color={colors.textSecondary || '#666'} />
-        <TextInput
-          placeholder="Search services..."
-          placeholderTextColor={colors.textSecondary || '#666'}
-          style={[styles.searchInput, { color: colors.text }]}
-          value={searchInputText}
-          onChangeText={handleSearchChange}
-          returnKeyType="search"
-          clearButtonMode="while-editing"
-          autoCapitalize="none"
-          autoCorrect={false}
-          testID="search-input"
-        />
-        {searchInputText.length > 0 && (
-          <TouchableOpacity onPress={clearSearch} testID="clear-search">
-            <Ionicons name="close-circle" size={20} color={colors.textSecondary || '#666'} />
-          </TouchableOpacity>
-        )}
-      </View>
-      
-      {/* Season Tabs */}
-      <View style={styles.seasonTabsContainer}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.seasonTabs}
-        >
-          <TouchableOpacity
-            style={[
-              styles.seasonTab,
-              selectedSeason === null && styles.selectedSeasonTab
-            ]}
-            onPress={() => setSelectedSeason(null)}
-            testID="season-tab-all"
-          >
-            <Ionicons 
-              name="apps-outline" 
-              size={18} 
-              color={selectedSeason === null ? '#fff' : '#555'} 
-            />
-            <Text style={[
-              styles.seasonTabText,
-              selectedSeason === null && styles.selectedSeasonTabText
-            ]}>
-              All
-            </Text>
-          </TouchableOpacity>
-          
-          {seasons.map((season) => (
-            <TouchableOpacity
-              key={season.name}
-              style={[
-                styles.seasonTab,
-                selectedSeason === season.name && styles.selectedSeasonTab
-              ]}
-              onPress={() => setSelectedSeason(
-                selectedSeason === season.name ? null : season.name
-              )}
-              testID={`season-tab-${season.name.toLowerCase()}`}
-            >
-              <Ionicons 
-                name={season.icon as any} 
-                size={18} 
-                color={selectedSeason === season.name ? '#fff' : '#555'} 
-              />
-              <Text style={[
-                styles.seasonTabText,
-                selectedSeason === season.name && styles.selectedSeasonTabText
-              ]}>
-                {season.name}
-              </Text>
+      {/* Search Bar and Season Filter */}
+      <View style={styles.filtersContainer}>
+        {/* Search Bar */}
+        <View style={[styles.searchContainer, { backgroundColor: colors.card }]}>
+          <Ionicons name="search" size={20} color={colors.textSecondary || '#666'} />
+          <TextInput
+            placeholder="Search services..."
+            placeholderTextColor={colors.textSecondary || '#666'}
+            style={[styles.searchInput, { color: colors.text }]}
+            value={searchInputText}
+            onChangeText={handleSearchChange}
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+            autoCapitalize="none"
+            autoCorrect={false}
+            testID="search-input"
+          />
+          {searchInputText.length > 0 && (
+            <TouchableOpacity onPress={clearSearch} testID="clear-search">
+              <Ionicons name="close-circle" size={20} color={colors.textSecondary || '#666'} />
             </TouchableOpacity>
-          ))}
-        </ScrollView>
+          )}
+        </View>
+
+        {/* Season Dropdown */}
+        <SeasonDropdown />
       </View>
       
       {/* Search Status Indicator */}
@@ -484,14 +622,20 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
   },
-  searchContainer: {
+  filtersContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 16,
-    marginBottom: 12,
+    marginBottom: 16,
+  },
+  searchContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
+    marginRight: 8,
   },
   searchInput: {
     flex: 1,
@@ -499,35 +643,93 @@ const styles = StyleSheet.create({
     fontSize: 16,
     paddingVertical: 4,
   },
-  seasonTabsContainer: {
-    marginBottom: 16,
+  dropdownContainer: {
+    width: '35%',
   },
-  seasonTabs: {
-    paddingHorizontal: 12,
-  },
-  seasonTab: {
+  dropdownButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 4,
-    paddingVertical: 8,
+    justifyContent: 'space-between',
     paddingHorizontal: 12,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    backgroundColor: '#f5f5f5',
+    paddingVertical: 10,
+    borderRadius: 8,
   },
-  selectedSeasonTab: {
-    backgroundColor: PRIMARY_COLOR,
-    borderColor: PRIMARY_COLOR,
+  dropdownIcon: {
+    marginRight: 6,
   },
-  seasonTabText: {
+  dropdownButtonText: {
+    flex: 1,
     fontSize: 14,
-    fontWeight: 'bold',
-    color: '#555',
-    marginLeft: 4,
+    fontWeight: '500',
   },
-  selectedSeasonTabText: {
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  dropdownModal: {
+    width: '80%',
+    borderRadius: 12,
+    paddingVertical: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    maxHeight: '70%', // Prevent it from being too tall on small screens
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  dropdownItemContent: {
+    flex: 1,
+  },
+  dropdownItemSubtext: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  statusBadge: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  statusBadgeText: {
     color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  selectedDropdownItem: {
+    backgroundColor: `${PRIMARY_COLOR}15`,
+  },
+  dropdownItemIcon: {
+    marginRight: 12,
+  },
+  dropdownItemText: {
+    fontSize: 16,
+  },
+  dropdownLoadingContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  dropdownLoadingText: {
+    marginTop: 8,
+    fontSize: 14,
+  },
+  dropdownEmptyContainer: {
+    padding: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropdownEmptyText: {
+    marginTop: 10,
+    fontSize: 14,
+    textAlign: 'center',
   },
   loadingContainer: {
     flex: 1,
@@ -588,20 +790,6 @@ const styles = StyleSheet.create({
   cardImage: {
     width: '100%',
     height: '100%',
-  },
-  priceBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: PRIMARY_COLOR,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  priceText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 12,
   },
   cardContent: {
     padding: 12,

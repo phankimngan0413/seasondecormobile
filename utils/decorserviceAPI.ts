@@ -23,6 +23,7 @@ export interface IDecor {
   imageUrls?: string[]; // Map từ images
   rate?: number;
   totalRating?: number;
+address:string;
 }
 
 // Then use type guards in your component to handle both possibilities

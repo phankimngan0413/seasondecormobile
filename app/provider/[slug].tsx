@@ -20,16 +20,16 @@ import {
   getProviderDetailAPI
 } from "@/utils/providerAPI";
 import { getDecorServiceByProviderAPI } from "@/utils/decorserviceAPI";
-import {getProductsByProviderAPI} from "@utils/productAPI"
+import { getProductsByProviderAPI } from "@/utils/productAPI"; // Fixed import path
 // Import follow APIs
 import {
   followUserAPI,
   unfollowUserAPI,
 } from "@/utils/followAPI";
-
+import RenderHtml from 'react-native-render-html';
 // Components
 import ProductCard from "@/app/product/ProductCard";
-import DecorCard from "@/components/DecorCard";
+// Removed DecorCard import as it's not being used
 
 // Types
 import { IProvider } from "@/utils/providerAPI";
@@ -52,7 +52,9 @@ const processDecorService = (item: any): IDecor => ({
   style: item.style || "Unknown Style",
   basePrice: item.basePrice || 0,
   description: item.description || "No description",
-  province: item.province || "Unknown Province",
+  sublocation: item.sublocation,
+  province: item.province ,
+  address: item.address ,
   createAt: item.createAt || new Date().toISOString(),
   accountId: item.accountId || 0,
   decorCategoryId: item.decorCategoryId || 0,
@@ -73,8 +75,12 @@ const processDecorService = (item: any): IDecor => ({
         })
       : ["No Season"],
 });
-
-
+interface IRenderBioProps {
+  bioText: string;
+  contentWidth: number;
+  textColor: string;
+  primaryColor: string;
+}
 const useForceUpdate = () => {
   const [, setTick] = useState(0);
   const update = useCallback(() => {
@@ -107,45 +113,66 @@ const ProviderDetailScreen: React.FC = () => {
   
   const forceUpdate = useForceUpdate();
   
-  // Helper function to get image URL safely
-  const getImageUrl = (imageItem: any): string => {
-    if (!imageItem) return "https://via.placeholder.com/300";
-    if (typeof imageItem === 'string') return imageItem;
-    if (imageItem.imageURL) return imageItem.imageURL;
-    return "https://via.placeholder.com/300";
-  };
-
-  // Helper function to extract season name safely
-  const getSeasonName = (season: any): string => {
-    if (typeof season === 'string') return season;
-    if (season && typeof season === 'object' && 'seasonName' in season) return season.seasonName;
-    return 'Unknown Season';
-  };
+  // Helper function with default parameters for safety
+const getImageUrl = (imageItem: any = null, defaultImage: string = "https://via.placeholder.com/300"): string => {
+  if (!imageItem) return defaultImage;
+  if (typeof imageItem === 'string') return imageItem;
+  if (imageItem.imageURL) return imageItem.imageURL;
+  return defaultImage;
+};
+const BioContent = ({ bioText, contentWidth, textColor, primaryColor }: IRenderBioProps) => {
+  const [expanded, setExpanded] = React.useState(false);
+  const MAX_BIO_LENGTH = 100; // Character limit before truncation
   
-  // Helper function to format decor data for the DecorCard component
-  const formatDecorForCard = (item: any): any => {
-    return {
-      ...item,
-      // Ensure seasons is properly formatted
-      seasons: Array.isArray(item.seasons)
-        ? item.seasons.map((season: any) => {
-            if (typeof season === "string") {
-              return { id: 0, seasonName: season };
-            } else if (season && season.seasonName) {
-              return { id: season.id || 0, seasonName: season.seasonName };
-            }
-            return { id: 0, seasonName: "Unknown Season" };
-          })
-        : [],
-      // Make sure images is properly formatted
-      images: Array.isArray(item.images)
-        ? item.images.map((img: any) => {
-            if (typeof img === "string") return img;
-            return img?.imageURL || "https://via.placeholder.com/150";
-          })
-        : ["https://via.placeholder.com/150"],
-    };
-  };
+  if (!bioText) return null;
+  
+  // Check if bio should be truncated
+  const shouldTruncate = bioText.length > MAX_BIO_LENGTH;
+  
+  // Create truncated text version
+  const displayText = shouldTruncate && !expanded 
+    ? bioText.substring(0, MAX_BIO_LENGTH) + "..." 
+    : bioText;
+  
+  // Check if bio contains HTML
+  const hasHtml = /<[a-z][\s\S]*>/i.test(bioText);
+  
+  return (
+    <View style={styles.bioWrapper}>
+      {hasHtml ? (
+        <RenderHtml
+          contentWidth={contentWidth}
+          source={{ html: displayText }}
+          tagsStyles={{
+            p: { fontSize: 15, lineHeight: 22, textAlign: 'center', color: textColor },
+            a: { color: primaryColor },
+            // Add styles for other common HTML tags if needed
+          }}
+        />
+      ) : (
+        <Text style={[styles.bioText, { color: textColor }]}>
+          {displayText}
+        </Text>
+      )}
+      
+      {shouldTruncate && (
+        <TouchableOpacity onPress={() => setExpanded(!expanded)}>
+          <Text style={[styles.readMoreButton, { color: primaryColor }]}>
+            {expanded ? "Show Less" : "Read More"}
+          </Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+};
+  // Helper function with default parameters for safety
+const getSeasonName = (season: any = null, defaultName: string = 'Unknown Season'): string => {
+  if (typeof season === 'string') return season;
+  if (season && typeof season === 'object' && 'seasonName' in season) return season.seasonName;
+  return defaultName;
+};
+  
+  // Remove the unused formatDecorForCard function since we're not using DecorCard component
   
   // Navigate to messaging
   // Enhanced navigateToChat with contact addition
@@ -154,9 +181,9 @@ const ProviderDetailScreen: React.FC = () => {
     
     try {
       // Try to add contact - whether it succeeds or says "already exists" doesn't matter
-      const response = await addContactAPI(provider.id);
+      await addContactAPI(provider.id);
       
-      // Log the result for debugging but don't show to user
+      // Log removed for production
     } catch (error) {
       // Just log any errors, don't show to user
       console.log("Contact addition error:", error);
@@ -222,6 +249,48 @@ const ProviderDetailScreen: React.FC = () => {
     }
   }, [provider?.id, checkFollowStatus]);
   
+  // Define proper TypeScript interfaces
+interface IRenderBioProps {
+  bioText: string;
+  contentWidth: number;
+  textColor: string;
+  primaryColor: string;
+}
+
+// Convert to a proper functional component with default parameters
+const RenderBioContent = ({
+  bioText,
+  contentWidth = SCREEN_WIDTH - 32,
+  textColor = "#000",
+  primaryColor = PRIMARY_COLOR
+}: IRenderBioProps) => {
+  if (!bioText) return null;
+  
+  // Check if bio contains HTML
+  const hasHtml = /<[a-z][\s\S]*>/i.test(bioText);
+  
+  if (hasHtml) {
+    return (
+      <RenderHtml
+        contentWidth={contentWidth}
+        source={{ html: bioText }}
+        tagsStyles={{
+          p: { fontSize: 15, lineHeight: 22, textAlign: 'center', color: textColor },
+          a: { color: primaryColor },
+          // Add styles for other common HTML tags if needed
+        }}
+      />
+    );
+  } else {
+    // If no HTML, display as regular text
+    return (
+      <Text style={[styles.bioText, { color: textColor }]}>
+        {bioText}
+      </Text>
+    );
+  }
+};
+
   // Final fixed handleFollowToggle without alreadyNotFollowing reference
   const handleFollowToggle = async () => {
     if (!provider?.id) return;
@@ -279,83 +348,84 @@ const ProviderDetailScreen: React.FC = () => {
       setFollowLoading(false);
     }
   };
+  
   // Update the fetchProviderDetail function to use the new paginated API
-const fetchProviderDetail = useCallback(async () => {
-  // Validate slug
-  if (!slug || typeof slug !== "string") {
-    console.error("Invalid slug:", slug);
-    setError("No provider information available");
-    setLoading(false);
-    return;
-  }
-
-  try {
-    console.log("Fetching provider details for slug:", slug);
-    setLoading(true);
-    setDecorLoading(true);
-    setProductLoading(true);
-
-    // Fetch provider data first
-    try {
-      const providerData = await getProviderDetailAPI(slug);
-      if (providerData) {
-        setProvider(providerData);
-      } else {
-        console.error("No provider data received");
-        setError("Could not load provider details");
-      }
-    } catch (providerErr) {
-      console.error("Error fetching provider:", providerErr);
-      setError("Could not load provider details");
+  const fetchProviderDetail = useCallback(async () => {
+    // Validate slug
+    if (!slug || typeof slug !== "string") {
+      console.error("Invalid slug:", slug);
+      setError("No provider information available");
       setLoading(false);
       return;
     }
 
-    // Fetch products using the new paginated API
-    // Fetch products using the new paginated API
-// Fetch products using the new paginated API
-try {
-  const productResponse = await getProductsByProviderAPI(slug);
-  
-  // The structure is now guaranteed to have 'items'
-  setProducts(productResponse.items);
-  
-  // You can also log pagination information if needed
-  console.log(`Loaded ${productResponse.items.length} of ${productResponse.totalItems} products (Page ${productResponse.currentPage} of ${productResponse.totalPages})`);
-} catch (productErr) {
-  console.log("No products available for this provider:", productErr);
-  setProducts([]);
-} finally {
-  setProductLoading(false);
-}
-    // Fetch decor services
     try {
-      const decorData = await getDecorServiceByProviderAPI(slug);
+      console.log("Fetching provider details for slug:", slug);
+      setLoading(true);
+      setDecorLoading(true);
+      setProductLoading(true);
 
-      // Process and set decor services
-      const processedServices = Array.isArray(decorData)
-        ? decorData.map(processDecorService)
-        : decorData
-        ? [processDecorService(decorData)]
-        : [];
+      // Fetch provider data first
+      try {
+        const providerData = await getProviderDetailAPI(slug);
+        if (providerData) {
+          setProvider(providerData);
+        } else {
+          console.error("No provider data received");
+          setError("Could not load provider details");
+        }
+      } catch (providerErr) {
+        console.error("Error fetching provider:", providerErr);
+        setError("Could not load provider details");
+        setLoading(false);
+        return;
+      }
 
-      setDecorServices(processedServices);
-    } catch (decorErr) {
-      console.log("No decor services available for this provider");
-      setDecorServices([]);
+      // Fetch products using the new paginated API
+      try {
+        const productResponse = await getProductsByProviderAPI(slug);
+        
+        // The structure is now guaranteed to have 'items'
+        setProducts(productResponse.items);
+        
+        // You can also log pagination information if needed
+        console.log(`Loaded ${productResponse.items.length} of ${productResponse.totalItems} products (Page ${productResponse.currentPage} of ${productResponse.totalPages})`);
+      } catch (productErr) {
+        console.log("No products available for this provider:", productErr);
+        setProducts([]);
+      } finally {
+        setProductLoading(false);
+      }
+      
+      // Fetch decor services
+      try {
+        const decorData = await getDecorServiceByProviderAPI(slug);
+
+        // Process and set decor services
+        const processedServices = Array.isArray(decorData)
+          ? decorData.map(processDecorService)
+          : decorData
+          ? [processDecorService(decorData)]
+          : [];
+
+        setDecorServices(processedServices);
+      } catch (decorErr) {
+        console.log("No decor services available for this provider");
+        setDecorServices([]);
+      } finally {
+        setDecorLoading(false);
+      }
+    } catch (err) {
+      console.error("Comprehensive Fetch Error:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to fetch provider details"
+      );
     } finally {
-      setDecorLoading(false);
+      // Always set loading to false
+      setLoading(false);
     }
-  } catch (err) {
-    console.error("Comprehensive Fetch Error:", err);
-    setError(
-      err instanceof Error ? err.message : "Failed to fetch provider details"
-    );
-  } finally {
-    // Always set loading to false
-    setLoading(false);
-  }
-}, [slug]);
+  }, [slug]);
+  
   // Check follow status after provider is loaded
   useEffect(() => {
     if (provider?.id) {
@@ -487,11 +557,16 @@ try {
               </View>
             </View>
 
-            <View style={styles.bioContainer}>
-              <Text style={[styles.bioText, { color: colors.text }]}>
-                {provider.bio}
-              </Text>
-            </View>
+          <View style={styles.bioContainer}>
+  {provider.bio && (
+    <BioContent
+      bioText={provider.bio}
+      contentWidth={SCREEN_WIDTH - 32}
+      textColor={colors.text}
+      primaryColor={PRIMARY_COLOR}
+    />
+  )}
+</View>
 
             <View
               style={[
@@ -559,7 +634,7 @@ try {
                 }
                 renderItem={({ item }) => {
                   // Extract province or sublocation for location display
-                  const location = item.province || item.sublocation || 'Unknown Province';
+                  const location = item.sublocation ;
                   
                   return (
                     <TouchableOpacity
@@ -606,20 +681,17 @@ try {
                           </View>
                           
                           <View style={styles.seasonTags}>
-                            {Array.isArray(item.seasons) && item.seasons.slice(0, 2).map((season, index) => {
-                              const seasonName = getSeasonName(season);
-                              return (
-                                <View 
-                                  key={index} 
-                                  style={styles.seasonTag}
-                                >
-                                  <Text style={styles.seasonTagText}>
-                                    {seasonName}
-                                  </Text>
-                                </View>
-                              );
-                            })}
-                          </View>
+                          {Array.isArray(item.seasons) && item.seasons.slice(0, 2).map((season, index) => (
+                            <View 
+                              key={index} 
+                              style={styles.seasonTag}
+                            >
+                              <Text style={styles.seasonTagText}>
+                                {getSeasonName(season)}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -1015,5 +1087,15 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 14,
   },
-})
+  bioWrapper: {
+  alignItems: 'center',
+},
+readMoreButton: {
+  textAlign: "center",
+  marginTop: 8, 
+  fontWeight: "bold",
+  paddingVertical: 4,
+}
+});
+
 export default ProviderDetailScreen;

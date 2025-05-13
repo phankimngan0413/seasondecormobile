@@ -20,6 +20,12 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 const { width } = Dimensions.get("window");
 const PRIMARY_COLOR = "#5fc1f1";
 
+// Hàm xóa các thẻ HTML khỏi văn bản
+const stripHtmlTags = (html: string): string => {
+  if (!html) return '';
+  return html.replace(/<\/?[^>]+(>|$)/g, " ").trim();
+};
+
 const ProviderScreen = () => {
   const [providers, setProviders] = useState<IProvider[]>([]);
   const [loading, setLoading] = useState(true);
@@ -156,11 +162,12 @@ const ProviderScreen = () => {
             
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
             
+            {/* Sử dụng text đã loại bỏ HTML tags cho bioText */}
             <Text 
               style={[styles.bioText, { color: colors.text }]}
               numberOfLines={2}
             >
-              {item.bio || 'No description available'}
+              {stripHtmlTags(item.bio) || 'No description available'}
             </Text>
           </TouchableOpacity>
         )}

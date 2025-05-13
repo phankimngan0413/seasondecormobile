@@ -1,5 +1,4 @@
 import { initApiClient } from "@/config/axiosConfig";
-import { random } from "lodash";
 
 export interface ISeason {
   id: number;
@@ -69,115 +68,32 @@ function mapSeason(season: IServerSeason): ISeason {
   };
 }
 
-export const getSeasonsAPI = async (): Promise<ISeasonsListResponse> => {
+// Simplified getSeasonsAPI function
+export const getSeasonsAPI = async () => {
   const url = "/api/Season";
   
   const apiClient = await initApiClient();
   try {
     const response = await apiClient.get(url);
     
+    // Handle different response formats but return just the seasons array
     if (response && response.data) {
+      // Case 1: Response is directly an array of seasons
       if (Array.isArray(response.data)) {
-        const seasons = response.data.map(mapSeason);
-        return {
-          success: true,
-          seasons,
-          totalCount: seasons.length,
-          message: "Seasons retrieved successfully"
-        };
+        return response.data;
       }
       
+      // Case 2: Response follows the {success, data} format
       if (response.data.success && Array.isArray(response.data.data)) {
-        const seasons = response.data.data.map(mapSeason);
-        return {
-          success: true,
-          seasons,
-          totalCount: seasons.length,
-          message: response.data.message || "Seasons retrieved successfully"
-        };
+        return response.data.data;
       }
     }
     
     console.log("Invalid seasons response:", response);
-    return {
-      success: false,
-      seasons: [],
-      totalCount: 0,
-      message: "Failed to retrieve seasons information"
-    };
-  } catch (error: any) {
+    return []; // Return empty array on failure
+  } catch (error) {
     console.log("Error fetching seasons:", error);
-    
-    if (error.response) {
-      console.log("API Error Response:", error.response.data);
-    }
-    
-    return {
-      success: false,
-      seasons: [],
-      totalCount: 0,
-      message: "Failed to connect to season service"
-    };
-  }
-};
-
-export const getSeasonByIdAPI = async (id: number): Promise<ISeasonResponse> => {
-  const url = `/api/Season/${id}`;
-  
-  const apiClient = await initApiClient();
-  try {
-    const response = await apiClient.get(url);
-    
-    if (response && response.data) {
-      if (response.data.id) {
-        return {
-          success: true,
-          season: mapSeason(response.data),
-          message: "Season retrieved successfully"
-        };
-      }
-      
-      if (response.data.success && response.data.data) {
-        return {
-          success: true,
-          season: mapSeason(response.data.data),
-          message: response.data.message || "Season retrieved successfully"
-        };
-      }
-    }
-    
-    console.log("Invalid season response:", response);
-    return {
-      success: false,
-      season: {
-        id: 0,
-        name: "",
-        startDate: "",
-        endDate: "",
-        status: "completed",
-        description: ""
-      },
-      message: "Failed to retrieve season information"
-    };
-  } catch (error: any) {
-    console.log("Error fetching season:", error);
-    
-    if (error.response) {
-      console.log("API Error Response:", error.response.data);
-    }
-    
-    return {
-      success: false,
-      season: {
-        id: 0,
-        name: "",
-        startDate: "",
-        endDate: "",
-        status: "completed",
-        description: ""
-      },
-      message: "Failed to connect to season service"
-    };
+    return []; // Return empty array on error
   }
 };
 
