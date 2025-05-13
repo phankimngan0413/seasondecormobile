@@ -513,11 +513,11 @@ const handleBooking = () => {
               <Text style={[styles.sectionTitle, { color: colors.text }]}>
                 <Ionicons name="home-outline" size={20} color={PRIMARY_COLOR} /> Location
               </Text>
-              <TouchableOpacity onPress={toggleSublocation}>
+              {/* <TouchableOpacity onPress={toggleSublocation}>
                 <Text style={[styles.readMoreText, { color: PRIMARY_COLOR }]}>
                   {showFullSublocation ? "Read Less" : "Read More"}
                 </Text>
-              </TouchableOpacity>
+              </TouchableOpacity> */}
             </View>
             
             <View style={[styles.divider, { backgroundColor: colors.border }]} />

@@ -251,7 +251,7 @@ export default function HomeScreen() {
                   Featured Products
                 </Text>
                 <FlatList
-                  data={products.slice(0, 10)}
+                  data={products.slice(0, 4)}
                   keyExtractor={(item) => item.id.toString()}
                   renderItem={({ item }) => (
                     <TouchableOpacity

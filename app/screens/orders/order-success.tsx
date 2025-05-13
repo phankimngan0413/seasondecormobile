@@ -229,53 +229,53 @@ const OrderSuccessScreen = () => {
       { label: "Completed", value: 2 }
     ];
     
-    return (
-      <View style={[styles.progressContainer, { backgroundColor: colors.card }]}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Order Progress</Text>
+    // return (
+    //   <View style={[styles.progressContainer, { backgroundColor: colors.card }]}>
+    //     <Text style={[styles.sectionTitle, { color: colors.text }]}>Order Progress</Text>
         
-        <View style={styles.stepperContainer}>
-          {steps.map((step, index) => {
-            // For completed orders (status 4), all steps should be active
-            let isActive = status === 4 ? true : status >= step.value;
+    //     <View style={styles.stepperContainer}>
+    //       {steps.map((step, index) => {
+    //         // For completed orders (status 4), all steps should be active
+    //         let isActive = status === 4 ? true : status >= step.value;
             
-            const isLast = index === steps.length - 1;
+    //         const isLast = index === steps.length - 1;
             
-            return (
-              <View key={index} style={styles.stepItem}>
-                <View style={styles.stepContent}>
-                  <View style={[
-                    styles.stepCircle, 
-                    { 
-                      backgroundColor: isActive ? getStatusColor(step.value) : colors.border,
-                      borderColor: isActive ? getStatusColor(step.value) : colors.border
-                    }
-                  ]}>
-                    {isActive && <Ionicons name="checkmark" size={12} color="white" />}
-                  </View>
-                  <Text style={[
-                    styles.stepLabel, 
-                    { 
-                      color: isActive ? getStatusColor(step.value) : colors.textSecondary,
-                      fontWeight: isActive ? '600' : 'normal'
-                    }
-                  ]}>
-                    {step.label}
-                  </Text>
-                </View>
+    //         return (
+    //           <View key={index} style={styles.stepItem}>
+    //             <View style={styles.stepContent}>
+    //               <View style={[
+    //                 styles.stepCircle, 
+    //                 { 
+    //                   backgroundColor: isActive ? getStatusColor(step.value) : colors.border,
+    //                   borderColor: isActive ? getStatusColor(step.value) : colors.border
+    //                 }
+    //               ]}>
+    //                 {isActive && <Ionicons name="checkmark" size={12} color="white" />}
+    //               </View>
+    //               <Text style={[
+    //                 styles.stepLabel, 
+    //                 { 
+    //                   color: isActive ? getStatusColor(step.value) : colors.textSecondary,
+    //                   fontWeight: isActive ? '600' : 'normal'
+    //                 }
+    //               ]}>
+    //                 {step.label}
+    //               </Text>
+    //             </View>
                 
-                {!isLast && (
-                  <View style={[
-                    styles.stepperLine, 
-                    { backgroundColor: isActive && status === 4 ? getStatusColor(step.value) : 
-                                       status > step.value ? getStatusColor(step.value) : colors.border }
-                  ]} />
-                )}
-              </View>
-            );
-          })}
-        </View>
-      </View>
-    );
+    //             {!isLast && (
+    //               <View style={[
+    //                 styles.stepperLine, 
+    //                 { backgroundColor: isActive && status === 4 ? getStatusColor(step.value) : 
+    //                                    status > step.value ? getStatusColor(step.value) : colors.border }
+    //               ]} />
+    //             )}
+    //           </View>
+    //         );
+    //       })}
+    //     </View>
+    //   </View>
+    // );
   };
 
   const renderOrderSummary = () => (
@@ -374,6 +374,11 @@ const OrderSuccessScreen = () => {
   const renderActionButtons = () => {
     const status = orderData?.status || 0;
     
+    // Get isReviewed status from the first product or check if any product is reviewed
+    const isReviewed = orderData?.orderDetails?.[0]?.isReviewed || false;
+    // Hoặc nếu cần kiểm tra tất cả sản phẩm:
+    // const isReviewed = orderData?.orderDetails?.every(item => item.isReviewed) || false;
+    
     // Different actions based on status
     return (
       <View style={styles.actionButtonsContainer}>
@@ -394,12 +399,12 @@ const OrderSuccessScreen = () => {
           </TouchableOpacity>
         )}
         
-        {status === 3 && (
+        {status === 1 && !isReviewed && (
           <TouchableOpacity 
             style={[styles.actionButton, { backgroundColor: PRIMARY_COLOR }]}
             onPress={() => router.push({
               pathname: "/screens/review/product-review",
-              params: { 
+              params: {
                 orderId: orderId,
                 productId: orderData?.orderDetails[0]?.productId // Passing the first product by default
               }

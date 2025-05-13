@@ -168,35 +168,64 @@ const ReviewScreen = () => {
   const toggleExpandReview = (id: number) => {
     setExpandedReview(expandedReview === id ? null : id);
   };
+  const formatDateTime = (dateString: string) => {
+    if (!dateString) return '';
+    
+    // Create date object and adjust for Vietnam timezone (UTC+7)
+    const reviewDate = new Date(dateString);
+    const now = new Date();
+    
+    // Calculate difference in milliseconds
+    const diffMs = now.getTime() - reviewDate.getTime();
+    const diffSeconds = Math.floor(diffMs / 1000);
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    const diffHours = Math.floor(diffMinutes / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    const diffMonths = Math.floor(diffDays / 30);
+    const diffYears = Math.floor(diffDays / 365);
+    
+    // Handle different time ranges with English formatting
+    if (diffSeconds < 60) {
+      return 'just now';
+    } else if (diffMinutes < 60) {
+      return `${diffMinutes} minute${diffMinutes > 1 ? 's' : ''} ago`;
+    } else if (diffHours < 24) {
+      return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    } else if (diffDays === 1) {
+      return 'yesterday';
+    } else if (diffDays < 7) {
+      return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    } else if (diffDays < 30) {
+      const weeks = Math.floor(diffDays / 7);
+      return `${weeks} week${weeks > 1 ? 's' : ''} ago`;
+    } else if (diffMonths === 1) {
+      return '1 month ago';
+    } else if (diffMonths < 12) {
+      return `${diffMonths} months ago`;
+    } else if (diffYears === 1) {
+      return '1 year ago';
+    } else if (diffYears > 1) {
+      return `${diffYears} years ago`;
+    } else {
+      // Fallback to formatted date with full day, month name, date, year
+      // Format: "Thursday, May 8, 2025"
+      return reviewDate.toLocaleDateString('en-US', {
+        weekday: 'long',    // Thursday
+        year: 'numeric',    // 2025
+        month: 'long',      // May
+        day: 'numeric',     // 8
+        timeZone: 'Asia/Ho_Chi_Minh' // Vietnam timezone
+      });
+    }
+  };
 
   const renderReviewItem = ({ item, index }: { item: IReviewItem, index: number }) => {
     const isExpanded = expandedReview === item.id;
     const isFirst = index === 0;
     const isLast = index === reviews.length - 1;
     
-    // Calculate date difference
-    const reviewDate = new Date(item.createAt);
-    const today = new Date();
-    const diffTime = Math.abs(today.getTime() - reviewDate.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    let timeText = '';
-    if (diffDays === 0) {
-      timeText = 'Today';
-    } else if (diffDays === 1) {
-      timeText = 'Yesterday';
-    } else if (diffDays < 7) {
-      timeText = `${diffDays} days ago`;
-    } else if (diffDays < 30) {
-      const weeks = Math.floor(diffDays / 7);
-      timeText = `${weeks} ${weeks === 1 ? 'week' : 'weeks'} ago`;
-    } else {
-      timeText = reviewDate.toLocaleDateString('en-US', { 
-        day: 'numeric', 
-        month: 'short', 
-        year: 'numeric' 
-      });
-    }
+    // Use the improved date formatting function
+    const timeText = formatDateTime(item.createAt);
     
     return (
       <TouchableOpacity
@@ -231,9 +260,9 @@ const ReviewScreen = () => {
               <Text style={[styles.userName, { color: colors.text }]} numberOfLines={1}>
                 {item.name}
               </Text>
-              <Text style={[styles.timeText, { color: colors.textSecondary }]}>
+              {/* <Text style={[styles.timeText, { color: colors.textSecondary }]}>
                 {timeText}
-              </Text>
+              </Text> */}
             </View>
           </View>
           
@@ -309,7 +338,7 @@ const ReviewScreen = () => {
             </Text>
           </TouchableOpacity>
           
-          <TouchableOpacity 
+          {/* <TouchableOpacity 
             style={[styles.actionButton, { backgroundColor: '#FF3B3010' }]}
             onPress={(e) => {
               e.stopPropagation();
@@ -320,7 +349,7 @@ const ReviewScreen = () => {
             <Text style={[styles.actionButtonText, { color: '#FF3B30' }]}>
               Delete
             </Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
       </TouchableOpacity>
     );

@@ -106,6 +106,7 @@ interface ActionButtonProps {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    marginTop:50,
   },
   header: {
     height: 56,

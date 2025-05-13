@@ -395,6 +395,7 @@ function ThemedStack() {
     "/booking/initial-deposit",
     "/booking/deposit-payment",
     "/booking/cancel-request",
+    "/screens/review/product-review",
   ].includes(pathname) || pathname.includes("/quotation/quotation-detail/") || pathname.includes("/quotation/contract/");
 
   // Only enable pull-to-refresh on specific screens

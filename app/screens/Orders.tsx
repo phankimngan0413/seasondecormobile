@@ -52,7 +52,7 @@ const OrderListScreen = () => {
     { label: "All", value: null },
     { label: "Pending", value: 0 },
     { label: "Payment", value: 1 },
-    { label: "Completed", value: 2 },
+    // { label: "Completed", value: 2 },
     { label: "Cancelled", value: 5 }
   ];
 
@@ -104,7 +104,7 @@ const OrderListScreen = () => {
     switch (status) {
       case 0: return PENDING_COLOR;     // Pending
       case 1: return PAYMENT_COLOR;     // Payment
-      case 2: return COMPLETED_COLOR;   // Completed
+      // case 2: return COMPLETED_COLOR;   // Completed
       case 5: return CANCELLED_COLOR;   // Cancelled
       default: return colors.textSecondary;
     }
@@ -114,7 +114,7 @@ const OrderListScreen = () => {
     const statusMap: Record<number, string> = {
       0: "Pending",
       1: "Payment",
-      2: "Completed",
+      // 2: "Completed",
       5: "Cancelled"
     };
     return statusMap[status] || "Unknown";
@@ -124,7 +124,7 @@ const OrderListScreen = () => {
     const iconMap: Record<number, string> = {
       0: "time-outline",              // Pending
       1: "card-outline",              // Payment
-      2: "checkmark-circle-outline",  // Completed
+      // 2: "checkmark-circle-outline",  // Completed
       5: "close-circle-outline"       // Cancelled
     };
     return iconMap[status] || "help-circle-outline";

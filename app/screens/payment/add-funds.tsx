@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -16,7 +16,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "@/constants/Colors";
 import { useTheme } from "@/constants/ThemeContext";
 import { topUpWalletAPI } from "@/utils/paymentAPI";
-import { WebView, WebViewNavigation } from "react-native-webview";
 
 const PREDEFINED_AMOUNTS = [100000, 200000, 500000, 1000000, 2000000];
 
@@ -31,15 +30,6 @@ const AddFundsScreen = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [linkingInitialized, setLinkingInitialized] = useState<boolean>(false);
-  const [showWebView, setShowWebView] = useState<boolean>(false);
-  const [paymentUrl, setPaymentUrl] = useState<string>("");
-  const [paymentSuccess, setPaymentSuccess] = useState<boolean>(false);
-
-  // Create a WebView reference
-  const webViewRef = useRef<WebView>(null);
-  
-  // Sử dụng ref để theo dõi trạng thái đã xử lý thanh toán thành công chưa
-  const hasProcessedPayment = useRef(false);
 
   // Handle predefined amount selection
   const handlePredefinedAmount = (value: number) => {
@@ -63,67 +53,8 @@ const AddFundsScreen = () => {
 
   // Handle successful payment completion
   const handlePaymentSuccess = () => {
-    // Kiểm tra nếu đã đánh dấu thanh toán thành công, không làm gì cả
-    if (hasProcessedPayment.current || paymentSuccess) {
-      console.log("Payment already marked as successful, ignoring duplicate call");
-      return;
-    }
-    
-    console.log("Payment successful - marking payment as successful");
-    hasProcessedPayment.current = true;
-    
-    // Đánh dấu thanh toán thành công
-    setPaymentSuccess(true);
-    
-    // Tự động chuyển hướng đến trang thành công
-    setShowWebView(false);
+    console.log("Payment successful - redirecting to success page");
     router.push("/screens/payment/success");
-  };
-
-  // Handle WebView navigation state changes
-  const handleNavigationStateChange = (navState: WebViewNavigation) => {
-    console.log("WebView navigating to:", navState.url);
-    
-    const url = navState.url;
-    
-    // Check if we're on the ngrok warning page
-    if (url.includes('ngrok-free.app') && 
-        url.includes('You are about to visit:')) {
-      // We'll handle this with injectedJavaScript, just log it
-      console.log("Detected ngrok warning page, auto-click script will handle it");
-      return;
-    }
-    
-    // Check for successful payment in the return URL
-    if ((url.includes('/api/Payment/mobileReturn') || 
-         url.includes('mobileReturn')) && 
-        url.includes('vnp_ResponseCode=')) {
-      
-      console.log("Payment return URL detected:", url);
-      
-      // Check for successful payment codes
-      if (url.includes('vnp_ResponseCode=00') && 
-          url.includes('vnp_TransactionStatus=00')) {
-        console.log("Payment successful! Marking as successful...");
-        handlePaymentSuccess();
-        return;
-      } else if (url.includes('vnp_ResponseCode')) {
-        // Payment was completed but not successful
-        console.log("Payment completed but not successful");
-        return;
-      }
-    }
-    
-    // Check for app scheme URLs that might indicate success
-    if (url.startsWith('com.baymaxphan.seasondecormobileapp://')) {
-      console.log("App scheme URL detected:", url);
-      
-      if (url.includes('/success') || url.includes('success')) {
-        console.log("Success detected in app scheme URL");
-        handlePaymentSuccess();
-        return;
-      }
-    }
   };
 
   // Handle deep linking for payment responses
@@ -140,6 +71,10 @@ const AddFundsScreen = () => {
             (url.includes('vnp_ResponseCode=00') && url.includes('vnp_TransactionStatus=00'))) {
           console.log("Success detected in deep link");
           handlePaymentSuccess();
+        } else if (url.includes('vnp_ResponseCode')) {
+          // Payment was completed but not successful
+          console.log("Payment completed but not successful");
+          setError("Payment was not successful. Please try again.");
         }
       } catch (error) {
         console.error("Error handling deep link:", error);
@@ -195,13 +130,19 @@ const AddFundsScreen = () => {
       }
 
       if (paymentUrl) {
-        // Reset payment tracking status for new payment
-        hasProcessedPayment.current = false;
-        setPaymentSuccess(false);
+        // Open the payment URL in the default browser
+        const supported = await Linking.canOpenURL(paymentUrl);
         
-        // Open the payment URL in a WebView
-        setPaymentUrl(paymentUrl);
-        setShowWebView(true);
+        if (supported) {
+          console.log("Opening payment URL in browser:", paymentUrl);
+          await Linking.openURL(paymentUrl);
+          
+          // Optionally show a message to the user
+          setError("Payment page has been opened in your browser. Please complete the payment and return to the app.");
+        } else {
+          console.error("Cannot open URL:", paymentUrl);
+          setError("Cannot open payment page. Please try again.");
+        }
       } else {
         setError("Could not find payment URL. Please try again.");
       }
@@ -212,240 +153,6 @@ const AddFundsScreen = () => {
       setLoading(false);
     }
   };
-
-  // If WebView is active, show it
-  if (showWebView && paymentUrl) {
-    return (
-      <View style={{ flex: 1 }}>
-        <WebView
-          ref={webViewRef}
-          source={{ uri: paymentUrl }}
-          style={{ flex: 1 }}
-          onNavigationStateChange={handleNavigationStateChange}
-          startInLoadingState={true}
-          javaScriptEnabled={true}
-          domStorageEnabled={true}
-          thirdPartyCookiesEnabled={true}
-          originWhitelist={['*', 'com.baymaxphan.seasondecormobileapp://*']}  // Allow app scheme
-          onShouldStartLoadWithRequest={(request) => {
-            // Log all requests for debugging
-            console.log("WebView request:", request.url);
-            
-            // FIRST: Check for app scheme URLs before anything else
-            if (request.url.startsWith('com.baymaxphan.seasondecormobileapp')) {
-              console.log("Intercepted app scheme URL:", request.url);
-              
-              // If it's a success URL, handle it immediately
-              if (request.url.includes('/success') || request.url.includes('success')) {
-                console.log("Detected success URL from app scheme - handling redirect");
-                
-                // Mark payment as successful if not already done
-                handlePaymentSuccess();
-                
-                // Prevent WebView from trying to load this URL
-                return false;
-              }
-              // Always return false for app scheme URLs to prevent errors
-              return false;
-            }
-            
-            // SECOND: Check for mobile return URLs
-            if (request.url.includes('/api/Payment/mobileReturn')) {
-              console.log("Detected mobileReturn URL:", request.url);
-              
-              try {
-                // Parse URL parameters
-                const urlParts = request.url.split('?');
-                if (urlParts.length > 1) {
-                  const queryString = urlParts[1];
-                  const params = new URLSearchParams(queryString);
-                  const responseCode = params.get('vnp_ResponseCode');
-                  const transactionStatus = params.get('vnp_TransactionStatus');
-                  
-                  console.log("Payment response code:", responseCode);
-                  console.log("Transaction status:", transactionStatus);
-                  
-                  // If payment successful
-                  if (responseCode === '00' && transactionStatus === '00') {
-                    console.log("Payment successful based on URL parameters");
-                    
-                    // Mark payment as successful
-                    handlePaymentSuccess();
-                  }
-                }
-              } catch (error) {
-                console.error("Error parsing URL parameters:", error);
-              }
-            }
-            
-            // Allow all other URLs
-            return true;
-          }}
-          renderLoading={() => (
-            <View style={styles.webViewLoading}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={{ marginTop: 10, color: colors.text }}>Loading payment page...</Text>
-            </View>
-          )}
-          onError={(syntheticEvent) => {
-            const { nativeEvent } = syntheticEvent;
-            console.error('WebView error:', nativeEvent);
-            
-            // If the error is related to localhost but contains valid payment parameters, treat it as success
-            if (nativeEvent.url && 
-                (nativeEvent.url.includes('localhost') || nativeEvent.code === -6) && 
-                nativeEvent.url.includes('vnp_ResponseCode=00') && 
-                nativeEvent.url.includes('vnp_TransactionStatus=00')) {
-              
-              console.log("Detected successful payment on localhost URL");
-              
-              // Handle success directly
-              handlePaymentSuccess();
-              return;
-            }
-            
-            // If the error is related to the app scheme, don't show an error
-            if (nativeEvent.url && nativeEvent.url.startsWith('com.baymaxphan.seasondecormobileapp://')) {
-              console.log("Ignoring expected error for app scheme URL");
-              
-              // Check if it's a success URL
-              if (nativeEvent.url.includes('/success') || nativeEvent.url.includes('success')) {
-                // Đánh dấu thành công
-                handlePaymentSuccess();
-              }
-              
-              return;
-            }
-          }}
-          incognito={false}
-          cacheEnabled={true}
-          allowsBackForwardNavigationGestures={true}
-          userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1"
-          injectedJavaScript={`
-            (function() {
-              // Biến để theo dõi đã click nút Visit Site chưa
-              let hasClickedVisitSite = false;
-              
-              function autoClickVisitSite() {
-                // Nếu đã click rồi thì không click nữa để tránh vòng lặp
-                if (hasClickedVisitSite) {
-                  console.log('Already clicked Visit Site, skipping');
-                  return false;
-                }
-                
-                // Look for the "Visit Site" button on ngrok warning pages
-                const visitButtons = document.querySelectorAll('a, button');
-                for (let i = 0; i < visitButtons.length; i++) {
-                  const button = visitButtons[i];
-                  if (button.textContent && button.textContent.includes('Visit Site')) {
-                    console.log('Auto-clicking Visit Site button');
-                    hasClickedVisitSite = true; // Đánh dấu đã click
-                    button.click();
-                    return true;
-                  }
-                }
-                return false;
-              }
-              
-              // Try immediately
-              if (!autoClickVisitSite()) {
-                // If not found, try again after the page fully loads
-                window.addEventListener('load', function() {
-                  autoClickVisitSite();
-                  
-                  // And try one more time after a slight delay
-                  setTimeout(() => {
-                    if (!hasClickedVisitSite) {
-                      autoClickVisitSite();
-                    }
-                  }, 1000);
-                });
-              }
-              
-              // Monitor URL changes to detect successful payments
-              let lastUrl = '';
-              let checkCount = 0; // Biến đếm số lần kiểm tra
-              const MAX_CHECKS = 50; // Giới hạn số lần kiểm tra
-              
-              const urlCheckInterval = setInterval(() => {
-                checkCount++;
-                
-                // Dừng kiểm tra nếu đã vượt quá giới hạn
-                if (checkCount > MAX_CHECKS) {
-                  console.log('Reached max URL checks, clearing interval');
-                  clearInterval(urlCheckInterval);
-                  return;
-                }
-                
-                if (window.location.href !== lastUrl) {
-                  lastUrl = window.location.href;
-                  console.log('URL changed to: ' + lastUrl);
-                  
-                  // Check if the URL indicates a successful payment
-                  if ((lastUrl.includes('/api/Payment/mobileReturn') || 
-                      lastUrl.includes('mobileReturn')) && 
-                      lastUrl.includes('vnp_ResponseCode=00') && 
-                      lastUrl.includes('vnp_TransactionStatus=00')) {
-                    
-                    console.log('Detected successful payment in URL!');
-                    // Send message to React Native
-                    window.ReactNativeWebView.postMessage(JSON.stringify({
-                      type: 'PAYMENT_SUCCESS',
-                      url: lastUrl
-                    }));
-                    
-                    // Clear interval after success
-                    clearInterval(urlCheckInterval);
-                  }
-                }
-              }, 300);
-              
-              // Theo dõi nút "Chuyển đến trang thành công" trong VNPay
-              function checkForSuccessButton() {
-                const successButtons = document.querySelectorAll('button, a, div');
-                for (let i = 0; i < successButtons.length; i++) {
-                  const button = successButtons[i];
-                  if (button.textContent && button.textContent.includes('Chuyển đến trang thành công')) {
-                    console.log('Found success button, clicking it');
-                    button.click();
-                    return true;
-                  }
-                }
-                return false;
-              }
-              
-              // Kiểm tra nút thành công sau khi trang tải xong
-              window.addEventListener('load', function() {
-                // Thử ngay lập tức
-                if (!checkForSuccessButton()) {
-                  // Nếu không tìm thấy, thử lại sau 2 giây
-                  setTimeout(checkForSuccessButton, 2000);
-                  // Và thử lại lần nữa sau 5 giây
-                  setTimeout(checkForSuccessButton, 5000);
-                }
-              });
-              
-              true;
-            })();
-          `}
-          onMessage={(event) => {
-            try {
-              const data = JSON.parse(event.nativeEvent.data);
-              console.log("Message from WebView:", data);
-              
-              if (data.type === 'PAYMENT_SUCCESS') {
-                console.log("Received payment success message from WebView JS");
-                // Gọi hàm handlePaymentSuccess trực tiếp (đã có kiểm tra bên trong)
-                handlePaymentSuccess();
-              }
-            } catch (e) {
-              console.error("Error parsing WebView message:", e);
-            }
-          }}
-        />
-      </View>
-    );
-  }
 
   return (
     <KeyboardAvoidingView
@@ -547,7 +254,10 @@ const AddFundsScreen = () => {
 
           {/* Error message */}
           {error && (
-            <Text style={styles.errorText}>
+            <Text style={[
+              styles.errorText,
+              error.includes('opened in your browser') ? { color: colors.text } : {}
+            ]}>
               {error}
             </Text>
           )}
@@ -582,7 +292,19 @@ const AddFundsScreen = () => {
               color={colors.textSecondary}
             />
             <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-              Funds will be immediately added to your wallet. The transaction will appear in your payment history.
+              You will be redirected to your browser to complete the payment. Return to the app once payment is complete.
+            </Text>
+          </View>
+
+          {/* Instruction for returning to app */}
+          <View style={styles.infoContainer}>
+            <Ionicons
+              name="arrow-back-circle-outline"
+              size={18}
+              color={colors.textSecondary}
+            />
+            <Text style={[styles.infoText, { color: colors.textSecondary }]}>
+              After completing payment in your browser, tap on the notification or app icon to return to the app.
             </Text>
           </View>
         </View>
@@ -717,17 +439,6 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     lineHeight: 18,
   },
-  // WebView styles
-  webViewLoading: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-  }
 });
 
 export default AddFundsScreen;
