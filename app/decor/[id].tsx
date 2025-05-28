@@ -68,8 +68,25 @@ interface IDecor {
   startDate?: string;
   status?: number;
   sublocation?: string;
+  themeColors?: IThemeColor[];
+  designs?: IDesign[];
+  offerings?: IOffering[];
+}
+interface IThemeColor {
+  id: number;
+  colorCode: string;
 }
 
+interface IDesign {
+  id: number;
+  name: string;
+}
+
+interface IOffering {
+  id: number;
+  name: string;
+  description: string;
+}
 // Explicitly define the API response structure
 interface ApiResponse {
   data: IDecor;
@@ -148,6 +165,17 @@ const [reviewsError, setReviewsError] = useState<string | null>(null);
     }
   };
   const PRIMARY_COLOR = colors.primary || "#5fc1f1";
+const stripHtmlTags = (html: string): string => {
+  if (!html) return '';
+  return html
+    .replace(/<[^>]*>/g, '') // Loại bỏ HTML tags
+    .replace(/&nbsp;/g, ' ') // Thay &nbsp; bằng space
+    .replace(/&amp;/g, '&')  // Thay các HTML entities
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .trim();
+};
 
   const renderStarRating = (rating: number) => {
     return (
@@ -499,11 +527,11 @@ const handleBooking = () => {
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
           
           <Text 
-            style={[styles.description, { color: colors.text }]}
-            numberOfLines={showFullDescription ? undefined : 4}
-          >
-            {decorDetail.description}
-          </Text>
+  style={[styles.description, { color: colors.text }]}
+  numberOfLines={showFullDescription ? undefined : 4}
+>
+  {stripHtmlTags(decorDetail.description)}
+</Text>
         </View>
 
         {/* Sublocation Details Card */}
@@ -558,7 +586,75 @@ const handleBooking = () => {
             </Text>
           )}
         </View>
+  {decorDetail.themeColors && decorDetail.themeColors.length > 0 && (
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              <Ionicons name="color-palette-outline" size={18} color={PRIMARY_COLOR} /> Theme Colors
+            </Text>
+            
+            <View style={styles.colorsRow}>
+              {decorDetail.themeColors.map((color, index) => (
+                <View key={color.id || index} style={styles.colorItem}>
+                  <View 
+                    style={[styles.colorDot, { backgroundColor: color.colorCode }]} 
+                  />
+                  <Text style={[styles.colorLabel, { color: colors.text }]}>
+                    {color.colorCode}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
 
+        {/* Designs Card */}
+        {decorDetail.designs && decorDetail.designs.length > 0 && (
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              <Ionicons name="brush-outline" size={18} color={PRIMARY_COLOR} /> Design Styles
+            </Text>
+            
+            <View style={styles.tagsRow}>
+              {decorDetail.designs.map((design, index) => (
+                <View
+                  key={design.id || index} 
+                  style={[styles.designChip, { backgroundColor: `${PRIMARY_COLOR}12` }]}
+                >
+                  <Text style={[styles.chipText, { color: PRIMARY_COLOR }]}>
+                    {design.name}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Offerings Card */}
+        {decorDetail.offerings && decorDetail.offerings.length > 0 && (
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              <Ionicons name="checkmark-circle-outline" size={18} color="#4CAF50" /> What's Included
+            </Text>
+            
+            <View style={styles.offeringsList}>
+              {decorDetail.offerings.map((offering, index) => (
+                <View key={offering.id || index} style={styles.offeringRow}>
+                  <Ionicons name="checkmark" size={16} color="#4CAF50" />
+                  <View style={styles.offeringText}>
+                    <Text style={[styles.offeringTitle, { color: colors.text }]}>
+                      {offering.name}
+                    </Text>
+                    {offering.description && (
+                      <Text style={[styles.offeringDesc, { color: colors.textSecondary }]}>
+                        {offering.description}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
         {/* Provider Card */}
         {decorDetail.provider && (
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -877,7 +973,92 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontSize: 14,
   },
+colorsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+    justifyContent: 'flex-start',
+  },
+  colorItem: {
+    alignItems: 'center',
+    marginRight: 20,
+    marginBottom: 16,
+  },
+  colorCircle: {
+    width: 45,
+    height: 45,
+    borderRadius: 22.5,
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  colorText: {
+    fontSize: 11,
+    fontWeight: '600',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
 
+  // Designs
+  designsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+  },
+  designTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 25,
+    marginRight: 12,
+    marginBottom: 10,
+    borderWidth: 1.5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  designText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+
+  // Offerings
+  offeringsContainer: {
+    marginTop: 8,
+  },
+  offeringItem: {
+    marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  offeringHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  offeringName: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginLeft: 10,
+    flex: 1,
+  },
+  offeringDescription: {
+    fontSize: 14,
+    lineHeight: 22,
+    marginLeft: 30,
+    fontStyle: 'italic',
+    opacity: 0.8,
+  },
   // Cards
   card: {
     marginHorizontal: 16,
@@ -1149,6 +1330,72 @@ const styles = StyleSheet.create({
   showMoreText: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  colorsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 16,
+    gap: 16,
+  },
+
+  colorDot: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginBottom: 8,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  colorLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+
+  // Designs - Clean Tags
+  tagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 16,
+    gap: 8,
+  },
+  designChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  chipText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  // Offerings - Simple List
+  offeringsList: {
+    marginTop: 16,
+    gap: 16,
+  },
+  offeringRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  offeringText: {
+    flex: 1,
+  },
+  offeringTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  offeringDesc: {
+    fontSize: 14,
+    lineHeight: 20,
+    opacity: 0.8,
   },
 });
 

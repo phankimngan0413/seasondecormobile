@@ -139,10 +139,7 @@ this._connection = new signalR.HubConnectionBuilder()
 
       // Handle connection closure - only define once
       this._connection.onclose((error) => {
-        console.error("SignalR connection closed with error:", error);
-        console.error("Connection state:", this._connection?.state);
-        console.error("Connection base URL used:", BASE_URL);
-        
+      
         this._connection = null;
         
         if (!this.isReconnecting && error) {

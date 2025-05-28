@@ -61,7 +61,16 @@ export interface IBookingRequest {
   decorServiceId: number;
   addressId: number;
   surveyDate: string;
-  note?: string;               
+  note?: string;
+  decorationStyleId: number;
+  themeColorIds: number[];
+  spaceStyle: string;
+  roomSize: number;
+  style: string;
+  themeColor: string;
+  primaryUser: string;
+  scopeOfWorldId: number[];
+  images: string[];
 }
 
 // Define response interfaces

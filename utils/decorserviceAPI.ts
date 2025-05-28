@@ -23,8 +23,99 @@ export interface IDecor {
   imageUrls?: string[]; // Map từ images
   rate?: number;
   totalRating?: number;
-address:string;
+  address: string;
 }
+
+// Interface for Style Color API response
+export interface IThemeColor {
+  id: number;
+  colorCode: string;
+  name?: string;
+}
+
+export interface IDesign {
+  id: number;
+  name: string;
+}
+
+export interface IStyleColorData {
+  themeColors: IThemeColor[];
+  designs: IDesign[];
+}
+
+export interface IStyleColorResponse {
+  success: boolean;
+  message: string;
+  data: IStyleColorData | null;
+  errors?: string[];
+}
+
+// Interface for Scope of Work
+export interface IScopeOfWork {
+  id: number;
+  workType: string; // Thay vì 'name'
+  description?: string;
+}
+
+export interface IScopeOfWorkResponse {
+  success: boolean;
+  message: string;
+  data: IScopeOfWork[] | null;
+  errors?: string[];
+}
+
+// NEW API: Get Style Colors and Designs by Service ID
+export const getStyleColorByServiceIdAPI = async (serviceId: number): Promise<any> => {
+  const apiClient = await initApiClient();
+
+  try {
+    console.log(`🔍 Fetching style colors for service ID: ${serviceId}`);
+    
+    const response = await apiClient.get(`/api/DecorService/getStyleNColorByServiceId/${serviceId}`);
+    
+    if (response.data) {
+      return response.data; // Return response trực tiếp
+    } else {
+      throw new Error("Invalid response format");
+    }
+  } catch (error: any) {
+    console.error("🔴 Get Style Color Error:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// NEW API: Get Scope of Work List
+export const getScopeOfWorkAPI = async (): Promise<IScopeOfWork[]> => {
+  const apiClient = await initApiClient();
+
+  try {
+    console.log("🔍 Fetching scope of work list");
+    
+    const response = await apiClient.get("/api/ScopeOfWork/getList");
+    
+    if (response.data) {
+      console.log("✅ Scope of work fetched successfully");
+      
+      // Handle different response formats
+      if (response.data.success && response.data.data) {
+        return response.data.data; // If wrapped in success/data structure
+      } else if (Array.isArray(response.data)) {
+        return response.data; // If direct array
+      } else {
+        return response.data; // Return as is
+      }
+    } else {
+      console.warn("⚠️ No scope of work data received");
+      return [];
+    }
+  } catch (error: any) {
+    console.error("🔴 Get Scope of Work Error:", error.response?.data || error.message);
+    
+    // Return empty array instead of throwing to prevent app crash
+    console.log("📝 Returning empty scope of work array");
+    return [];
+  }
+};
 
 // Then use type guards in your component to handle both possibilities
 // Fetches all decor services (adjusted to match the correct endpoint)
@@ -64,36 +155,77 @@ export const getDecorServicesAPI = async (): Promise<IDecor[]> => {
     throw new Error(error.response?.data?.message || "Failed to fetch decor services.");
   }
 };
+
 // Fetches a single decor service by ID
 export const getDecorServiceByIdAPI = async (id: number): Promise<IDecor | null> => {
   const apiClient = await initApiClient();
-  
+     
   try {
     const response = await apiClient.get(`/api/DecorService/${id}`);
     const service = response.data;
     
-    // Xử lý mảng images
-    const images = service.images?.map((img: any) => 
-      img?.imageURL || 'https://via.placeholder.com/150'
-    ) || [];
-    
-    // Xử lý mảng seasons
-    const seasons = service.seasons?.map((season: any) => 
-      season?.seasonName || 'No Season'
-    ) || [];
-    
+    // Kiểm tra nếu không có dữ liệu service
+    if (!service) {
+      return null;
+    }
+       
+    // Xử lý mảng images - giữ nguyên cấu trúc object
+    const images = Array.isArray(service.images) 
+      ? service.images.map((img: any) => ({
+          id: img.id,
+          imageURL: img?.imageURL || 'https://via.placeholder.com/150'
+        }))
+      : [];
+       
+    // Xử lý mảng seasons - giữ nguyên cấu trúc object  
+    const seasons = Array.isArray(service.seasons)
+      ? service.seasons.map((season: any) => ({
+          id: season.id,
+          seasonName: season?.seasonName || 'No Season'
+        }))
+      : [];
+
+    // Xử lý themeColors
+    const themeColors = Array.isArray(service.themeColors)
+      ? service.themeColors.map((color: any) => ({
+          id: color.id,
+          colorCode: color.colorCode
+        }))
+      : [];
+
+    // Xử lý designs
+    const designs = Array.isArray(service.designs)
+      ? service.designs.map((design: any) => ({
+          id: design.id,
+          name: design.name
+        }))
+      : [];
+
+    // Xử lý offerings
+    const offerings = Array.isArray(service.offerings)
+      ? service.offerings.map((offering: any) => ({
+          id: offering.id,
+          name: offering.name,
+          description: offering.description
+        }))
+      : [];
+       
     return {
       ...service,
       images,
-      seasons
+      seasons,
+      themeColors,
+      designs,
+      offerings
     };
-    
+       
   } catch (error: any) {
-    // Trả về null thay vì throw error
+    console.error('Failed to fetch decor service:', error);
     console.log('Decor service fetch failed silently');
     return null;
   }
 };
+
 export const getDecorServiceByProviderAPI = async (slug: string): Promise<any> => {
   try {
     // Log the slug being used to ensure it's correct
@@ -173,6 +305,7 @@ export const getDecorServiceByProviderAPI = async (slug: string): Promise<any> =
     throw error;
   }
 };
+
 // Search decor services with filter parameters
 export const searchDecorServicesAPI = async (
   params: {
