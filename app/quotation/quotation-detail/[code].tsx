@@ -22,7 +22,7 @@ import { Colors } from '@/constants/Colors';
 import { getQuotationDetailByCustomerAPI, confirmQuotationAPI,removeProductFromQuotationAPI, rejectQuotationAPI } from '@/utils/quotationsAPI';
 import { WebView } from 'react-native-webview';
 import ProductCatalog from '@/components/RelatedProductsSection';
-
+import QuotationRejectScreen from '@/components/QuotationRejectScreen';
 const PRIMARY_COLOR = "#5fc1f1";
 const QUOTATION_COLOR = "#34c759"; // Green color for quotation elements
 
@@ -192,7 +192,7 @@ const QuotationDetailScreen: React.FC = () => {
   const [imageLoading, setImageLoading] = useState<boolean>(false);
   const [showRejectReasonModal, setShowRejectReasonModal] = useState<boolean>(false);
   const [rejectReason, setRejectReason] = useState<string>('');
-  
+  const [showRejectModal, setShowRejectModal] = useState<boolean>(false);
   useEffect(() => {
     fetchQuotationDetails();
   }, [quotationCode]);
@@ -353,25 +353,9 @@ const formatDateWithTextMonth = (dateString: string): string => {
   return date.toLocaleDateString(undefined, options);
 };
 
-const handleRejectQuotation = async (): Promise<void> => {
+const handleRejectQuotation = (): void => {
   if (!quotation) return;
-
-  // Show confirmation dialog
-  Alert.alert(
-    'Reject Quotation',
-    'Are you sure you want to reject this quotation?',
-    [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Reject',
-        style: 'destructive',
-        onPress: () => {
-          // Show modal for rejection reason
-          setShowRejectReasonModal(true);
-        }
-      }
-    ]
-  );
+  setShowRejectModal(true);
 };
   // Function to handle image preview
   const handleImagePreview = (imageUrl: string) => {
@@ -1211,84 +1195,14 @@ const handleRejectQuotation = async (): Promise<void> => {
           </View>
         )}
 {/* Rejection Reason Modal */}
-<Modal
-  visible={showRejectReasonModal}
-  transparent={true}
-  animationType="fade"
-  onRequestClose={() => setShowRejectReasonModal(false)}
->
-  <View style={styles.modalOverlay}>
-    <View style={[styles.modalContainer, { backgroundColor: colors.card }]}>
-      <Text style={[styles.modalTitle, { color: colors.text }]}>Rejection Reason</Text>
-      <Text style={[styles.modalDescription, { color: colors.textSecondary }]}>
-        Please provide a reason for rejection (optional):
-      </Text>
-      
-      <TextInput
-        style={[styles.rejectReasonInput, { 
-          color: colors.text,
-          borderColor: colors.border,
-          backgroundColor: colors.background
-        }]}
-        value={rejectReason}
-        onChangeText={setRejectReason}
-        multiline={true}
-        numberOfLines={3}
-        placeholder="Enter reason here..."
-        placeholderTextColor={colors.textSecondary}
-      />
-      
-      <View style={styles.modalButtonsContainer}>
-        <TouchableOpacity
-          style={[styles.modalButton, styles.cancelButton, { borderColor: colors.border }]}
-          onPress={() => {
-            setShowRejectReasonModal(false);
-            setRejectReason('');
-          }}
-        >
-          <Text style={[styles.cancelButtonText, { color: colors.text }]}>Cancel</Text>
-        </TouchableOpacity>
+<QuotationRejectScreen
+  visible={showRejectModal}
+  onClose={() => setShowRejectModal(false)}
+  quotationCode={quotation?.quotationCode || ''}
+  onSuccess={fetchQuotationDetails}
+/>
+  
         
-        <TouchableOpacity
-          style={[styles.modalButton, styles.confirmRejectButton]}
-          // Modified onPress handler for the Confirm Rejection button
-onPress={async () => {
-  try {
-    setShowRejectReasonModal(false);
-    setLoading(true);
-    const result = await rejectQuotationAPI(quotation.quotationCode, rejectReason);
-    
-    // Handle null response case
-    if (result === null) {
-      console.log("API returned null response, treating as success");
-      Alert.alert('Success', 'Quotation rejected successfully');
-      setRejectReason('');
-      fetchQuotationDetails(); // Refresh the data
-      return;
-    }
-    
-    // Handle normal response case
-    if (result && result.success) {
-      Alert.alert('Success', result.message || 'Quotation rejected successfully');
-      setRejectReason('');
-      fetchQuotationDetails();
-    } else {
-      Alert.alert('Error', (result && result.message) || 'Failed to reject quotation');
-    }
-  } catch (err: any) {
-    console.error('Error rejecting quotation:', err);
-    Alert.alert('Error', err.message || 'Failed to reject quotation. Please try again.');
-  } finally {
-    setLoading(false);
-  }
-}}
-        >
-          <Text style={styles.confirmRejectButtonText}>Confirm Rejection</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  </View>
-</Modal>
 {canConfirm && (
   <View style={styles.actionButtonsContainer}>
     <TouchableOpacity
@@ -1301,7 +1215,7 @@ onPress={async () => {
     
     <TouchableOpacity
       style={styles.rejectButton}
-      onPress={handleRejectQuotation}
+      onPress={handleRejectQuotation} // Sử dụng function mới
       activeOpacity={0.8}
     >
       <Text style={styles.buttonText}>Reject</Text>

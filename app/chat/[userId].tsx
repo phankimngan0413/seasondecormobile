@@ -15,7 +15,7 @@ import {
   AppStateStatus,
   Linking,
   Alert,
-  ClipboardStatic,
+  Clipboard,
   GestureResponderEvent
 } from "react-native";
 import { signalRService } from "@/services/SignalRService";
@@ -28,9 +28,6 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { getChatHistoryAPI } from "@/utils/chatAPI";
 import { getUserIdFromToken, getToken } from "@/services/auth";
 
-// Import Clipboard with correct type
-const Clipboard: ClipboardStatic = require('react-native').Clipboard;
-
 // Define interfaces for better type checking
 interface FileObject {
   fileUrl?: string;
@@ -39,7 +36,7 @@ interface FileObject {
   uri?: string;
   path?: string;
   file?: {
-    [key: string]: any;  // This allows accessing properties with bracket notation
+    [key: string]: any;
     fileUrl?: string;
     file_url?: string;
     url?: string;
@@ -50,7 +47,7 @@ interface FileObject {
   contentType?: string;
   mimeType?: string;
   name?: string;
-  [key: string]: any;  // This allows accessing properties with bracket notation
+  [key: string]: any;
 }
 
 // Improved Message interface with proper types
@@ -71,18 +68,38 @@ interface FileInfo {
   fileName: string;
 }
 
+// Function to clean HTML content and extract plain text
+const cleanHtmlContent = (htmlString: string): string => {
+  if (!htmlString) return '';
+  
+  // Remove HTML tags and decode HTML entities
+  let cleanText = htmlString
+    .replace(/<[^>]*>/g, '') // Remove HTML tags
+    .replace(/&nbsp;/g, ' ') // Replace &nbsp; with space
+    .replace(/&amp;/g, '&') // Replace &amp; with &
+    .replace(/&lt;/g, '<') // Replace &lt; with <
+    .replace(/&gt;/g, '>') // Replace &gt; with >
+    .replace(/&quot;/g, '"') // Replace &quot; with "
+    .replace(/&#39;/g, "'") // Replace &#39; with '
+    .replace(/&apos;/g, "'") // Replace &apos; with '
+    .trim(); // Remove leading/trailing whitespace
+  
+  return cleanText;
+};
+
+// Check if content contains HTML tags
+const containsHtml = (content: string): boolean => {
+  if (!content) return false;
+  return /<[^>]*>/g.test(content);
+};
+
 // Check if URL is a PDF
 const isPdfUrl = (url: string | null): boolean => {
   if (!url) return false;
   
-  // Check file extension
   const lowercaseUrl = url.toLowerCase();
   if (lowercaseUrl.endsWith('.pdf')) return true;
-  
-  // Check for PDF in path
   if (lowercaseUrl.includes('/pdf/')) return true;
-  
-  // Check for common PDF hosting patterns
   if (lowercaseUrl.includes('cloudinary') && lowercaseUrl.includes('.pdf')) return true;
   
   return false;
@@ -93,16 +110,13 @@ const getFileNameFromUrl = (url: string | null): string => {
   if (!url) return 'document.pdf';
   
   try {
-    // Split by slashes and get last part
     const parts = url.split('/');
     let fileName = parts[parts.length - 1];
     
-    // Remove query parameters if any
     if (fileName.includes('?')) {
       fileName = fileName.split('?')[0];
     }
     
-    // Try to decode URL encoding
     try {
       fileName = decodeURIComponent(fileName);
     } catch (e) {
@@ -119,12 +133,10 @@ const getFileNameFromUrl = (url: string | null): string => {
 const getFileUrl = (fileObject: FileObject | string | null): string | null => {
   if (!fileObject) return null;
   
-  // Check if the object itself is a string (might be directly the URL)
   if (typeof fileObject === 'string') {
     return fileObject;
   }
   
-  // Check for various common URL property names
   const possibleUrlProps: Array<keyof FileObject> = ['fileUrl', 'file_url', 'url', 'uri', 'path'];
   
   for (const prop of possibleUrlProps) {
@@ -133,7 +145,6 @@ const getFileUrl = (fileObject: FileObject | string | null): string | null => {
     }
   }
   
-  // If the object has a nested 'file' property, try that too
   if (fileObject.file && typeof fileObject.file === 'object') {
     for (const prop of possibleUrlProps) {
       if (fileObject.file[prop] && typeof fileObject.file[prop] === 'string') {
@@ -162,7 +173,18 @@ const handleOpenPdf = (pdfUrl: string | null): void => {
           "Your device doesn't support opening this URL directly. Would you like to copy it to your clipboard?",
           [
             { text: "Cancel", style: "cancel" },
-            { text: "Copy URL", onPress: () => Clipboard.setString(pdfUrl) }
+            { 
+              text: "Copy URL", 
+              onPress: () => {
+                try {
+                  Clipboard.setString(pdfUrl);
+                  Alert.alert("Success", "URL copied to clipboard!");
+                } catch (error) {
+                  console.error("Error copying to clipboard:", error);
+                  Alert.alert("Error", "Could not copy URL to clipboard");
+                }
+              }
+            }
           ]
         );
       }
@@ -201,6 +223,7 @@ export default function ChatScreen() {
       if (!message) return;
       
       console.log('Message ID:', message.id);
+      console.log('Message content:', message.message);
       console.log('Message has files?', !!message.files);
       
       if (message.files) {
@@ -220,7 +243,6 @@ export default function ChatScreen() {
   useEffect(() => {
     let isMounted = true;
     
-    // Setup SignalR connection
     const setupSignalR = async (): Promise<void> => {
       try {
         if (isMounted) setConnectionStatus('connecting');
@@ -237,12 +259,10 @@ export default function ChatScreen() {
       } catch (error) {
         console.error("Failed to connect to SignalR hub:", error);
         if (isMounted) setConnectionStatus('disconnected');
-        // Try to reconnect after a delay
         setTimeout(setupSignalR, 5000);
       }
     };
 
-    // Handle app state changes to reconnect when app comes to foreground
     const handleAppStateChange = (nextAppState: AppStateStatus): void => {
       if (nextAppState === 'active') {
         console.log('App has come to the foreground, checking SignalR connection');
@@ -256,13 +276,10 @@ export default function ChatScreen() {
       }
     };
 
-    // Initial setup
     setupSignalR();
     
-    // Subscribe to app state changes
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     
-    // Set up periodic connection checking
     const connectionChecker = setInterval(() => {
       if (!signalRService.isConnected()) {
         console.log('Connection check failed, reconnecting...');
@@ -271,10 +288,9 @@ export default function ChatScreen() {
         console.log('SignalR connection is active');
         if (isMounted) setConnectionStatus('connected');
       }
-    }, 30000); // Check every 30 seconds
+    }, 30000);
 
     return () => {
-      // Clean up
       isMounted = false;
       subscription.remove();
       clearInterval(connectionChecker);
@@ -305,20 +321,20 @@ export default function ChatScreen() {
         return;
       }
       
-      // Debug message structure if it has files
+      // Clean HTML content from message
+      if (message.message && containsHtml(message.message)) {
+        message.message = cleanHtmlContent(message.message);
+      }
+      
       if (message.files && message.files.length > 0) {
         console.log('Received message with files:');
         debugMessageStructure(message);
       }
   
-      // Add the message to chat history if it doesn't exist
       setChatHistory(prevHistory => {
-        // Check if message already exists by content and approximate time
         const isMessageExists = prevHistory.some(msg => {
-          // If IDs match
           if (message.id && msg.id === message.id) return true;
           
-          // Or if content and time are close (within 5 seconds)
           if (msg.message === message.message && 
               Math.abs(new Date(msg.sentTime).getTime() - new Date(message.sentTime).getTime()) < 5000) {
             return true;
@@ -336,16 +352,11 @@ export default function ChatScreen() {
         return [...prevHistory, message];
       });
       
-      // Force scroll to end
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 50);
     };
   
-    // Register message handler
-    signalRService.onMessageReceived(messageReceivedHandler);
-    
-    // Register message sent handler to update UI
     const messageSentHandler = (sentMessage: Message): void => {
       console.log('Message sent confirmation received:', sentMessage);
       
@@ -354,22 +365,23 @@ export default function ChatScreen() {
         return;
       }
       
-      // Debug message structure if it has files
+      // Clean HTML content from sent message
+      if (sentMessage.message && containsHtml(sentMessage.message)) {
+        sentMessage.message = cleanHtmlContent(sentMessage.message);
+      }
+      
       if (sentMessage.files && sentMessage.files.length > 0) {
         console.log('Sent message with files:');
         debugMessageStructure(sentMessage);
       }
       
-      // Update chat with confirmed message (replacing temp if needed)
       setChatHistory(prevHistory => {
-        // Find any temporary version of this message
         const tempIndex = prevHistory.findIndex(msg => 
           typeof msg.id === 'string' && 
           msg.id.startsWith('temp_') && 
-          msg.message === sentMessage.message
+          cleanHtmlContent(msg.message) === cleanHtmlContent(sentMessage.message)
         );
         
-        // If we found a temporary version and have a valid ID, replace it
         if (tempIndex !== -1 && sentMessage.id) {
           console.log('Replacing temporary message with confirmed one');
           const newHistory = [...prevHistory];
@@ -377,7 +389,6 @@ export default function ChatScreen() {
           return newHistory;
         }
         
-        // If we have a confirmed message with ID, check if it already exists
         if (sentMessage.id) {
           const msgExists = prevHistory.some(msg => msg.id === sentMessage.id);
           if (msgExists) {
@@ -386,12 +397,11 @@ export default function ChatScreen() {
           }
         }
         
-        // For messages with null ID, first check if we have a temp version
         if (sentMessage.id === null) {
           const hasTempVersion = prevHistory.some(msg => 
             typeof msg.id === 'string' && 
             msg.id.startsWith('temp_') && 
-            msg.message === sentMessage.message
+            cleanHtmlContent(msg.message) === cleanHtmlContent(sentMessage.message)
           );
           
           if (hasTempVersion) {
@@ -400,20 +410,18 @@ export default function ChatScreen() {
           }
         }
         
-        // If we got here, add the message
         console.log('Adding confirmed message to history');
         return [...prevHistory, sentMessage];
       });
       
-      // Force scroll to end
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 50);
     };
     
+    signalRService.onMessageReceived(messageReceivedHandler);
     signalRService.onMessageSent(messageSentHandler);
   
-    // Clean up the handlers when component unmounts
     return () => {
       signalRService.offMessageReceived(messageReceivedHandler);
       signalRService.offMessageSent(messageSentHandler);
@@ -447,8 +455,13 @@ export default function ChatScreen() {
       console.log(`Fetched ${history?.length || 0} messages from chat history`);
 
       if (history && history.length > 0) {
-        // Debug the structure of messages with files
-        const messagesWithFiles = history.filter(msg => msg.files && msg.files.length > 0);
+        // Clean HTML content from all messages
+        const cleanedHistory = history.map(msg => ({
+          ...msg,
+          message: containsHtml(msg.message) ? cleanHtmlContent(msg.message) : msg.message
+        }));
+
+        const messagesWithFiles = cleanedHistory.filter(msg => msg.files && msg.files.length > 0);
         console.log(`Found ${messagesWithFiles.length} messages with files`);
         
         if (messagesWithFiles.length > 0) {
@@ -456,8 +469,7 @@ export default function ChatScreen() {
           debugMessageStructure(messagesWithFiles[0]);
         }
 
-        // Filter out any messages with undefined/null ids
-        const validHistory = history.filter(msg => msg && msg.id !== undefined && msg.id !== null);
+        const validHistory = cleanedHistory.filter(msg => msg && msg.id !== undefined && msg.id !== null);
         setChatHistory(validHistory);
         setError(null);
       } else {
@@ -494,17 +506,24 @@ export default function ChatScreen() {
     }
   };
 
-  // Handle sending messages with improved image handling
+  // Handle sending messages with improved validation
   const handleSendMessage = async (): Promise<void> => {
-    if (message.trim() === "" && !selectedImage) {
+    const trimmedMessage = message.trim();
+    
+    if (trimmedMessage === "" && !selectedImage) {
       console.log('No message or image to send');
+      return;
+    }
+
+    // Validate message content - don't allow HTML
+    if (trimmedMessage && containsHtml(trimmedMessage)) {
+      Alert.alert("Invalid Content", "Please enter plain text only. HTML content is not allowed.");
       return;
     }
 
     setSendingMessage(true);
 
     try {
-      // Ensure we have a user ID
       let userId = currentUserId;
       if (!userId) {
         userId = await getUserIdFromToken();
@@ -512,7 +531,6 @@ export default function ChatScreen() {
         console.log('Retrieved user ID:', userId);
       }
       
-      // Ensure connection is active
       if (!signalRService.isConnected()) {
         setConnectionStatus('connecting');
         const token = await getToken();
@@ -523,13 +541,12 @@ export default function ChatScreen() {
         setConnectionStatus('connected');
       }
 
-      // Create temp message with a prefix to identify it
       const tempMessageId = `temp_${Date.now()}`;
       const tempMessage: Message = {
         id: tempMessageId,
         senderId: userId || 0,
         receiverId: receiverId,
-        message: message.trim(),
+        message: trimmedMessage,
         sentTime: new Date().toISOString(),
         files: selectedImage ? [{ fileUrl: selectedImage.uri }] : []
       };
@@ -558,24 +575,20 @@ export default function ChatScreen() {
         }
       }
 
-      // For first message with empty chat, update UI and error state
       if (chatHistory.length === 0) {
-        setError(null); // Clear any "Start conversation" error message
+        setError(null);
       }
 
-      // Add message to UI immediately
       setChatHistory(prev => [...prev, tempMessage]);
       console.log('Added temporary message to chat history');
       
-      // Force immediate UI update
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 50);
 
-      // Send message via SignalR
       const messageId = await signalRService.sendMessage(
         receiverId,
-        message.trim(),
+        trimmedMessage,
         fileData,
         (progress) => {
           console.log(`Message send progress: ${progress}%`);
@@ -584,22 +597,26 @@ export default function ChatScreen() {
       
       console.log('Message sent successfully with ID:', messageId);
 
-      // For first message specifically, if ID is null, force render again
       if (messageId === null && chatHistory.length === 0) {
         console.log('Special handling for first message with null ID');
         setTimeout(() => {
-          // Force a re-render by creating a new reference
           setChatHistory(prev => [...prev]);
           flatListRef.current?.scrollToEnd({ animated: true });
         }, 100);
       }
 
-      // Reset UI
       setMessage("");
       setSelectedImage(null);
     } catch (error) {
       console.error("Error sending message:", error);
       setConnectionStatus('disconnected');
+      
+      // Remove the temporary message on error
+      setChatHistory(prev => prev.filter(msg => 
+        !(typeof msg.id === 'string' && msg.id.startsWith('temp_'))
+      ));
+      
+      Alert.alert("Error", "Failed to send message. Please try again.");
     } finally {
       setSendingMessage(false);
     }
@@ -638,7 +655,6 @@ export default function ChatScreen() {
   };
 
   const keyExtractor = useCallback((item: Message, index: number): string => {
-    // Enhanced key extractor that won't fail on any input
     if (!item) return `item-${index}-${Math.random().toString(36)}`;
     if (item.id === undefined || item.id === null) return `item-${index}-${Math.random().toString(36)}`;
     try {
@@ -649,20 +665,18 @@ export default function ChatScreen() {
     }
   }, []);
 
-  // Enhanced renderMessageItem with PDF support
+  // Enhanced renderMessageItem with proper text handling
   const renderMessageItem = useCallback(({ item, index }: { item: Message, index: number }) => {
     if (!item) {
       console.warn('Null item at index', index);
       return null;
     }
     
-    // Less strict check for item validity
     if (!item.senderId || !item.receiverId) {
       console.warn('Invalid message item at index', index, item);
       return null;
     }
     
-    // This is the correct logic for determining if a message is from the current user
     const isFromMe = currentUserId !== null && item.senderId === currentUserId;
   
     const messageDate = item.sentTime ? new Date(item.sentTime) : new Date();
@@ -671,12 +685,11 @@ export default function ChatScreen() {
       minute: '2-digit'
     });
   
-    // Determine appropriate text color based on message type and theme
     const messageTextColor = isFromMe 
-      ? "#FFFFFF" // White text for my messages (on primary color background)
+      ? "#FFFFFF"
       : validTheme === "dark" 
-        ? "#F0F0F0" // Light text for other's messages in dark mode
-        : "#000000"; // Dark text for other's messages in light mode
+        ? "#F0F0F0"
+        : "#000000";
   
     // Process file (image or PDF)
     let fileContent = null;
@@ -684,7 +697,6 @@ export default function ChatScreen() {
       const fileUrl = getFileUrl(item.files[0]);
       
       if (fileUrl) {
-        // Check if it's a PDF
         if (isPdfUrl(fileUrl)) {
           const fileName = getFileNameFromUrl(fileUrl);
           
@@ -708,7 +720,6 @@ export default function ChatScreen() {
             </TouchableOpacity>
           );
         } else {
-          // Regular image handling
           fileContent = (
             <View style={styles.imageContainer}>
               <Image 
@@ -726,6 +737,9 @@ export default function ChatScreen() {
       }
     }
   
+    // Clean message text and ensure it's not HTML
+    const cleanMessageText = item.message ? cleanHtmlContent(item.message) : '';
+  
     return (
       <View style={[styles.messageContainer, isFromMe ? styles.messageReceiver : styles.messageSender]}>
         <View 
@@ -734,9 +748,9 @@ export default function ChatScreen() {
             borderBottomRightRadius: isFromMe ? 4 : 16,
             borderBottomLeftRadius: isFromMe ? 16 : 4
           }]}>
-          {item.message && item.message.trim() !== '' && (
+          {cleanMessageText && cleanMessageText.trim() !== '' && (
             <Text style={[styles.messageText, { color: messageTextColor }]}>
-              {item.message}
+              {cleanMessageText}
             </Text>
           )}
           
@@ -821,7 +835,7 @@ export default function ChatScreen() {
               data={validChatHistory}
               renderItem={renderMessageItem}
               keyExtractor={keyExtractor}
-              extraData={validChatHistory.length + (currentUserId || 0)} // Added length to force re-render
+              extraData={validChatHistory.length + (currentUserId || 0)}
               contentContainerStyle={[styles.chatListContent, { paddingBottom: 80 + (selectedImage ? 120 : 0) }]}
               showsVerticalScrollIndicator={false}
               onContentSizeChange={() => {
@@ -854,9 +868,17 @@ export default function ChatScreen() {
                 placeholder={connectionStatus === 'connected' ? "Type a message..." : "Connecting..."}
                 placeholderTextColor={colors.textSecondary || '#999'}
                 value={message}
-                onChangeText={setMessage}
+                onChangeText={(text) => {
+                  // Prevent HTML input
+                  if (containsHtml(text)) {
+                    Alert.alert("Invalid Input", "HTML content is not allowed. Please enter plain text only.");
+                    return;
+                  }
+                  setMessage(text);
+                }}
                 editable={!sendingMessage && connectionStatus === 'connected'}
                 multiline
+                maxLength={1000} // Add character limit
               />
 
               <TouchableOpacity 
@@ -948,17 +970,17 @@ const styles = StyleSheet.create({
   },
   chatListContent: {
     padding: 16,
-    paddingBottom: 80, // Ensure enough space at bottom for input
+    paddingBottom: 80,
   },
   messageContainer: {
     marginBottom: 8,
     maxWidth: '80%',
   },
   messageSender: {
-    alignSelf: 'flex-start', // Messages from others on the left
+    alignSelf: 'flex-start',
   },
   messageReceiver: {
-    alignSelf: 'flex-end', // Your messages on the right
+    alignSelf: 'flex-end',
   },
   messageContent: {
     borderRadius: 16,
@@ -986,7 +1008,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginVertical: 6,
   },
-  // PDF specific styles
   pdfContainer: {
     marginTop: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.9)',

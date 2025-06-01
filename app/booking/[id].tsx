@@ -16,16 +16,14 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
-import { createBookingAPI, IBookingRequest } from "@/utils/bookingAPI";
 import { getAddressesAPI, IAddress } from "@/utils/AddressAPI";
 import { getToken } from "@/services/auth";
-
-
-// Import custom date picker
 import CalendarPicker from "@/components/CalendarPicker";
+import { initApiClient } from "@/config/axiosConfig";
 
 // Get screen dimensions for responsive design
 const { width } = Dimensions.get('window');
+const apiClient = "http://10.0.2.2:5297";
 
 // Define custom global interface for TypeScript
 interface CustomGlobal {
@@ -44,6 +42,14 @@ interface CustomGlobal {
     serviceId?: string;
     style?: string;
     price?: string;
+    bookingData?: {
+      decorServiceId: number;
+      addressId: number;
+      surveyDate: string;
+      note?: string;
+      serviceName: string;
+      selectedAddressDetails?: any;
+    };
   };
 }
 
@@ -52,58 +58,55 @@ const BookingScreen = () => {
   const params = useLocalSearchParams();
   const id = params.id as string;
   const style = params.style as string;
-  
-  // Get the selectedAddressId from params (will update when coming back from address list)
   const selectedAddressIdParam = params.selectedAddressId as string | undefined;
-  const timestamp = params.timestamp; // Used to trigger useEffect when coming back from address list
+  const timestamp = params.timestamp;
   
   const router = useRouter();
   const { theme } = useTheme();
   const validTheme = theme as "light" | "dark";
   const colors = Colors[validTheme];
   
-  // Add error state to track any booking errors
+  // State management
   const [error, setError] = useState<string | null>(null);
-  
-  // State to store the style name (for header)
   const [serviceName, setServiceName] = useState<string>(style || "");
-  
-  // Set minimum date to today for the calendar
-  const minDate = new Date();
-
-  // Form booking state management
   const [addresses, setAddresses] = useState<IAddress[]>([]);
   const [addressesLoading, setAddressesLoading] = useState(true);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
-  const [surveyDate, setSurveyDate] = useState(new Date());
+  const [surveyDate, setSurveyDate] = useState(() => {
+    // Set default date to tomorrow
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow;
+  });
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [addressesRefreshKey, setAddressesRefreshKey] = useState(0); // Add a refresh key for addresses
+  const [quickBookingLoading, setQuickBookingLoading] = useState(false);
+  const [addressesRefreshKey, setAddressesRefreshKey] = useState(0);
   const [lastAddressTimestamp, setLastAddressTimestamp] = useState<string>("");
-  // Add state to store service ID
   const [serviceId, setServiceId] = useState<string>(id || "");
-  const [isFavorite, setIsFavorite] = useState(false);
-  const [favoriteLoading, setFavoriteLoading] = useState(false);
-  // New state variables for the additional fields
   const [note, setNote] = useState<string>("");
-  const [expectedCompletion, setExpectedCompletion] = useState<string>("");
   
-// Format date with text month (e.g., "May 7, 2025")
-const formatDateWithTextMonth = (date: Date) => {
-  const options: Intl.DateTimeFormatOptions = { 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
+  // Set minimum date to tomorrow (next day after today)
+  const minDate = (() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow;
+  })();
+
+  // Format date with text month (e.g., "May 7, 2025")
+  const formatDateWithTextMonth = (date: Date) => {
+    const options: Intl.DateTimeFormatOptions = { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    };
+    return date.toLocaleDateString(undefined, options);
   };
-  return date.toLocaleDateString(undefined, options);
-};
   
   // Keep track of service info on mount and when params change
   useEffect(() => {
-    // Keep track of service information in global state
     const globalData = globalThis as unknown as CustomGlobal;
     
-    // Preserve service information if not already set in global state
     if (!globalData.currentBookingState || !globalData.currentBookingState.style) {
       globalData.currentBookingState = {
         serviceId: id,
@@ -111,14 +114,12 @@ const formatDateWithTextMonth = (date: Date) => {
       };
     }
     
-    // If we don't have style from params but have it in global state, use it
-    if ((!style || style === '') && globalData.currentBookingState && globalData.currentBookingState.style) {
+    if ((!style || style === '') && globalData.currentBookingState?.style) {
       setServiceName(globalData.currentBookingState.style);
     } else if (style) {
       setServiceName(style);
     }
 
-    // Make sure serviceId is set
     if (id) {
       setServiceId(id);
     }
@@ -129,69 +130,57 @@ const formatDateWithTextMonth = (date: Date) => {
     fetchAddresses();
   }, [addressesRefreshKey]);
 
-  // Update selected address when the parameter changes (coming back from address list)
+  // Update selected address when the parameter changes
   useEffect(() => {
     if (selectedAddressIdParam) {
       setSelectedAddress(selectedAddressIdParam);
-      setError(null); // Clear any errors when a new address is selected
-      // Also refresh the address list
+      setError(null);
       setAddressesRefreshKey(prev => prev + 1);
     }
   }, [selectedAddressIdParam, timestamp]);
 
   // Check for service name in global state when screen is focused
- // Add console logs to debug the issue
-useFocusEffect(
-  useCallback(() => {
-    // Get global data
-    const globalData = globalThis as unknown as CustomGlobal;
-    console.log("URL Param ID:", id);
-    console.log("Global State ID:", serviceId);
-    
-    // MODIFIED: Prioritize URL param over global state
-    if (id) {
-      // Always prefer the ID from URL params
-      setServiceId(id);
-      // Update global state with current ID
-      if (globalData.currentBookingState) {
-        globalData.currentBookingState.serviceId = id;
-      } else {
-        globalData.currentBookingState = { serviceId: id };
+  useFocusEffect(
+    useCallback(() => {
+      const globalData = globalThis as unknown as CustomGlobal;
+      console.log("URL Param ID:", id);
+      console.log("Global State ID:", serviceId);
+      
+      // Prioritize URL param over global state
+      if (id) {
+        setServiceId(id);
+        if (globalData.currentBookingState) {
+          globalData.currentBookingState.serviceId = id;
+        } else {
+          globalData.currentBookingState = { serviceId: id };
+        }
+      } else if (globalData.currentBookingState?.serviceId) {
+        setServiceId(globalData.currentBookingState.serviceId);
       }
-    } else if (globalData.currentBookingState?.serviceId) {
-      // Only use global state if URL param is missing
-      setServiceId(globalData.currentBookingState.serviceId);
-    }
-  }, [id]) // Add id as dependency
-);
+    }, [id])
+  );
   
   // Check for address updates when screen is focused
   useFocusEffect(
     useCallback(() => {
-      // Safely access global state with proper typing
       const globalData = globalThis as unknown as CustomGlobal;
       
-      // Check if there's a new address selection (using new approach first)
       if (globalData.addressTimestamp && globalData.addressTimestamp !== lastAddressTimestamp) {
-        // Update timestamp to prevent duplicate processing
         setLastAddressTimestamp(globalData.addressTimestamp);
         
-        // Handle the updated address
-        if (globalData.addressSelection && globalData.addressSelection.id) {
+        if (globalData.addressSelection?.id) {
           setSelectedAddress(globalData.addressSelection.id);
-          setError(null); // Clear any errors when a new address is selected
-        } 
-        else if (globalData.selectedAddressId) {
+          setError(null);
+        } else if (globalData.selectedAddressId) {
           setSelectedAddress(globalData.selectedAddressId);
-          setError(null); // Clear any errors when a new address is selected
+          setError(null);
         }
         
-        // Refresh the address list to get any new addresses
         setAddressesRefreshKey(prev => prev + 1);
       }
       
       return () => {
-        // Clean up if needed
+        // Cleanup if needed
       };
     }, [lastAddressTimestamp])
   );
@@ -202,15 +191,16 @@ useFocusEffect(
     if (defaultAddress) {
       setSelectedAddress(defaultAddress.id);
     } else if (addressList.length > 0) {
-      // If no default, select the first one
       setSelectedAddress(addressList[0].id);
     }
   };
 
-  // Fetch addresses
+  // Fetch addresses with improved error handling
   const fetchAddresses = async () => {
     try {
       setAddressesLoading(true);
+      setError(null); // Clear previous errors
+      
       const token = await getToken();
       if (!token) {
         setError("Please log in to continue");
@@ -223,60 +213,46 @@ useFocusEffect(
       if (Array.isArray(fetchedAddresses) && fetchedAddresses.length > 0) {
         setAddresses(fetchedAddresses);
         
-        // Determine which address to select
         const globalData = globalThis as unknown as CustomGlobal;
         
-        if (globalData.addressSelection && globalData.addressSelection.id) {
+        if (globalData.addressSelection?.id) {
           setSelectedAddress(globalData.addressSelection.id);
-        }
-        else if (globalData.selectedAddressId) {
+        } else if (globalData.selectedAddressId) {
           setSelectedAddress(globalData.selectedAddressId);
-        }
-        else if (selectedAddressIdParam) {
+        } else if (selectedAddressIdParam) {
           setSelectedAddress(selectedAddressIdParam);
-        }
-        else if (selectedAddress) {
-          // Check if current selection still exists in the new address list
+        } else if (selectedAddress) {
           const addressExists = fetchedAddresses.some(address => address.id === selectedAddress);
-          if (addressExists) {
-            // Keep current selection
-          } else {
-            // If selected address no longer exists, select default or first
+          if (!addressExists) {
             selectDefaultAddress(fetchedAddresses);
           }
-        }
-        else {
-          // No selection yet, select default or first
+        } else {
           selectDefaultAddress(fetchedAddresses);
         }
       } else if (Array.isArray(fetchedAddresses) && fetchedAddresses.length === 0) {
-        // No addresses available
         setAddresses([]);
         setSelectedAddress(null);
       }
     } catch (error) {
+      console.error("Error fetching addresses:", error);
       setError("Unable to load address list. Please try again.");
     } finally {
       setAddressesLoading(false);
     }
   };
 
-  // Handle date change - FIXED to ensure date consistency
+  // Handle date change with improved validation (must be at least tomorrow)
   const onDateChange = (selectedDate: Date) => {
     const now = new Date();
-    setError(null); // Clear any errors
+    setError(null);
     
-    // Create today date with time set to midnight (00:00:00)
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // Calculate tomorrow's date
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     
-    // If selected date is before today, use today instead and show inline error
-    if (selectedDate < today) {
-      setError("You cannot select a date in the past. Today's date has been selected.");
-      setSurveyDate(today);
+    if (selectedDate < tomorrow) {
+      setError("Survey date must be at least one day from today. Tomorrow's date has been selected.");
+      setSurveyDate(tomorrow);
     } else {
-      // IMPORTANT FIX: Create a new date object with time set to midnight
-      // This ensures that when we later convert to ISO string and split at 'T',
-      // we get the correct date regardless of timezone
       const normalizedDate = new Date(
         selectedDate.getFullYear(),
         selectedDate.getMonth(),
@@ -291,164 +267,268 @@ useFocusEffect(
 
   // Save service info when navigating to address screen
   const handleSelectAddress = () => {
-    // Reset error when selecting a new address
     setError(null);
     
-    // Save current state to global variables for retrieval when returning
     const globalData = globalThis as unknown as CustomGlobal;
     globalData.currentBookingState = {
       serviceId: serviceId || id,
-      style: serviceName // Use serviceName instead of style
+      style: serviceName
     };
     
-    // Clear any old address selection to prevent confusion
     globalData.selectedAddressId = undefined;
     globalData.addressSelection = undefined;
     
-    // Navigate to address list using simple path
     router.push({
       pathname: "/screens/address/address-list",
       params: { 
         fromBooking: "true", 
         currentAddressId: selectedAddress || "",
         id: id || "",
-        style: serviceName || "", // Use serviceName
-        // Add a timestamp to ensure params change triggers useEffect
+        style: serviceName || "",
         timestamp: Date.now().toString()
       }
     });
   };
 
-  // Format date for API to ensure consistency across timezones - FIXED
+  // Format date for API with proper timezone handling
   const formatDateForAPI = (date: Date): string => {
-    // Format date as YYYY-MM-DD, ensuring we get the right date regardless of timezone
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
 
-  // Handle booking - FIXED date handling
-  const handleBooking = async () => {
-    setError(null);
-    
-    // Ưu tiên sử dụng ID từ URL param
+  // Validate basic booking requirements
+  const validateBookingData = () => {
+    // Validate service ID
     const currentServiceId = id || serviceId || 
       (globalThis as unknown as CustomGlobal).currentBookingState?.serviceId;
     
-    console.log("Final ID being used:", currentServiceId);
-    
-    // Kiểm tra ID hợp lệ
     if (!currentServiceId) {
       setError("Invalid service ID. Please try selecting the service again.");
-      return;
-    }
-    // Convert to number and check if it's valid
-    const numericServiceId = Number(currentServiceId);
-    if (isNaN(numericServiceId)) {
-      setError("Invalid service ID. Please try selecting the service again.");
-      return;
+      return null;
     }
     
     // Validate address
     if (!selectedAddress) {
       setError("Please add a shipping address before proceeding");
-      // Navigate to add address screen
       router.push("/screens/address/add-address");
-      return;
+      return null;
     }
     
-    // Get current date for validation
+    // Validate survey date (must be at least tomorrow)
     const now = new Date();
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     
-    // Create a date object for today at midnight for comparison
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  
-    // Check if the date is in the past
-    if (surveyDate < today) {
-      setError("The selected date cannot be in the past. Please select a future date.");
-      return;
+    if (surveyDate < tomorrow) {
+      setError("Survey date must be at least one day from today. Please select a future date.");
+      return null;
     }
-  
+
+    return {
+      decorServiceId: Number(currentServiceId),
+      addressId: Number(selectedAddress),
+      surveyDate: formatDateForAPI(surveyDate),
+      note: note.trim() || undefined,
+      serviceName: serviceName,
+      selectedAddressDetails: getSelectedAddressObject()
+    };
+  };
+
+  // Navigation to survey form with detailed questionnaire
+  const handleProceedToSurvey = () => {
+    setError(null);
+    
+    const bookingData = validateBookingData();
+    if (!bookingData) return;
+    
+    // Save to global state
+    const globalData = globalThis as unknown as CustomGlobal;
+    globalData.currentBookingState = {
+      ...globalData.currentBookingState,
+      bookingData: bookingData
+    };
+    
+    // Navigate to Survey Form
+    router.push({
+      pathname: "/booking/survey-form",
+      params: {
+        decorServiceId: bookingData.decorServiceId.toString(),
+        addressId: bookingData.addressId.toString(),
+        surveyDate: bookingData.surveyDate,
+        serviceName: serviceName,
+        note: note || ""
+      }
+    });
+  };
+
+  // Quick booking without detailed survey - direct API call
+  const handleQuickBooking = async () => {
+    setError(null);
+    setQuickBookingLoading(true);
+    
     try {
-      setLoading(true);
-  
-      // FIXED: Format the date to YYYY-MM-DD format consistently
-      const formattedDate = formatDateForAPI(surveyDate);
-  
-      // Prepare booking data - make sure all fields are properly set
-      const bookingData: IBookingRequest = {
-        decorServiceId: numericServiceId,
-        addressId: Number(selectedAddress),
-        surveyDate: formattedDate, // Using our fixed format function
-        note: note.trim() !== "" ? note : undefined,
-      };
-  
-      // Call booking API
-      const response = await createBookingAPI(bookingData);
-      
-      // Handle response
-      if (response.success && response.data) {
-        // Refresh addresses to get any potential new addresses
-        await fetchAddresses();
+      const bookingData = validateBookingData();
+      if (!bookingData) {
+        setQuickBookingLoading(false);
+        return;
+      }
+
+      // Alternative: Try using createBookingAPI with minimal object
+      try {
+        const { createBookingAPI } = await import("@/utils/bookingAPI");
         
-        // Format the returned date consistently for display with text month
-        let displayDate = '';
-        if (response.data.timeSlots && response.data.timeSlots.length > 0) {
-          // Convert the date string to a Date object and format it with text month
-          const dateObj = new Date(response.data.timeSlots[0].surveyDate);
-          displayDate = formatDateWithTextMonth(dateObj);
+        // Create object with only user inputs and empty arrays/strings for rest
+        const minimalRequest = {
+          decorServiceId: bookingData.decorServiceId,
+          addressId: bookingData.addressId,
+          surveyDate: bookingData.surveyDate,
+          note: bookingData.note || '',
+          images: [],
+          // Try with empty/null values that might not trigger validation
+          decorationStyleId: null,
+          roomSize: null,
+          scopeOfWorkId: null,
+          themeColorIds: [],
+          spaceStyle: '',
+          style: '',
+          themeColor: '',
+          primaryUser: '',
+          estimatedBudget: null
+        } as any;
+
+        console.log('🔄 Trying createBookingAPI with minimal request');
+        const apiResponse = await createBookingAPI(minimalRequest);
+        
+        if (apiResponse && apiResponse.success) {
+          console.log('✅ Success with createBookingAPI');
+          
+          Alert.alert(
+            "🎉 Booking Successful!", 
+            `Your booking has been confirmed!\n\n• Service: ${serviceName}\n• Date: ${formatDateWithTextMonth(surveyDate)}\n• Quick booking completed\n\nOur team will contact you within 24 hours to confirm details.`,
+            [
+              {
+                text: "View My Bookings",
+                onPress: () => router.replace('/screens/Bookings')
+              }
+            ]
+          );
+          return; // Exit successfully
         }
+      } catch (apiError) {
+        console.log('❌ createBookingAPI failed, trying direct fetch...');
+      }
+
+      // Fallback to direct fetch if createBookingAPI fails
+      // Use direct API call instead of createBookingAPI to avoid validation
+      const token = await getToken();
+      
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+      
+      // Use fixed API URL - adjust as needed
+
+      // Create FormData - try different approach for problematic fields
+      const formData = new FormData();
+      formData.append('DecorServiceId', bookingData.decorServiceId.toString());
+      formData.append('AddressId', bookingData.addressId.toString());
+      formData.append('SurveyDate', bookingData.surveyDate);
+      formData.append('Note', bookingData.note || '');
+      
+      // Fields that can be empty
+      formData.append('EstimatedBudget', '');
+      formData.append('SpaceStyle', '');
+      formData.append('PrimaryUser', '');
+      formData.append('Style', '');
+      formData.append('ThemeColor', '');
+      formData.append('RoomSize', '');
+      formData.append('DecorationStyleId', '');
+      
+      // Try minimal values for fields that don't accept empty strings
+      formData.append('ScopeOfWorkId', '1'); // Minimal scope
+      formData.append('ThemeColorIds', '1'); // Minimal color ID
+      
+      console.log('🚀 Quick booking FormData with minimal required values');
+      console.log('🌐 API URL:', `${apiClient}/api/Booking/create`);
+      console.log('🔑 Token available:', !!token);
+      
+      // Direct API call to match curl exactly
+      const response = await fetch(`${apiClient}/api/Booking/create`, {
+        method: 'POST',
+        headers: {
+          'accept': '*/*',
+          'Authorization': `Bearer ${token}`,
+          // No Content-Type - let browser set multipart/form-data
+        },
+        body: formData
+      });
+
+      console.log('📡 Response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log('📄 Error response:', errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+      
+      const result = await response.json();
+      console.log('📥 API Response:', result);
+
+      if (response.ok) {
+        console.log('🎉 Quick booking successful!');
         
         Alert.alert(
-          "✅ Booking Successful",
-          `Your booking has been confirmed!
-          
-Your booking ID: ${response.data.id}
-Booking code: ${response.data.bookingCode || 'N/A'}${response.data.decorService ? `\nService: ${response.data.decorService.style}` : ''}${displayDate ? `\nDate: ${displayDate}` : ''}
-
-Thank you for your booking. We'll be in touch soon.`,
+          "🎉 Booking Successful!", 
+          `Your booking has been confirmed!\n\n• Service: ${serviceName}\n• Date: ${formatDateWithTextMonth(surveyDate)}\n• Quick booking completed\n\nOur team will contact you within 24 hours to confirm details.`,
           [
             {
-              text: "Return to Home",
-              onPress: () => router.push("/"),
-              style: "default"
+              text: "View My Bookings",
+              onPress: () => router.replace('/screens/Bookings')
             }
           ]
         );
       } else {
-        // Use the exact error message from the backend
-        setError(response.message || "Unable to book service");
+        const errorMessage = result?.title || result?.errors || "Booking failed. Please try again.";
+        console.error("❌ Quick booking API error:", result);
+        
+        Alert.alert(
+          "Booking Failed",
+          typeof errorMessage === 'string' ? errorMessage : "Booking failed. Please try again.",
+          [
+            { text: "Retry", onPress: () => handleQuickBooking() },
+            { text: "Try Detailed Survey", onPress: () => handleProceedToSurvey() },
+            { text: "Cancel", style: "cancel" }
+          ]
+        );
       }
-    } catch (err: any) {
-      // Extract the exact error message from the error object
-      let errorMessage = "Unable to book service. Please try again.";
+
+    } catch (error: any) {
+      console.error("❌ Quick booking error:", error);
       
-      // Check if the error object contains a structured response from the backend
-      if (err.response && err.response.data && err.response.data.message) {
-        errorMessage = err.response.data.message;
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-      
-      // If the error is in JSON string format, try to parse it
-      if (typeof errorMessage === 'string' && errorMessage.startsWith('{') && errorMessage.endsWith('}')) {
-        try {
-          const parsedError = JSON.parse(errorMessage);
-          if (parsedError.message) {
-            errorMessage = parsedError.message;
-          }
-        } catch (e) {
-          // If parsing fails, keep the original message
-        }
+      let errorMessage = "Unable to complete quick booking. Please try again.";
+      if (error?.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
       }
       
       setError(errorMessage);
+      
+      Alert.alert(
+        "Booking Error",
+        "Unable to complete quick booking. Would you like to try the detailed survey instead?",
+        [
+          { text: "Retry Quick Booking", onPress: () => handleQuickBooking() },
+          { text: "Try Detailed Survey", onPress: () => handleProceedToSurvey() },
+          { text: "Cancel", style: "cancel" }
+        ]
+      );
     } finally {
-      setLoading(false);
+      setQuickBookingLoading(false);
     }
   };
-
+  
   // Get the selected address object
   const getSelectedAddressObject = () => {
     if (!selectedAddress) return null;
@@ -535,9 +615,9 @@ Thank you for your booking. We'll be in touch soon.`,
             <Text style={[styles.addressName, { color: colors.text }]}>{selectedAddressObj.fullName}</Text>
             <Text style={[styles.addressPhone, { color: colors.textSecondary }]}>{selectedAddressObj.phone}</Text>
             <Text style={[styles.addressFull, { color: colors.textSecondary }]}>{fullAddress}</Text>
-            
-            {/* Display the address ID in small font for debugging */}
-            <Text style={[styles.addressDebug, { color: colors.textSecondary }]}>ID: {selectedAddressObj.id}</Text>
+            {__DEV__ && (
+              <Text style={[styles.addressDebug, { color: colors.textSecondary }]}>ID: {selectedAddressObj.id}</Text>
+            )}
           </View>
           <View style={styles.iconWrapper}>
             <Ionicons 
@@ -548,7 +628,6 @@ Thank you for your booking. We'll be in touch soon.`,
           </View>
         </TouchableOpacity>
         
-        {/* If there's an address-specific error, add the Choose Different Address button */}
         {hasAddressError && (
           <TouchableOpacity 
             style={[styles.chooseAddressButton, { backgroundColor: colors.error }]} 
@@ -603,7 +682,7 @@ Thank you for your booking. We'll be in touch soon.`,
             {renderAddressSection()}
           </View>
 
-          {/* Booking Form - With improved UI */}
+          {/* Booking Form */}
           <View style={styles.sectionContainer}>
             <View style={styles.sectionHeader}>
               <Ionicons name="calendar-outline" size={20} color={colors.primary} />
@@ -620,7 +699,7 @@ Thank you for your booking. We'll be in touch soon.`,
               <View style={styles.formGroup}>
                 <Text style={[styles.label, { color: colors.text }]}>
                   <Ionicons name="calendar-outline" size={18} color={colors.primary} /> 
-                  {" "}Survey Date
+                  {" "}Survey Date 
                 </Text>
                 <TouchableOpacity 
                   style={[styles.dateInput, { 
@@ -645,12 +724,12 @@ Thank you for your booking. We'll be in touch soon.`,
                   />
                 </TouchableOpacity>
 
-                {/* Custom Calendar Picker */}
                 <CalendarPicker
                   selectedDate={surveyDate}
                   onSelectDate={onDateChange}
                   isVisible={showDatePicker}
                   onClose={() => setShowDatePicker(false)}
+                  minDate={minDate}
                 />
               </View>
               
@@ -681,15 +760,24 @@ Thank you for your booking. We'll be in touch soon.`,
                     multiline={true}
                     numberOfLines={4}
                     textAlignVertical="top"
+                    maxLength={500}
                   />
                 </View>
+                {note.length > 400 && (
+                  <Text style={[styles.charCount, { color: colors.textSecondary }]}>
+                    {note.length}/500 characters
+                  </Text>
+                )}
               </View>
             </View>
           </View>
           
           {/* Display any errors */}
           {error && (
-            <View style={[styles.errorContainer, { borderLeftColor: colors.error }]}>
+            <View style={[styles.errorContainer, { 
+              borderLeftColor: colors.error,
+              backgroundColor: `${colors.error}10`
+            }]}>
               <Ionicons name="alert-circle" size={20} color={colors.error} style={styles.errorIcon} />
               <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
             </View>
@@ -705,35 +793,74 @@ Thank you for your booking. We'll be in touch soon.`,
             </View>
           )}
 
-          {/* Book Service Button */}
-          <TouchableOpacity 
-            style={[
-              styles.bookButton, 
-              { 
-                backgroundColor: loading || !selectedAddress ? colors.textSecondary : colors.primary,
-                opacity: loading || !selectedAddress ? 0.7 : 1,
-                elevation: loading || !selectedAddress ? 0 : 4,
-              }
-            ]}
-            onPress={handleBooking}
-            disabled={loading || !selectedAddress}
-          >
-            {loading ? (
-              <View style={styles.loadingButton}>
+          {/* Booking Options Info */}
+          {/* <View style={[styles.infoContainer, { backgroundColor: `${colors.primary}08`, borderColor: colors.primary }]}>
+            <Ionicons name="information-circle" size={20} color={colors.primary} style={{ marginRight: 8 }} />
+            <View style={styles.infoTextContainer}>
+              <Text style={[styles.infoTitle, { color: colors.primary }]}>Choose Your Booking Option</Text>
+              <Text style={[styles.infoText, { color: colors.text }]}>
+                • <Text style={{ fontWeight: '600' }}>Quick Booking:</Text> Book immediately with basic info {'\n'}
+                • <Text style={{ fontWeight: '600' }}>Detailed Survey:</Text> Fill preferences & upload photos for better service
+              </Text>
+            </View>
+          </View> */}
+
+          {/* Action Buttons */}
+          <View style={styles.buttonContainer}>
+            {/* Quick Booking Button */}
+            {/* <TouchableOpacity 
+              style={[
+                styles.actionButton, 
+                styles.quickBookingButton,
+                { 
+                  backgroundColor: !selectedAddress ? colors.textSecondary : '#28a745',
+                  opacity: (!selectedAddress || quickBookingLoading) ? 0.7 : 1,
+                  elevation: !selectedAddress ? 0 : 4,
+                }
+              ]}
+              onPress={handleQuickBooking}
+              disabled={!selectedAddress || quickBookingLoading}
+            >
+              {quickBookingLoading ? (
                 <ActivityIndicator size="small" color="#fff" />
-                <Text style={styles.bookButtonText}>
-                  Processing...
-                </Text>
-              </View>
-            ) : (
-              <>
-                <Ionicons name="checkmark-circle" size={22} color="#fff" />
-                <Text style={styles.bookButtonText}>
-                  {!selectedAddress ? "Add Address" : "Confirm Booking"}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
+              ) : (
+                <Ionicons name="flash" size={20} color="#fff" />
+              )}
+              <Text style={styles.actionButtonText}>
+                {quickBookingLoading ? "Processing..." : (!selectedAddress ? "Add Address First" : "Quick Booking")}
+              </Text>
+              {!quickBookingLoading && selectedAddress && (
+                <Ionicons name="arrow-forward" size={18} color="#fff" />
+              )}
+            </TouchableOpacity> */}
+
+            {/* Survey Form Button */}
+            <TouchableOpacity 
+              style={[
+                styles.actionButton, 
+                styles.surveyButton,
+                { 
+                  backgroundColor: !selectedAddress ? colors.textSecondary : colors.primary,
+                  opacity: (!selectedAddress || loading) ? 0.7 : 1,
+                  elevation: !selectedAddress ? 0 : 4,
+                }
+              ]}
+              onPress={handleProceedToSurvey}
+              disabled={!selectedAddress || loading}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="document-text" size={20} color="#fff" />
+              )}
+              <Text style={styles.actionButtonText}>
+                {loading ? "Processing..." : (!selectedAddress ? "Add Address First" : "Detailed Survey")}
+              </Text>
+              {!loading && selectedAddress && (
+                <Ionicons name="arrow-forward" size={18} color="#fff" />
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -749,7 +876,6 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: 30,
   },
-  // Enhanced header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -760,10 +886,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     zIndex: 10,
-  },
-  backButton: {
-    padding: 8,
-    borderRadius: 20,
   },
   headerTitleContainer: {
     flex: 1,
@@ -786,7 +908,6 @@ const styles = StyleSheet.create({
   contentWrapper: {
     padding: 16,
   },
-  // Section styling
   sectionContainer: {
     marginBottom: 24,
   },
@@ -800,7 +921,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
   },
-  // Enhanced address container
   addressContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -855,8 +975,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  
-  // Form styles
   formContainer: {
     borderRadius: 12,
     padding: 16,
@@ -887,21 +1005,6 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
-  // Enhanced text input styles
-  textInputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 12,
-    borderWidth: 0,
-    padding: 4,
-    paddingHorizontal: 12,
-  },
-  textInput: {
-    flex: 1,
-    fontSize: 16,
-    padding: 8,
-    height: 46,
-  },
   textAreaWrapper: {
     flexDirection: 'row',
     borderRadius: 12,
@@ -919,19 +1022,10 @@ const styles = StyleSheet.create({
   inputIcon: {
     marginRight: 8,
   },
-  
-  // Enhanced button styles
-  bookButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 24,
-    marginHorizontal: 16,
-    padding: 16,
-    borderRadius: 12,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
+  charCount: {
+    fontSize: 12,
+    textAlign: 'right',
+    marginTop: 4,
   },
   chooseAddressButton: {
     flexDirection: 'row',
@@ -947,22 +1041,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
-  loadingButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  bookButtonText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  
-  // Enhanced status messages
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#ffebee',
     marginBottom: 16,
     padding: 14,
     borderRadius: 8,
@@ -975,6 +1056,7 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 14,
     flex: 1,
+    lineHeight: 20,
   },
   noteContainer: {
     flexDirection: 'row',
@@ -986,6 +1068,55 @@ const styles = StyleSheet.create({
   noteText: {
     fontSize: 14,
     flex: 1,
+  },
+  infoContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  infoTextContainer: {
+    flex: 1,
+  },
+  infoTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  infoText: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  buttonContainer: {
+    gap: 12,
+    marginTop: 8,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 12,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    marginHorizontal: 4,
+  },
+  quickBookingButton: {
+    // Green color for quick action
+  },
+  surveyButton: {
+    // Primary color for detailed option
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginHorizontal: 12,
+    flex: 1,
+    textAlign: 'center',
   },
 });
 

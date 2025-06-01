@@ -43,6 +43,43 @@ interface Message {
   isRead?: boolean;
 }
 
+// Function to clean HTML content and extract plain text
+const cleanHtmlContent = (htmlString: string): string => {
+  if (!htmlString) return '';
+  
+  // Remove HTML tags and decode HTML entities
+  let cleanText = htmlString
+    .replace(/<[^>]*>/g, '') // Remove HTML tags
+    .replace(/&nbsp;/g, ' ') // Replace &nbsp; with space
+    .replace(/&amp;/g, '&') // Replace &amp; with &
+    .replace(/&lt;/g, '<') // Replace &lt; with <
+    .replace(/&gt;/g, '>') // Replace &gt; with >
+    .replace(/&quot;/g, '"') // Replace &quot; with "
+    .replace(/&#39;/g, "'") // Replace &#39; with '
+    .replace(/&apos;/g, "'") // Replace &apos; with '
+    .trim(); // Remove leading/trailing whitespace
+  
+  return cleanText;
+};
+
+// Check if content contains HTML tags
+const containsHtml = (content: string): boolean => {
+  if (!content) return false;
+  return /<[^>]*>/g.test(content);
+};
+
+// Function to safely process message content
+const processMessageContent = (message: string | undefined): string => {
+  if (!message) return '';
+  
+  // If contains HTML, clean it
+  if (containsHtml(message)) {
+    return cleanHtmlContent(message);
+  }
+  
+  return message.trim();
+};
+
 export default function ChatListScreen() {
   const [searchText, setSearchText] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -85,9 +122,13 @@ export default function ChatListScreen() {
   // Enhanced custom sort function for contacts
   const sortContacts = (contacts: Contact[]) => {
     return [...contacts].sort((a, b) => {
+      // Clean messages before comparison
+      const aMessage = processMessageContent(a.message);
+      const bMessage = processMessageContent(b.message);
+      
       // First priority: empty messages or "Contacts retrieved successfully" go to the top
-      const aIsEmpty = !a.message || a.message.trim() === '' || a.message === "Contacts retrieved successfully";
-      const bIsEmpty = !b.message || b.message.trim() === '' || b.message === "Contacts retrieved successfully";
+      const aIsEmpty = !aMessage || aMessage.trim() === '' || aMessage === "Contacts retrieved successfully";
+      const bIsEmpty = !bMessage || bMessage.trim() === '' || bMessage === "Contacts retrieved successfully";
       
       if (aIsEmpty && !bIsEmpty) return -1;
       if (!aIsEmpty && bIsEmpty) return 1;
@@ -120,19 +161,23 @@ export default function ChatListScreen() {
       if (Array.isArray(data) && data.length > 0) {
         // Process data to mark messages as images or text
         const processedData = data.map(contact => {
+          // Clean the message content
+          const cleanedMessage = processMessageContent(contact.message);
+          
           // Consider it an image message if message is empty but timestamp exists
           const isImage = Boolean(
-            (!contact.message || contact.message.trim() === '') && 
+            (!cleanedMessage || cleanedMessage.trim() === '') && 
             contact.lastMessageTime && contact.lastMessageTime.trim() !== ''
           );
           
           // Assign sort priority: empty messages or "Contacts retrieved successfully" get highest priority
-          const sortPriority = (!contact.message || 
-                              contact.message.trim() === '' || 
-                              contact.message === "Contacts retrieved successfully") ? 10 : 0;
+          const sortPriority = (!cleanedMessage || 
+                              cleanedMessage.trim() === '' || 
+                              cleanedMessage === "Contacts retrieved successfully") ? 10 : 0;
                          
           return {
             ...contact,
+            message: cleanedMessage, // Use cleaned message
             isImage,
             sortPriority,
             // Ensure contactId is valid
@@ -181,16 +226,19 @@ export default function ChatListScreen() {
         return;
       }
       
+      // Clean the message content
+      const cleanedMessage = processMessageContent(newMessage.message);
+      
       // Check if message is an image
       const isImage = Boolean(
-        (!newMessage.message || newMessage.message.trim() === '') && 
+        (!cleanedMessage || cleanedMessage.trim() === '') && 
         (newMessage.lastMessageTime || newMessage.sentTime)
       );
       
       // Calculate sort priority
-      const sortPriority = (!newMessage.message || 
-                           newMessage.message.trim() === '' || 
-                           newMessage.message === "Contacts retrieved successfully") ? 10 : 0;
+      const sortPriority = (!cleanedMessage || 
+                           cleanedMessage.trim() === '' || 
+                           cleanedMessage === "Contacts retrieved successfully") ? 10 : 0;
       
       setContacts((prevContacts) => {
         // Check if contact already exists
@@ -205,7 +253,7 @@ export default function ChatListScreen() {
           updatedContacts = [...prevContacts];
           updatedContacts[existingContactIndex] = {
             ...updatedContacts[existingContactIndex],
-            message: newMessage.message || '',
+            message: cleanedMessage, // Use cleaned message
             lastMessageTime: newMessage.lastMessageTime || newMessage.sentTime || new Date().toISOString(),
             isImage,
             sortPriority
@@ -217,7 +265,7 @@ export default function ChatListScreen() {
             {
               contactId: newMessage.contactId,
               contactName: newMessage.contactName || `Contact ${newMessage.contactId}`,
-              message: newMessage.message || '',
+              message: cleanedMessage, // Use cleaned message
               lastMessageTime: newMessage.lastMessageTime || newMessage.sentTime || new Date().toISOString(),
               avatar: newMessage.avatar || null,
               email: newMessage.email || '',
@@ -318,7 +366,7 @@ export default function ChatListScreen() {
     }
   }, []);
 
-  // Safe render function with validation
+  // Safe render function with validation and HTML cleaning
   const renderContactItem = useCallback(({ item, index }: { item: Contact, index: number }) => {
     if (!item) {
       console.warn("Null contact item at index", index);
@@ -330,14 +378,17 @@ export default function ChatListScreen() {
       return null;
     }
     
+    // Process and clean message content
+    const cleanedMessage = processMessageContent(item.message);
+    
     // Determine message display text
     let messageDisplay = "No messages yet";
     if (item.isImage) {
       messageDisplay = "Sent a photo";
-    } else if (item.message === "Contacts retrieved successfully") {
+    } else if (cleanedMessage === "Contacts retrieved successfully") {
       messageDisplay = "New contact"; // Replace API message with user-friendly text
-    } else if (item.message) {
-      messageDisplay = item.message;
+    } else if (cleanedMessage) {
+      messageDisplay = cleanedMessage;
     }
     
     return (
@@ -374,7 +425,14 @@ export default function ChatListScreen() {
           placeholder="Search by Receiver Name"
           placeholderTextColor={colors.inputPlaceholder}
           value={searchText}
-          onChangeText={setSearchText}
+          onChangeText={(text) => {
+            // Prevent HTML input in search
+            if (containsHtml(text)) {
+              return; // Don't update if HTML is detected
+            }
+            setSearchText(text);
+          }}
+          maxLength={100} // Add reasonable limit
         />
       </View>
 

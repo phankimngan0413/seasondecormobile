@@ -1,10 +1,11 @@
 import { AxiosResponse } from 'axios';
 import { initApiClient } from "@/config/axiosConfig";
+import { getToken } from "@/services/auth";
 
-// Define a more specific status type to avoid 'any' type issues
+// Define booking status type
 export type BookingStatusCode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
 
-// Updated Booking interface with numeric status
+// Booking interface
 export interface IBooking {
   id?: number;
   bookingId: number;
@@ -15,14 +16,14 @@ export interface IBooking {
   address: string;
   surveyDate?: string;
   surveyTime?: string;
-  status: BookingStatusCode; // Using the specific type for status
+  status: BookingStatusCode;
   createdAt: string;
   updatedAt?: string;
   totalPrice?: number;
   cost?: number;
   serviceItems?: string;
-  note?: string;                 // Added note field
-  expectedCompletion?: string;   // Added expectedCompletion field
+  note?: string;
+  expectedCompletion?: string;
   decorService?: {
     id: number;
     style: string;
@@ -56,29 +57,30 @@ export interface IBooking {
   }>;
 }
 
-// Updated request interface with new fields
-export interface IBookingRequest {
-  decorServiceId: number;
-  addressId: number;
-  surveyDate: string;
-  note?: string;
-  decorationStyleId: number;
-  themeColorIds: number[];
-  spaceStyle: string;
-  roomSize: number;
-  style: string;
-  themeColor: string;
-  primaryUser: string;
-  scopeOfWorldId: number[];
-  images: string[];
+// Updated booking request interface with support for multiple theme colors
+export interface IBookingRequest {   
+  decorServiceId: number;        
+  addressId: number;             
+  surveyDate: string;            
+  note?: string;                 
+  decorationStyleId: number;     
+  themeColorIds: number[];       // Changed from number to number[] for multiple colors
+  spaceStyle: string;            
+  roomSize: number;              
+  style: string;                 
+  themeColor: string;            
+  primaryUser: string;           
+  scopeOfWorkId: number | number[]; // Can be single or multiple scope of work IDs
+  images?: File[];               
+  estimatedBudget?: number;      
 }
 
-// Define response interfaces
+// Response interfaces
 export interface IBookingResponse {
   success: boolean;
   booking?: IBooking;
   message?: string;
-  errors?: string[];
+  errors?: string[] | Record<string, string[]>; // Allow both array and object formats
   data?: IBooking;
 }
 
@@ -100,25 +102,26 @@ export interface IPaginatedBookingsResponse {
     pageSize?: number;
     totalPages?: number;
   };
-  items?: IBooking[];  // Kept for backward compatibility
-  totalCount?: number; // Kept for backward compatibility
-  pageIndex?: number;  // Kept for backward compatibility
-  pageSize?: number;   // Kept for backward compatibility
-  totalPages?: number; // Kept for backward compatibility
+  items?: IBooking[];
+  totalCount?: number;
+  pageIndex?: number;
+  pageSize?: number;
+  totalPages?: number;
 }
 
 export interface IBookingFilterOptions {
-  Status?: number; // Changed to match API parameter (PascalCase)
-  DecorServiceId?: number; // Changed to match API parameter (PascalCase)
-  PageIndex?: number; // Changed to match API parameter (PascalCase)
-  PageSize?: number; // Changed to match API parameter (PascalCase)
-  SortBy?: string; // Changed to match API parameter (PascalCase)
-  Descending?: boolean; // Changed to match API parameter (PascalCase)
+  Status?: number;
+  DecorServiceId?: number;
+  PageIndex?: number;
+  PageSize?: number;
+  SortBy?: string;
+  Descending?: boolean;
 }
+
 export interface ICancelType {
   id: number;
   type: string;
-  name?: string; // Optional for backward compatibility
+  name?: string;
   description?: string;
   isActive?: boolean;
 }
@@ -131,545 +134,589 @@ export interface ICancelTypeResponse {
 }
 
 /**
- * Lấy danh sách booking phân trang với các tùy chọn lọc
- * @param options - Các tùy chọn lọc và phân trang
- * @returns Promise với danh sách booking phân trang
+ * Helper function to handle multiple theme colors
+ */
+const formatThemeColorIds = (themeColorIds: number | number[]): string => {
+  if (Array.isArray(themeColorIds)) {
+    return themeColorIds.join(','); // Convert array to comma-separated string
+  }
+  return String(themeColorIds); // Use String() instead of toString()
+};
+
+/**
+ * Helper function to handle multiple scope of work IDs
+ */
+const formatScopeOfWorkIds = (scopeOfWorkId: number | number[]): string => {
+  if (Array.isArray(scopeOfWorkId)) {
+    return scopeOfWorkId.join(','); // Convert array to comma-separated string
+  }
+  return String(scopeOfWorkId); // Use String() instead of toString()
+};
+
+/**
+ * Create a booking - Updated version with multiple theme colors support
+ */
+export const createBookingAPI = async (bookingData: IBookingRequest): Promise<IBookingResponse> => {
+  try {
+    const token = await getToken();
+    if (!token) throw new Error("No token found!");
+    
+    console.log("Sending booking request data:", bookingData);
+    
+    // Use direct fetch instead of axios to bypass interceptors
+    const formData = new FormData();
+    
+    // Required fields with PascalCase (exactly like successful direct test)
+    formData.append('DecorServiceId', String(bookingData.decorServiceId));
+    formData.append('AddressId', String(bookingData.addressId));
+    formData.append('SurveyDate', bookingData.surveyDate);
+    formData.append('DecorationStyleId', String(bookingData.decorationStyleId));
+    
+    // Handle multiple theme colors - try different formats based on backend requirements
+    if (Array.isArray(bookingData.themeColorIds)) {
+      // Option 1: Send each color ID as separate form field
+      bookingData.themeColorIds.forEach((colorId, index) => {
+        formData.append(`ThemeColorIds[${index}]`, String(colorId));
+      });
+      
+      // Option 2: Also try sending as comma-separated for backup
+      // formData.append('ThemeColorIds', bookingData.themeColorIds.join(','));
+    } else {
+      formData.append('ThemeColorIds', String(bookingData.themeColorIds));
+    }
+    
+    formData.append('SpaceStyle', bookingData.spaceStyle || '');
+    formData.append('RoomSize', String(bookingData.roomSize));
+    formData.append('Style', bookingData.style || '');
+    formData.append('ThemeColor', bookingData.themeColor || '');
+    formData.append('PrimaryUser', bookingData.primaryUser || '');
+    
+    // Handle scope of work ID(s) - try array format
+    if (Array.isArray(bookingData.scopeOfWorkId)) {
+      bookingData.scopeOfWorkId.forEach((scopeId, index) => {
+        formData.append(`ScopeOfWorkId[${index}]`, String(scopeId));
+      });
+    } else {
+      formData.append('ScopeOfWorkId', String(bookingData.scopeOfWorkId));
+    }
+    
+    // Optional fields
+    formData.append('Note', bookingData.note || '');
+    formData.append('EstimatedBudget', bookingData.estimatedBudget ? String(bookingData.estimatedBudget) : '');
+    
+    // Add images if present with correct field name for your API
+    if (bookingData.images && bookingData.images.length > 0) {
+      console.log(`📷 Adding ${bookingData.images.length} images to FormData...`);
+      
+      let validImageCount = 0;
+      for (let index = 0; index < bookingData.images.length; index++) {
+        const file = bookingData.images[index] as any; // Type assertion for React Native compatibility
+        if (file && (file.size > 0 || file.uri)) { // Accept both File objects and RN objects
+          console.log(`📎 Adding image ${index + 1}: ${file.name} (${file.size || 'unknown size'} bytes, ${file.type})`);
+          
+          // Use the field name that your API expects
+          formData.append('Images', file); // Try PascalCase first
+          
+          validImageCount++;
+        } else {
+          console.warn(`⚠️ Skipping invalid image at index ${index}:`, file);
+        }
+      }
+      
+      console.log(`✅ Added ${validImageCount} valid images to FormData with field name 'Images'`);
+    } else {
+      console.log('📷 No images to add');
+    }
+    
+    // Use direct fetch with exact same headers as successful test
+    const response = await fetch("http://10.0.2.2:5297/api/Booking/create", {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json',
+        // DON'T set Content-Type - let browser handle FormData boundary
+      },
+      body: formData,
+    });
+    
+    const responseData = await response.json();
+    console.log("Raw booking API response:", responseData);
+    
+    // Return the response data directly
+    return responseData;
+    
+  } catch (error: any) {
+    console.error("Error in createBookingAPI:", error);
+    return {
+      success: false,
+      message: error.message || "Failed to create booking",
+      errors: []
+    };
+  }
+};
+
+/**
+ * Alternative method: Try different array formats for backend compatibility
+ */
+export const createBookingAPIAlternative = async (bookingData: IBookingRequest): Promise<IBookingResponse> => {
+  try {
+    const token = await getToken();
+    if (!token) throw new Error("No token found!");
+    
+    console.log("🔄 Trying alternative format for multiple arrays...");
+    
+    const formData = new FormData();
+    
+    // Basic fields
+    formData.append('DecorServiceId', String(bookingData.decorServiceId));
+    formData.append('AddressId', String(bookingData.addressId));
+    formData.append('SurveyDate', bookingData.surveyDate);
+    formData.append('DecorationStyleId', String(bookingData.decorationStyleId));
+    
+    // Try different formats for theme colors
+    if (Array.isArray(bookingData.themeColorIds)) {
+      // Format 1: Try simple repeated field names
+      bookingData.themeColorIds.forEach((colorId) => {
+        formData.append('ThemeColorIds', String(colorId));
+      });
+    } else {
+      formData.append('ThemeColorIds', String(bookingData.themeColorIds));
+    }
+    
+    formData.append('SpaceStyle', bookingData.spaceStyle || '');
+    formData.append('RoomSize', String(bookingData.roomSize));
+    formData.append('Style', bookingData.style || '');
+    formData.append('ThemeColor', bookingData.themeColor || '');
+    formData.append('PrimaryUser', bookingData.primaryUser || '');
+    
+    // Try different formats for scope of work
+    if (Array.isArray(bookingData.scopeOfWorkId)) {
+      // Format 1: Try simple repeated field names
+      bookingData.scopeOfWorkId.forEach((scopeId) => {
+        formData.append('ScopeOfWorkId', String(scopeId));
+      });
+    } else {
+      formData.append('ScopeOfWorkId', String(bookingData.scopeOfWorkId));
+    }
+    
+    formData.append('Note', bookingData.note || '');
+    formData.append('EstimatedBudget', bookingData.estimatedBudget ? String(bookingData.estimatedBudget) : '');
+    
+    // Add images with correct field name
+    if (bookingData.images && bookingData.images.length > 0) {
+      console.log(`📷 Adding ${bookingData.images.length} images to alternative FormData...`);
+      
+      let validImageCount = 0;
+      bookingData.images.forEach((file: any, index) => { // Type assertion for React Native compatibility
+        if (file && (file.size > 0 || file.uri)) {
+          console.log(`📎 Adding image ${index + 1}: ${file.name} (${file.size || 'unknown'} bytes)`);
+          
+          // Use correct field name for your API
+          formData.append('Images', file); // PascalCase
+          
+          validImageCount++;
+        } else {
+          console.warn(`⚠️ Skipping invalid image at index ${index}`);
+        }
+      });
+      
+      console.log(`✅ Added ${validImageCount} valid images with field name 'Images'`);
+    }
+    
+    const response = await fetch("http://10.0.2.2:5297/api/Booking/create", {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json',
+      },
+      body: formData,
+    });
+    
+    const responseData = await response.json();
+    console.log("📥 Alternative format response:", responseData);
+    
+    return responseData;
+    
+  } catch (error: any) {
+    console.error("❌ Error in createBookingAPIAlternative:", error);
+    return {
+      success: false,
+      message: error.message || "Failed to create booking with alternative format",
+      errors: []
+    };
+  }
+};
+
+/**
+ * Helper function for debugging array formats
+ */
+export const debugArrayFormats = async (bookingData: IBookingRequest): Promise<void> => {
+  const token = await getToken();
+  if (!token) return;
+  
+  console.log("🧪 Testing different array formats...");
+  
+  // Test Format 1: Array notation ThemeColorIds[0], ThemeColorIds[1]
+  if (Array.isArray(bookingData.themeColorIds)) {
+    console.log("Format 1 - Array notation: ThemeColorIds[0]=1, ThemeColorIds[1]=2");
+    bookingData.themeColorIds.forEach((colorId, index) => {
+      console.log(`ThemeColorIds[${index}]=${colorId}`);
+    });
+  }
+  
+  // Test Format 2: Repeated field names
+  if (Array.isArray(bookingData.themeColorIds)) {
+    console.log("Format 2 - Repeated names: ThemeColorIds=1, ThemeColorIds=2");
+    bookingData.themeColorIds.forEach((colorId) => {
+      console.log(`ThemeColorIds=${colorId}`);
+    });
+  }
+  
+  // Test Format 3: JSON string
+  if (Array.isArray(bookingData.themeColorIds)) {
+    console.log("Format 3 - JSON string: ThemeColorIds='[1,2]'");
+    console.log(`ThemeColorIds=${JSON.stringify(bookingData.themeColorIds)}`);
+  }
+  
+  console.log("🔍 Try these formats if current one fails");
+};
+export const testArrayFormats = async (bookingData: IBookingRequest): Promise<void> => {
+  const token = await getToken();
+  if (!token) return;
+  
+  console.log("🧪 Testing different array formats...");
+  
+  // Test Format 1: Array notation ThemeColorIds[0], ThemeColorIds[1]
+  const formData1 = new FormData();
+  if (Array.isArray(bookingData.themeColorIds)) {
+    bookingData.themeColorIds.forEach((colorId, index) => {
+      formData1.append(`ThemeColorIds[${index}]`, String(colorId));
+    });
+  }
+  console.log("Format 1 - Array notation: ThemeColorIds[0]=1, ThemeColorIds[1]=2");
+  
+  // Test Format 2: Repeated field names
+  const formData2 = new FormData();
+  if (Array.isArray(bookingData.themeColorIds)) {
+    bookingData.themeColorIds.forEach((colorId) => {
+      formData2.append('ThemeColorIds', String(colorId));
+    });
+  }
+  console.log("Format 2 - Repeated names: ThemeColorIds=1, ThemeColorIds=2");
+  
+  // Test Format 3: JSON string
+  const formData3 = new FormData();
+  if (Array.isArray(bookingData.themeColorIds)) {
+    formData3.append('ThemeColorIds', JSON.stringify(bookingData.themeColorIds));
+  }
+  console.log("Format 3 - JSON string: ThemeColorIds='[1,2]'");
+  
+  // Log all formats for debugging
+  console.log("🔍 Try these formats if current one fails");
+};
+export const createBookingAPIAxios = async (bookingData: IBookingRequest): Promise<IBookingResponse> => {
+  try {
+    const token = await getToken();
+    if (!token) throw new Error("No token found!");
+    
+    console.log("Sending booking request data via axios:", bookingData);
+    
+    const apiClient = await initApiClient();
+    
+    // Create FormData
+    const formData = new FormData();
+    formData.append('DecorServiceId', String(bookingData.decorServiceId));
+    formData.append('AddressId', String(bookingData.addressId));
+    formData.append('SurveyDate', bookingData.surveyDate);
+    formData.append('DecorationStyleId', String(bookingData.decorationStyleId));
+    
+    // Handle multiple theme colors
+    if (Array.isArray(bookingData.themeColorIds)) {
+      bookingData.themeColorIds.forEach((colorId, index) => {
+        formData.append(`ThemeColorIds[${index}]`, String(colorId));
+      });
+    } else {
+      formData.append('ThemeColorIds', String(bookingData.themeColorIds));
+    }
+    
+    formData.append('SpaceStyle', bookingData.spaceStyle || '');
+    formData.append('RoomSize', String(bookingData.roomSize));
+    formData.append('Style', bookingData.style || '');
+    formData.append('ThemeColor', bookingData.themeColor || '');
+    formData.append('PrimaryUser', bookingData.primaryUser || '');
+    
+    // Handle scope of work ID(s)
+    if (Array.isArray(bookingData.scopeOfWorkId)) {
+      bookingData.scopeOfWorkId.forEach((scopeId, index) => {
+        formData.append(`ScopeOfWorkId[${index}]`, String(scopeId));
+      });
+    } else {
+      formData.append('ScopeOfWorkId', String(bookingData.scopeOfWorkId));
+    }
+    
+    formData.append('Note', bookingData.note || '');
+    formData.append('EstimatedBudget', bookingData.estimatedBudget ? String(bookingData.estimatedBudget) : '');
+    
+    if (bookingData.images && bookingData.images.length > 0) {
+      bookingData.images.forEach((file, index) => {
+        if (file && file.size > 0) {
+          formData.append('images', file);
+        } else {
+          console.warn(`⚠️ Skipping invalid image at index ${index} in axios version`);
+        }
+      });
+    }
+    
+    // BYPASS interceptors by creating a fresh axios instance
+    const freshAxios = require('axios').create({
+      baseURL: 'http://10.0.2.2:5297',
+      timeout: 30000,
+    });
+    
+    const response = await freshAxios.post('/api/Booking/create', formData, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json',
+        // Don't set Content-Type for FormData
+      },
+    });
+    
+    console.log("Fresh axios response:", response.data);
+    return response.data;
+    
+  } catch (error: any) {
+    console.error("Error in createBookingAPIAxios:", error);
+    return {
+      success: false,
+      message: error.message || "Failed to create booking",
+      errors: []
+    };
+  }
+};
+
+/**
+ * Get paginated bookings for customer
  */
 export const getPaginatedBookingsForCustomerAPI = async (
   options: IBookingFilterOptions = {}
 ): Promise<IPaginatedBookingsResponse> => {
-  console.log('🔍 getPaginatedBookingsForCustomerAPI - Starting API call with options:', JSON.stringify(options, null, 2));
-  
-  const {
-    Status,
-    DecorServiceId,
-    PageIndex = 1,
-    PageSize = 10,
-    SortBy = "createdAt",
-    Descending = true
-  } = options;
-
-  const url = "/api/Booking/getPaginatedBookingsForCustomer";
-  console.log(`🔍 API URL: ${url}`);
-  
-  // Use parameters directly from options without transformation
-  const params: Record<string, any> = {
-    PageIndex,
-    PageSize,
-    SortBy,
-    Descending
-  };
-
-  // Thêm các tham số tùy chọn
-  if (Status !== undefined) {
-    params.Status = Status;
-    console.log(`🔍 Filtering by Status: ${Status}`);
-  }
-  if (DecorServiceId !== undefined) {
-    params.DecorServiceId = DecorServiceId;
-    console.log(`🔍 Filtering by DecorServiceId: ${DecorServiceId}`);
-  }
-  
-  console.log('🔍 Request parameters:', JSON.stringify(params, null, 2));
-  
-  const apiClient = await initApiClient();
   try {
-    console.log('🔍 Sending API request...');
-    const response = await apiClient.get(url, { params });
+    const token = await getToken();
+    if (!token) throw new Error("No token found!");
     
-    console.log('🔍 API response headers:', JSON.stringify(response.headers, null, 2));
-    
-    if (response && response.data) {
-      console.log('🔍 API call successful, returning data');
-      return response.data;
-    } else {
-      console.error("🔴 Invalid paginated bookings response:", response);
-      console.log('🔍 Returning empty response due to invalid data');
-      return {
-        items: [],
-        totalCount: 0,
-        pageIndex: PageIndex,
-        pageSize: PageSize,
-        totalPages: 0
-      };
-    }
-  } catch (error: any) {
-    console.error("🔴 Error fetching paginated bookings:", error);
+    const {
+      Status,
+      DecorServiceId,
+      PageIndex = 1,
+      PageSize = 10,
+      SortBy = "createdAt",
+      Descending = true
+    } = options;
 
-    return {
+    const params: Record<string, any> = {
+      PageIndex,
+      PageSize,
+      SortBy,
+      Descending
+    };
+
+    if (Status !== undefined) params.Status = Status;
+    if (DecorServiceId !== undefined) params.DecorServiceId = DecorServiceId;
+    
+    const apiClient = await initApiClient();
+    const response = await apiClient.get("/api/Booking/getPaginatedBookingsForCustomer", { 
+      params,
+      headers: {
+        Authorization: `Bearer ${token}`,
+      }
+    });
+    
+    return response.data || {
       items: [],
       totalCount: 0,
       pageIndex: PageIndex,
       pageSize: PageSize,
       totalPages: 0
     };
+    
+  } catch (error: any) {
+    console.error("Error fetching bookings:", error);
+    return {
+      items: [],
+      totalCount: 0,
+      pageIndex: 1,
+      pageSize: 10,
+      totalPages: 0
+    };
   }
 };
 
 /**
- * Create a booking
- * @param bookingData Booking information
- * @returns Promise with booking result
+ * Request cancel booking
  */
-export const createBookingAPI = async (
-  bookingData: IBookingRequest
-): Promise<IBookingResponse> => {
-  const url = "/api/Booking/create";
-  
-  // Log the complete request data
-  console.log("📤 BOOKING REQUEST DATA:", JSON.stringify(bookingData, null, 2));
-  
-  const apiClient = await initApiClient();
-  try {
-    console.log(`🔷 Making POST request to ${url}`);
-    
-    // Additional log of request headers if needed
-    // console.log("📋 Request Headers:", apiClient.defaults.headers);
-    
-    const response: AxiosResponse = await apiClient.post(url, bookingData);
-    
-    // Log the raw response
-    console.log("📥 BOOKING RESPONSE:", JSON.stringify(response.data, null, 2));
-    
-    if (response && response.data) {
-      // Check if the response has a success property
-      if (response.data.success !== undefined) {
-        // Standard wrapped response, return as is
-        console.log(`✅ Booking API call ${response.data.success ? 'succeeded' : 'failed'}: ${response.data.message}`);
-        return response.data;
-      } else if (response.data.id) {
-        // Direct booking object response, wrap it in proper structure
-        console.log(`✅ Booking created with ID: ${response.data.id}`);
-        return {
-          success: true,
-          message: "Booking created successfully",
-          data: response.data
-        };
-      } else {
-        console.error("🔴 Invalid booking response structure:", response.data);
-        return {
-          success: false,
-          message: "Invalid response from server"
-        };
-      }
-    } else {
-      console.error("🔴 Empty or invalid booking response");
-      return {
-        success: false,
-        message: "Invalid response from server"
-      };
-    }
-  } catch (error: any) {
-    // Log detailed error information
-    console.error("🔴 Error creating booking:", error.message);
-    
-    if (error.request) {
-      console.error("📋 Request that caused error:", {
-        url: url,
-        method: 'POST',
-        data: JSON.stringify(bookingData, null, 2)
-      });
-    }
-    
-    if (error.response) {
-      console.error("📋 Error Response Status:", error.response.status);
-      console.error("📋 Error Response Headers:", error.response.headers);
-      console.error("📋 Error Response Data:", JSON.stringify(error.response.data, null, 2));
-      
-      // Check if we have the specific address-in-use error
-      if (error.response.data.message && 
-          error.response.data.message.includes("address is currently in use")) {
-        console.error("🚫 Address in use error detected");
-        return {
-          success: false,
-          message: error.response.data.message,
-          errors: error.response.data.errors || []
-        };
-      }
-      
-      // Return the exact error message from the backend
-      return {
-        success: false,
-        message: error.response.data.message || "Failed to create booking",
-        errors: error.response.data.errors || []
-      };
-    }
-    
-    // For network errors or when response structure is unexpected
-    if (error.message && error.message.includes("Network Error")) {
-      console.error("🌐 Network error detected");
-      return {
-        success: false,
-        message: "Network error or server unavailable"
-      };
-    }
-    
-    // Return a generic error if we can't get a specific message
-    return {
-      success: false,
-      message: error.message || "Failed to process your booking request"
-    };
-  }
-};
 export const requestCancelBookingAPI = async (
   bookingCode: string,
   cancelTypeId: number,
   cancelReason: string
 ): Promise<IBookingResponse> => {
-  const url = `/api/Booking/requestCancel/${bookingCode}`;
-  
-  const payload = {
-    cancelTypeId,
-    cancelReason
-  };
-  
-  console.log(`🔍 Sending cancellation request to ${url} with payload:`, payload);
-  
-  const apiClient = await initApiClient();
   try {
-    const response: AxiosResponse = await apiClient.put(url, payload);
+    const token = await getToken();
+    if (!token) throw new Error("No token found!");
     
-    // Log the complete API response
-    console.log(`🔍 Complete API response:`, response);
+    const payload = {
+      cancelTypeId,
+      cancelReason
+    };
     
-    // The issue is that response.data is null, but the response itself has success details
-    // Let's check if we need to extract success info from the response rather than response.data
-    if (response.data === null) {
-      console.log("📘 Response data is null, extracting success info from response");
-      
-      // Check if response has a status in the 200 range (successful HTTP status)
-      if (response.status >= 200 && response.status < 300) {
-        return {
-          success: true,
-          message: "Booking has been canceled successfully."
-        };
+    const apiClient = await initApiClient();
+    const response = await apiClient.put(`/api/Booking/requestCancel/${bookingCode}`, payload, {
+      headers: {
+        Authorization: `Bearer ${token}`,
       }
-    }
+    });
     
-    // If response.data exists, return it
-    if (response.data) {
-      return response.data;
-    }
-    
-    // Default success response
-    return {
+    return response.data || {
       success: true,
-      message: "Request processed successfully"
+      message: "Booking cancellation requested successfully"
     };
+    
   } catch (error: any) {
-    console.error("🔴 Error requesting cancellation:", error);
-    
-    // Handle axios error with response
-    if (error.response) {
-      console.error("API Error Response:", error.response);
-      
-      // If the error response has data, return it
-      if (error.response.data) {
-        return error.response.data;
-      }
-      
-      // Otherwise create an error based on status
-      return {
-        success: false,
-        message: `Error: ${error.response.status} - ${error.response.statusText}`
-      };
-    }
-    
-    // Return a generic error for network issues
+    console.error("Error requesting cancellation:", error);
     return {
       success: false,
-      message: error.message || "Network error or server unavailable"
+      message: error.message || "Failed to request cancellation",
+      errors: []
     };
   }
 };
-export const confirmBookingAPI = async (
-  bookingCode: string
-): Promise<IBookingResponse> => {
-  const url = `/api/Booking/confirm/${bookingCode}`;
-  
-  console.log(`🔍 Attempting to confirm booking: ${bookingCode}`);
-  
-  const apiClient = await initApiClient();
-  try {
-    const response: AxiosResponse = await apiClient.put(url);
-    
-    console.log(`🟢 Booking confirmation response:`, response.data);
-    
-    // If we have response data with defined success property, return it directly
-    if (response.data && typeof response.data.success === 'boolean') {
-      return response.data;
-    }
-    
-    // For any 2xx status code, treat as success even if response format is unexpected
-    if (response.status >= 200 && response.status < 300) {
-      return {
-        success: true,
-        message: "Booking confirmed successfully",
-        data: response.data
-      };
-    }
-    
-    console.error("🔴 Invalid booking confirmation response:", response);
-    return {
-      success: false,
-      message: "Failed to confirm booking"
-    };
-  } catch (error: any) {
-    console.error("🔴 Error confirming booking:", error);
-    
-    // Special handling for error response that might actually indicate success
-    if (error.response && error.response.status >= 200 && error.response.status < 300) {
-      console.log("✅ Received 2xx status in error response - treating as success");
-      return {
-        success: true,
-        message: "Booking confirmed successfully"
-      };
-    }
-    
-    // Check if error response contains a success:true indicator
-    if (error.response && error.response.data && error.response.data.success === true) {
-      console.log("✅ Found success:true in error response - treating as success");
-      return error.response.data;
-    }
-    
-    if (error.response) {
-      console.error("API Error Response:", error.response.data);
-      
-      // For specific error status codes
-      if (error.response.status === 401) {
-        return {
-          success: false,
-          message: "Please log in to confirm this booking"
-        };
-      } else if (error.response.status === 403) {
-        return {
-          success: false,
-          message: "You don't have permission to confirm this booking"
-        };
-      } else if (error.response.status === 404) {
-        return {
-          success: false,
-          message: "Booking not found or already processed"
-        };
-      }
-      
-      return {
-        success: false,
-        message: error.response.data?.message || "Failed to confirm booking",
-        errors: error.response.data?.errors
-      };
-    }
-    
-    return {
-      success: false,
-      message: error.message || "Network error or server unavailable"
-    };
-  }
-};
+
 /**
- * Make a deposit payment for a booking
- * @param bookingCode Booking code to make deposit for
- * @param depositData Deposit payment data
- * @returns Promise with deposit result
+ * Confirm booking
+ */
+export const confirmBookingAPI = async (bookingCode: string): Promise<IBookingResponse> => {
+  try {
+    const token = await getToken();
+    if (!token) throw new Error("No token found!");
+    
+    const apiClient = await initApiClient();
+    const response = await apiClient.put(`/api/Booking/confirm/${bookingCode}`, null, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      }
+    });
+    
+    return response.data || {
+      success: true,
+      message: "Booking confirmed successfully"
+    };
+    
+  } catch (error: any) {
+    console.error("Error confirming booking:", error);
+    return {
+      success: false,
+      message: error.message || "Failed to confirm booking",
+      errors: []
+    };
+  }
+};
+
+/**
+ * Make booking deposit
  */
 export const makeBookingDepositAPI = async (
   bookingCode: string,
   depositData: any
 ): Promise<IBookingResponse> => {
-  const url = `/api/Booking/deposit/${bookingCode}`;
-  
-  const apiClient = await initApiClient();
   try {
-    const response: AxiosResponse<IBookingResponse> = await apiClient.post(url, depositData);
+    const token = await getToken();
+    if (!token) throw new Error("No token found!");
     
-    if (response && response.data) {
-      return response.data;
-    } else {
-      console.error("🔴 Invalid deposit response:", response);
-      return {
-        success: false,
-        message: "Failed to make deposit"
-      };
-    }
+    const apiClient = await initApiClient();
+    const response = await apiClient.post(`/api/Booking/deposit/${bookingCode}`, depositData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      }
+    });
+    
+    return response.data || {
+      success: false,
+      message: "Failed to make deposit"
+    };
+    
   } catch (error: any) {
-    console.error("🔴 Error making deposit:", error);
-    
-    if (error.response) {
-      console.error("API Error Response:", error.response.data);
-      return {
-        success: false,
-        message: error.response.data.message || "Failed to make deposit",
-        errors: error.response.data.errors
-      };
-    }
-    
+    console.error("Error making deposit:", error);
     return {
       success: false,
-      message: "Network error or server unavailable"
+      message: error.message || "Failed to make deposit",
+      errors: []
     };
   }
 };
+
 /**
- * Fetch all available cancellation types
- * @returns Promise with cancellation types
+ * Get all cancel types
  */
 export const getAllCancelTypesAPI = async (): Promise<ICancelTypeResponse> => {
-  const url = "/api/CancelType/getAllCancelType";
-  
-  const apiClient = await initApiClient();
   try {
-    console.log('🔍 Sending request to fetch cancel types');
-    const response = await apiClient.get(url);
+    const token = await getToken();
+    if (!token) throw new Error("No token found!");
     
-    console.log('🔍 Cancel types API response:', JSON.stringify(response.data, null, 2));
+    const apiClient = await initApiClient();
+    const response = await apiClient.get("/api/CancelType/getAllCancelType", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      }
+    });
     
-    // Check if response has the expected structure
-    if (response && response.data) {
-      // Handle different possible response structures
+    // Handle different response formats
+    if (response.data) {
       if (response.data.success !== undefined) {
-        // Standard wrapped response structure
         return response.data;
       } else if (Array.isArray(response.data)) {
-        // Direct array response
-        return {
-          success: true,
-          data: response.data
-        };
+        return { success: true, data: response.data };
       } else if (response.data.data && Array.isArray(response.data.data)) {
-        // Nested data property with array
-        return {
-          success: true,
-          data: response.data.data
-        };
-      } else {
-        console.error("🔴 Unexpected cancel types response format:", response.data);
-        return {
-          success: false,
-          message: "Unexpected response format from server"
-        };
+        return { success: true, data: response.data.data };
       }
-    } else {
-      console.error("🔴 Invalid cancel types response:", response);
-      return {
-        success: false,
-        message: "Failed to retrieve cancellation types"
-      };
     }
+    
+    return response.data;
+    
   } catch (error: any) {
-    console.error("🔴 Error fetching cancellation types:", error);
-    
-    if (error.response) {
-      console.error("API Error Response:", error.response.data);
-      return {
-        success: false,
-        message: error.response.data?.message || "Failed to retrieve cancellation types",
-        errors: error.response.data?.errors
-      };
-    }
-    
+    console.error("Error fetching cancel types:", error);
     return {
       success: false,
-      message: error.message || "Network error or server unavailable"
+      message: error.message || "Failed to retrieve cancellation types",
+      errors: []
     };
   }
 };
-export const processCommitDepositAPI = async (
-  bookingCode: string
-): Promise<IBookingResponse> => {
-  const url = `/api/Booking/processCommitDeposit/${bookingCode}`;
-  
-  console.log(`🔍 Processing initial commitment deposit for booking: ${bookingCode}`);
-  
-  const apiClient = await initApiClient();
+
+/**
+ * Process commit deposit
+ */
+export const processCommitDepositAPI = async (bookingCode: string): Promise<IBookingResponse> => {
   try {
-    // Using POST method as indicated in the Swagger documentation
-    const response: AxiosResponse = await apiClient.post(url);
+    const token = await getToken();
+    if (!token) throw new Error("No token found!");
     
-    console.log(`🟢 Deposit processing response:`, response.data);
-    
-    // Check if the response contains success property and it's true
-    if (response.data && typeof response.data.success === 'boolean') {
-      // Important fix: directly return the original response data
-      // This preserves the original success and message properties
-      return response.data;
-    }
-    
-    // For backward compatibility or unusual response formats
-    if (response.status >= 200 && response.status < 300) {
-      // If response has data object with booking info
-      if (response.data && (response.data.id || response.data.bookingId)) {
-        return {
-          success: true,
-          message: "Deposit processed successfully",
-          data: response.data
-        };
+    const apiClient = await initApiClient();
+    const response = await apiClient.post(`/api/Booking/processCommitDeposit/${bookingCode}`, null, {
+      headers: {
+        Authorization: `Bearer ${token}`,
       }
-      
-      // Even with empty/null data but 2xx status, consider success
-      return {
-        success: true,
-        message: "Deposit processed successfully"
-      };
-    }
+    });
     
-    return {
-      success: false,
-      message: "Failed to process deposit commitment"
+    return response.data || {
+      success: true,
+      message: "Deposit processed successfully"
     };
+    
   } catch (error: any) {
-    console.error("🔴 Error processing initial deposit:", error);
-    
-    // Check if the error contains a successful response
-    // This is crucial based on your error log showing success:true in an error
-    if (error.response && error.response.data) {
-      // Critical fix: Some APIs return success:true in the error object
-      if (error.response.data.success === true) {
-        console.log("✅ Found success:true in error response - treating as success");
-        return {
-          success: true,
-          message: error.response.data.message || "Deposit processed successfully",
-          data: error.response.data.data
-        };
-      }
-      
-      // If explicit success:false is present, return that with the message
-      if (error.response.data.success === false) {
-        return {
-          success: false,
-          message: error.response.data.message || "Failed to process deposit commitment"
-        };
-      }
-    }
-    
-    // Handle other error scenarios with proper status code checking
-    if (error.response) {
-      console.error("API Error Response:", error.response.data);
-      
-      // Status code-based error messages
-      if (error.response.status === 401) {
-        return {
-          success: false,
-          message: "Authentication required to process this deposit"
-        };
-      } else if (error.response.status === 403) {
-        return {
-          success: false,
-          message: "You don't have permission to process this deposit"
-        };
-      }
-      
-      // Return server error message if available
-      return {
-        success: false,
-        message: error.response.data?.message || "Failed to process initial deposit",
-        errors: error.response.data?.errors
-      };
-    }
-    
-    // Network errors
+    console.error("Error processing deposit:", error);
     return {
       success: false,
-      message: error.message || "Network error or server unavailable"
+      message: error.message || "Failed to process deposit",
+      errors: []
     };
   }
 };

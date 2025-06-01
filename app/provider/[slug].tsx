@@ -15,21 +15,23 @@ import {
 import { useRouter } from "expo-router";
 import { useLocalSearchParams } from "expo-router";
 import Ionicons from "react-native-vector-icons/Ionicons";
+
 // API Utilities
 import {
   getProviderDetailAPI
 } from "@/utils/providerAPI";
 import { getDecorServiceByProviderAPI } from "@/utils/decorserviceAPI";
-import { getProductsByProviderAPI } from "@/utils/productAPI"; // Fixed import path
+import { getProductsByProviderAPI } from "@/utils/productAPI";
+
 // Import follow APIs
 import {
   followUserAPI,
   unfollowUserAPI,
 } from "@/utils/followAPI";
 import RenderHtml from 'react-native-render-html';
+
 // Components
 import ProductCard from "@/app/product/ProductCard";
-// Removed DecorCard import as it's not being used
 
 // Types
 import { IProvider } from "@/utils/providerAPI";
@@ -53,8 +55,8 @@ const processDecorService = (item: any): IDecor => ({
   basePrice: item.basePrice || 0,
   description: item.description || "No description",
   sublocation: item.sublocation,
-  province: item.province ,
-  address: item.address ,
+  province: item.province,
+  address: item.address,
   createAt: item.createAt || new Date().toISOString(),
   accountId: item.accountId || 0,
   decorCategoryId: item.decorCategoryId || 0,
@@ -75,18 +77,69 @@ const processDecorService = (item: any): IDecor => ({
         })
       : ["No Season"],
 });
-interface IRenderBioProps {
+
+// Interface for Bio component props
+interface IBioContentProps {
   bioText: string;
   contentWidth: number;
   textColor: string;
   primaryColor: string;
 }
+
+// Force update hook
 const useForceUpdate = () => {
   const [, setTick] = useState(0);
   const update = useCallback(() => {
     setTick(tick => tick + 1);
   }, []);
   return update;
+};
+
+// Bio Content Component
+const BioContent: React.FC<IBioContentProps> = ({ 
+  bioText, 
+  contentWidth, 
+  textColor, 
+  primaryColor 
+}) => {
+  const [expanded, setExpanded] = useState(false);
+  const MAX_BIO_LENGTH = 100;
+  
+  if (!bioText) return null;
+  
+  const shouldTruncate = bioText.length > MAX_BIO_LENGTH;
+  const displayText = shouldTruncate && !expanded 
+    ? bioText.substring(0, MAX_BIO_LENGTH) + "..." 
+    : bioText;
+  
+  const hasHtml = /<[a-z][\s\S]*>/i.test(bioText);
+  
+  return (
+    <View style={styles.bioWrapper}>
+      {hasHtml ? (
+        <RenderHtml
+          contentWidth={contentWidth}
+          source={{ html: displayText }}
+          tagsStyles={{
+            p: { fontSize: 15, lineHeight: 22, textAlign: 'center', color: textColor },
+            a: { color: primaryColor },
+          }}
+        />
+      ) : (
+        <Text style={[styles.bioText, { color: textColor }]}>
+          {displayText}
+        </Text>
+      )}
+      
+      {shouldTruncate && (
+        <TouchableOpacity onPress={() => setExpanded(!expanded)}>
+          <Text style={[styles.readMoreButton, { color: primaryColor }]}>
+            {expanded ? "Show Less" : "Read More"}
+          </Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
 };
 
 const ProviderDetailScreen: React.FC = () => {
@@ -114,67 +167,20 @@ const ProviderDetailScreen: React.FC = () => {
   const forceUpdate = useForceUpdate();
   
   // Helper function with default parameters for safety
-const getImageUrl = (imageItem: any = null, defaultImage: string = "https://via.placeholder.com/300"): string => {
-  if (!imageItem) return defaultImage;
-  if (typeof imageItem === 'string') return imageItem;
-  if (imageItem.imageURL) return imageItem.imageURL;
-  return defaultImage;
-};
-const BioContent = ({ bioText, contentWidth, textColor, primaryColor }: IRenderBioProps) => {
-  const [expanded, setExpanded] = React.useState(false);
-  const MAX_BIO_LENGTH = 100; // Character limit before truncation
-  
-  if (!bioText) return null;
-  
-  // Check if bio should be truncated
-  const shouldTruncate = bioText.length > MAX_BIO_LENGTH;
-  
-  // Create truncated text version
-  const displayText = shouldTruncate && !expanded 
-    ? bioText.substring(0, MAX_BIO_LENGTH) + "..." 
-    : bioText;
-  
-  // Check if bio contains HTML
-  const hasHtml = /<[a-z][\s\S]*>/i.test(bioText);
-  
-  return (
-    <View style={styles.bioWrapper}>
-      {hasHtml ? (
-        <RenderHtml
-          contentWidth={contentWidth}
-          source={{ html: displayText }}
-          tagsStyles={{
-            p: { fontSize: 15, lineHeight: 22, textAlign: 'center', color: textColor },
-            a: { color: primaryColor },
-            // Add styles for other common HTML tags if needed
-          }}
-        />
-      ) : (
-        <Text style={[styles.bioText, { color: textColor }]}>
-          {displayText}
-        </Text>
-      )}
-      
-      {shouldTruncate && (
-        <TouchableOpacity onPress={() => setExpanded(!expanded)}>
-          <Text style={[styles.readMoreButton, { color: primaryColor }]}>
-            {expanded ? "Show Less" : "Read More"}
-          </Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-};
+  const getImageUrl = (imageItem: any = null, defaultImage: string = "https://via.placeholder.com/300"): string => {
+    if (!imageItem) return defaultImage;
+    if (typeof imageItem === 'string') return imageItem;
+    if (imageItem.imageURL) return imageItem.imageURL;
+    return defaultImage;
+  };
+
   // Helper function with default parameters for safety
-const getSeasonName = (season: any = null, defaultName: string = 'Unknown Season'): string => {
-  if (typeof season === 'string') return season;
-  if (season && typeof season === 'object' && 'seasonName' in season) return season.seasonName;
-  return defaultName;
-};
+  const getSeasonName = (season: any = null, defaultName: string = 'Unknown Season'): string => {
+    if (typeof season === 'string') return season;
+    if (season && typeof season === 'object' && 'seasonName' in season) return season.seasonName;
+    return defaultName;
+  };
   
-  // Remove the unused formatDecorForCard function since we're not using DecorCard component
-  
-  // Navigate to messaging
   // Enhanced navigateToChat with contact addition
   const navigateToChat = async () => {
     if (!provider?.id) return;
@@ -182,8 +188,6 @@ const getSeasonName = (season: any = null, defaultName: string = 'Unknown Season
     try {
       // Try to add contact - whether it succeeds or says "already exists" doesn't matter
       await addContactAPI(provider.id);
-      
-      // Log removed for production
     } catch (error) {
       // Just log any errors, don't show to user
       console.log("Contact addition error:", error);
@@ -242,56 +246,7 @@ const getSeasonName = (season: any = null, defaultName: string = 'Unknown Season
     }
   }, [provider?.id, isFollowing, forceUpdate]);
 
-  // Run checkFollowStatus only when provider changes
-  useEffect(() => {
-    if (provider?.id) {
-      checkFollowStatus();
-    }
-  }, [provider?.id, checkFollowStatus]);
-  
-  // Define proper TypeScript interfaces
-interface IRenderBioProps {
-  bioText: string;
-  contentWidth: number;
-  textColor: string;
-  primaryColor: string;
-}
-
-// Convert to a proper functional component with default parameters
-const RenderBioContent = ({
-  bioText,
-  contentWidth = SCREEN_WIDTH - 32,
-  textColor = "#000",
-  primaryColor = PRIMARY_COLOR
-}: IRenderBioProps) => {
-  if (!bioText) return null;
-  
-  // Check if bio contains HTML
-  const hasHtml = /<[a-z][\s\S]*>/i.test(bioText);
-  
-  if (hasHtml) {
-    return (
-      <RenderHtml
-        contentWidth={contentWidth}
-        source={{ html: bioText }}
-        tagsStyles={{
-          p: { fontSize: 15, lineHeight: 22, textAlign: 'center', color: textColor },
-          a: { color: primaryColor },
-          // Add styles for other common HTML tags if needed
-        }}
-      />
-    );
-  } else {
-    // If no HTML, display as regular text
-    return (
-      <Text style={[styles.bioText, { color: textColor }]}>
-        {bioText}
-      </Text>
-    );
-  }
-};
-
-  // Final fixed handleFollowToggle without alreadyNotFollowing reference
+  // Final fixed handleFollowToggle
   const handleFollowToggle = async () => {
     if (!provider?.id) return;
 
@@ -431,7 +386,7 @@ const RenderBioContent = ({
     if (provider?.id) {
       checkFollowStatus();
     }
-  }, [provider, checkFollowStatus]);
+  }, [provider?.id]); // Remove checkFollowStatus from deps to avoid infinite loop
 
   // Trigger fetch on component mount or slug change
   useEffect(() => {
@@ -519,7 +474,7 @@ const RenderBioContent = ({
                 <TouchableOpacity
                   style={[
                     styles.followButton,
-                    isFollowing ? styles.unfollowButton : {}, // Style change for unfollow
+                    isFollowing ? styles.unfollowButton : {},
                     followLoading ? styles.disabledButton : {},
                   ]}
                   onPress={handleFollowToggle}
@@ -557,16 +512,16 @@ const RenderBioContent = ({
               </View>
             </View>
 
-          <View style={styles.bioContainer}>
-  {provider.bio && (
-    <BioContent
-      bioText={provider.bio}
-      contentWidth={SCREEN_WIDTH - 32}
-      textColor={colors.text}
-      primaryColor={PRIMARY_COLOR}
-    />
-  )}
-</View>
+            <View style={styles.bioContainer}>
+              {provider.bio && (
+                <BioContent
+                  bioText={provider.bio}
+                  contentWidth={SCREEN_WIDTH - 32}
+                  textColor={colors.text}
+                  primaryColor={PRIMARY_COLOR}
+                />
+              )}
+            </View>
 
             <View
               style={[
@@ -634,7 +589,7 @@ const RenderBioContent = ({
                 }
                 renderItem={({ item }) => {
                   // Extract province or sublocation for location display
-                  const location = item.sublocation ;
+                  const location = item.sublocation || item.province || "Unknown location";
                   
                   return (
                     <TouchableOpacity
@@ -681,17 +636,17 @@ const RenderBioContent = ({
                           </View>
                           
                           <View style={styles.seasonTags}>
-                          {Array.isArray(item.seasons) && item.seasons.slice(0, 2).map((season, index) => (
-                            <View 
-                              key={index} 
-                              style={styles.seasonTag}
-                            >
-                              <Text style={styles.seasonTagText}>
-                                {getSeasonName(season)}
-                              </Text>
-                            </View>
-                          ))}
-                        </View>
+                            {Array.isArray(item.seasons) && item.seasons.slice(0, 2).map((season, index) => (
+                              <View 
+                                key={index} 
+                                style={styles.seasonTag}
+                              >
+                                <Text style={styles.seasonTagText}>
+                                  {getSeasonName(season)}
+                                </Text>
+                              </View>
+                            ))}
+                          </View>
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -700,7 +655,7 @@ const RenderBioContent = ({
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.horizontalDecorList}
-                initialNumToRender={3} // Render more items initially
+                initialNumToRender={3}
               />
             </View>
           ) : (
@@ -877,13 +832,13 @@ const styles = StyleSheet.create({
     minWidth: 110,
   },
   unfollowButton: {
-    backgroundColor: "#FF5252", // Red color for unfollow state
+    backgroundColor: "#FF5252",
   },
   followingButton: {
-    backgroundColor: "#4CAF50", // Green for following state
+    backgroundColor: "#4CAF50",
   },
   messageButton: {
-    backgroundColor: "#FF9500", // Orange for message button
+    backgroundColor: "#FF9500",
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
@@ -911,6 +866,15 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     textAlign: "center",
+  },
+  bioWrapper: {
+    alignItems: 'center',
+  },
+  readMoreButton: {
+    textAlign: "center",
+    marginTop: 8, 
+    fontWeight: "bold",
+    paddingVertical: 4,
   },
   contactInfoContainer: {
     borderTopWidth: 1,
@@ -1013,7 +977,7 @@ const styles = StyleSheet.create({
   
   // Updated DecorCard styles to match DecorListScreen
   decorCardWrapper: {
-    width: SCREEN_WIDTH * 0.46, // Make cards smaller to fit more on screen
+    width: SCREEN_WIDTH * 0.46,
     maxWidth: 180,
     marginRight: 8,
   },
@@ -1031,7 +995,7 @@ const styles = StyleSheet.create({
   cardImageContainer: {
     position: 'relative',
     width: '100%',
-    height: 120, // Make image height smaller
+    height: 120,
   },
   cardImage: {
     width: '100%',
@@ -1039,7 +1003,7 @@ const styles = StyleSheet.create({
   },
   cardContent: {
     padding: 10,
-    backgroundColor: '#f5f5f5', // Light gray background to match screenshot
+    backgroundColor: '#f5f5f5',
   },
   cardTitle: {
     fontSize: 16,
@@ -1072,30 +1036,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: PRIMARY_COLOR,
   },
-  // Legacy styles kept for backward compatibility
-  priceTag: {
-    position: "absolute",
-    top: 10,
-    right: 10,
-    backgroundColor: PRIMARY_COLOR,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-  },
-  priceText: {
-    color: "white",
-    fontWeight: "bold",
-    fontSize: 14,
-  },
-  bioWrapper: {
-  alignItems: 'center',
-},
-readMoreButton: {
-  textAlign: "center",
-  marginTop: 8, 
-  fontWeight: "bold",
-  paddingVertical: 4,
-}
 });
 
 export default ProviderDetailScreen;

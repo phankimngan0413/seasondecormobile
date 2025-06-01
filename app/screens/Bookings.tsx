@@ -515,7 +515,7 @@ const handleRateBooking = (booking: IBooking): void => {
     });
   };
 
-  const renderHeader = (): React.ReactElement => (
+   const renderHeader = (): React.ReactElement => (
     <View style={[styles.header, { borderBottomColor: colors.border }]}>
       <TouchableOpacity
         style={styles.backButton}
@@ -524,14 +524,23 @@ const handleRateBooking = (booking: IBooking): void => {
         <Ionicons name="arrow-back" size={24} color={colors.text} />
       </TouchableOpacity>
       <Text style={[styles.headerTitle, { color: colors.text }]}>My Bookings</Text>
-      <TouchableOpacity
-        style={styles.quotationButton}
-        onPress={() => router.push('/quotation/list')}
-      >
-        <Ionicons name="document-text-outline" size={24} color={colors.text} />
-      </TouchableOpacity>
+      <View style={styles.headerRightButtons}>
+        <TouchableOpacity
+          style={styles.headerIconButton}
+          onPress={() => router.push('/(tabs)/home')}
+        >
+          <Ionicons name="home-outline" size={24} color={colors.text} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.headerIconButton}
+          onPress={() => router.push('/quotation/list')}
+        >
+          <Ionicons name="document-text-outline" size={24} color={colors.text} />
+        </TouchableOpacity>
+      </View>
     </View>
   );
+
 
   const renderFilterTabs = (): React.ReactElement => (
     <View style={styles.filterContainer}>
@@ -1153,6 +1162,14 @@ rateButtonText: {
   color: '#fff',
   fontSize: 12,
   fontWeight: '500',
+},
+headerRightButtons: {
+  flexDirection: 'row',
+  alignItems: 'center',
+},
+headerIconButton: {
+  padding: 8,
+  marginLeft: 4,
 },
 });
 

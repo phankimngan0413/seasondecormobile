@@ -12,7 +12,45 @@ import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
 import { getReviewByProductIdAPI, IReview } from "@/utils/reviewAPI";
 import { addFavoriteProductAPI } from "@/utils/favoriteAPI";
+
 const { width } = Dimensions.get("window");
+
+// Function to clean HTML content and extract plain text
+const cleanHtmlContent = (htmlString: string): string => {
+  if (!htmlString) return '';
+  
+  // Remove HTML tags and decode HTML entities
+  let cleanText = htmlString
+    .replace(/<[^>]*>/g, '') // Remove HTML tags
+    .replace(/&nbsp;/g, ' ') // Replace &nbsp; with space
+    .replace(/&amp;/g, '&') // Replace &amp; with &
+    .replace(/&lt;/g, '<') // Replace &lt; with <
+    .replace(/&gt;/g, '>') // Replace &gt; with >
+    .replace(/&quot;/g, '"') // Replace &quot; with "
+    .replace(/&#39;/g, "'") // Replace &#39; with '
+    .replace(/&apos;/g, "'") // Replace &apos; with '
+    .trim(); // Remove leading/trailing whitespace
+  
+  return cleanText;
+};
+
+// Check if content contains HTML tags
+const containsHtml = (content: string): boolean => {
+  if (!content) return false;
+  return /<[^>]*>/g.test(content);
+};
+
+// Function to safely process text content
+const processTextContent = (text: string | undefined): string => {
+  if (!text) return '';
+  
+  // If contains HTML, clean it
+  if (containsHtml(text)) {
+    return cleanHtmlContent(text);
+  }
+  
+  return text.trim();
+};
 
 const ProductDetailScreen = () => {
   const { id } = useLocalSearchParams(); 
@@ -27,8 +65,7 @@ const ProductDetailScreen = () => {
   const [reviews, setReviews] = useState<IReview[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
-const [favoriteLoading, setFavoriteLoading] = useState(false);
-
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
 
   const { theme } = useTheme();
   const validTheme = theme as "light" | "dark";
@@ -47,7 +84,20 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
     try {
       const data = await getProductDetailAPI(Number(id)); 
       if (data) {
-        setProduct(data);
+        // Clean HTML content from product data
+        const cleanedProduct = {
+          ...data,
+          productName: processTextContent(data.productName),
+          description: processTextContent(data.description),
+          madeIn: processTextContent(data.madeIn),
+          shipFrom: processTextContent(data.shipFrom),
+          provider: data.provider ? {
+            ...data.provider,
+            businessName: processTextContent(data.provider.businessName),
+          } : data.provider
+        };
+        
+        setProduct(cleanedProduct);
         // After product data is loaded, fetch reviews
         fetchProductReviews(Number(id));
       } else {
@@ -59,6 +109,7 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
       setLoading(false);
     }
   };
+
   const handleAddToFavorite = async () => {
     if (!product) return;
   
@@ -93,6 +144,7 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
       setFavoriteLoading(false);
     }
   };
+
   const fetchProductReviews = async (productId: number) => {
     try {
       setReviewsLoading(true);
@@ -100,14 +152,25 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
       
       // Kiểm tra cấu trúc dữ liệu và gán giá trị đúng
       if (response) {
+        let reviewsData: any[] = [];
+        
         if (Array.isArray(response)) {
-          setReviews(response);
+          reviewsData = response;
         } else if (response.data && Array.isArray(response.data)) {
-          setReviews(response.data);
+          reviewsData = response.data;
         } else {
           console.log("❌ Không thể xác định cấu trúc dữ liệu review:", response);
-          setReviews([]);
+          reviewsData = [];
         }
+        
+        // Clean HTML content from reviews
+        const cleanedReviews = reviewsData.map(review => ({
+          ...review,
+          comment: processTextContent(review.comment),
+          userName: processTextContent(review.userName)
+        }));
+        
+        setReviews(cleanedReviews);
       } else {
         setReviews([]);
       }
@@ -335,37 +398,37 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
         </View>
 
         <View style={styles.actionButtons}>
-        <TouchableOpacity 
-  style={[
-    styles.saveButton, 
-    { 
-      borderColor: colors.primary, 
-      backgroundColor: isFavorite ? colors.primary : colors.card 
-    }
-  ]}
-  onPress={handleAddToFavorite}
-  disabled={favoriteLoading}
->
-  {favoriteLoading ? (
-    <ActivityIndicator size="small" color={isFavorite ? "white" : colors.primary} />
-  ) : (
-    <>
-      <Ionicons 
-        name={isFavorite ? "heart" : "heart-outline"} 
-        size={18} 
-        color={isFavorite ? "white" : colors.primary} 
-      />
-      <Text 
-        style={[
-          styles.saveButtonText, 
-          { color: isFavorite ? "white" : colors.primary }
-        ]}
-      >
-        {isFavorite ? "Saved" : "Save"}
-      </Text>
-    </>
-  )}
-</TouchableOpacity>
+          <TouchableOpacity 
+            style={[
+              styles.saveButton, 
+              { 
+                borderColor: colors.primary, 
+                backgroundColor: isFavorite ? colors.primary : colors.card 
+              }
+            ]}
+            onPress={handleAddToFavorite}
+            disabled={favoriteLoading}
+          >
+            {favoriteLoading ? (
+              <ActivityIndicator size="small" color={isFavorite ? "white" : colors.primary} />
+            ) : (
+              <>
+                <Ionicons 
+                  name={isFavorite ? "heart" : "heart-outline"} 
+                  size={18} 
+                  color={isFavorite ? "white" : colors.primary} 
+                />
+                <Text 
+                  style={[
+                    styles.saveButtonText, 
+                    { color: isFavorite ? "white" : colors.primary }
+                  ]}
+                >
+                  {isFavorite ? "Saved" : "Save"}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
           
           <TouchableOpacity 
             style={[styles.addToCartButton, { backgroundColor: colors.primary }]} 
@@ -431,7 +494,7 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
         </View>
       </View>
 
-      {/* Reviews Section - Thiết kế cải tiến */}
+      {/* Reviews Section */}
       <View style={[styles.reviewsContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
         {/* Header với icon và số lượng review */}
         <View style={styles.reviewsHeader}>
@@ -506,7 +569,7 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
                   {review.userName || 'Anonymous User'}
                 </Text>
                 
-                {/* Review Comment */}
+                {/* Review Comment - Now cleaned of HTML */}
                 <Text style={[styles.reviewComment, { color: colors.text }]}>
                   {review.comment}
                 </Text>
@@ -546,26 +609,10 @@ const [favoriteLoading, setFavoriteLoading] = useState(false);
           </View>
         )}
       </View>
-
-      {/* Additional Info Section - Specs and Shipping
-      <View style={[styles.additionalInfoContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <TouchableOpacity style={styles.additionalInfoItem}>
-          <Text style={[styles.additionalInfoTitle, { color: colors.text }]}>
-            <Ionicons name="list" size={18} color={colors.primary} /> Product Specifications
-          </Text>
-          <Ionicons name="chevron-forward" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <View style={[styles.additionalInfoDivider, { backgroundColor: colors.border }]} />
-        <TouchableOpacity style={styles.additionalInfoItem}>
-          <Text style={[styles.additionalInfoTitle, { color: colors.text }]}>
-            <Ionicons name="gift" size={18} color={colors.primary} /> Shipping & Returns
-          </Text>
-          <Ionicons name="chevron-forward" size={20} color={colors.text} />
-        </TouchableOpacity>
-      </View> */}
     </ScrollView>
   );
 };
+
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
@@ -931,34 +978,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: "#0096b5",
     marginRight: 4,
-  },
-  
-  // Additional Info
-  additionalInfoContainer: {
-    marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 30,
-    borderRadius: 10,
-    padding: 6,
-    borderWidth: 1,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  additionalInfoItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-  },
-  additionalInfoTitle: {
-    fontSize: 16,
-  },
-  additionalInfoDivider: {
-    height: 1,
-    width: "100%",
   },
   
   // Reviews Section - Cải tiến

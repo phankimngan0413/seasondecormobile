@@ -18,6 +18,7 @@ type CalendarPickerProps = {
   onSelectDate: (date: Date) => void;
   isVisible: boolean;
   onClose: () => void;
+  minDate?: Date; // Add minDate prop
 };
 
 // Get current date in Vietnam timezone (GMT+7)
@@ -34,6 +35,20 @@ const getVietnamDate = () => {
   // Create a new date adjusted to Vietnam time
   const vietnamDate = new Date(now.getTime() + offsetDiff * 60 * 1000);
   return vietnamDate;
+};
+
+// Helper function to check if a date is before another date (ignoring time)
+const isDateBefore = (date1: Date, date2: Date): boolean => {
+  const d1 = new Date(date1.getFullYear(), date1.getMonth(), date1.getDate());
+  const d2 = new Date(date2.getFullYear(), date2.getMonth(), date2.getDate());
+  return d1 < d2;
+};
+
+// Helper function to check if two dates are the same day
+const isSameDay = (date1: Date, date2: Date): boolean => {
+  return date1.getFullYear() === date2.getFullYear() &&
+         date1.getMonth() === date2.getMonth() &&
+         date1.getDate() === date2.getDate();
 };
 
 // Component for year selector
@@ -103,7 +118,8 @@ const CalendarPicker = ({
   selectedDate, 
   onSelectDate, 
   isVisible, 
-  onClose 
+  onClose,
+  minDate // Add minDate prop
 }: CalendarPickerProps) => {
   const { theme } = useTheme();
   const validTheme = theme as "light" | "dark";
@@ -166,6 +182,15 @@ const CalendarPicker = ({
   };
 
   const handleDateSelection = (day: number) => {
+    // Create a new date using the selected calendar date
+    const selectedDate = new Date(currentYear, currentMonth, day);
+    
+    // Check if the selected date is before minDate
+    if (minDate && isDateBefore(selectedDate, minDate)) {
+      // Don't allow selection of dates before minDate
+      return;
+    }
+    
     // Create a new date using the selected calendar date
     // but convert to Vietnam timezone
     const localDate = new Date(currentYear, currentMonth, day);
@@ -239,24 +264,31 @@ const CalendarPicker = ({
         currentMonth === todayMonth && 
         currentYear === todayYear;
       
+      // Check if this day is disabled (before minDate)
+      const isDisabled = minDate && isDateBefore(date, minDate);
+      
       days.push(
         <TouchableOpacity
           key={`day-${day}`}
           style={[
             styles.calendarCell,
-            isSelected && [styles.selectedCalendarCell, { backgroundColor: "#5fc1f1" }]
+            isSelected && [styles.selectedCalendarCell, { backgroundColor: "#5fc1f1" }],
+            isDisabled && styles.disabledCalendarCell
           ]}
           onPress={() => handleDateSelection(day)}
+          disabled={isDisabled}
         >
           <View style={[
             isToday && styles.todayIndicator, 
-            isSelected && { backgroundColor: 'transparent' }
+            isSelected && { backgroundColor: 'transparent' },
+            isDisabled && styles.disabledIndicator
           ]}>
             <Text style={[
               styles.calendarDay,
               { color: isSelected ? '#fff' : colors.text },
               isSelected && styles.selectedCalendarDay,
-              isToday && !isSelected && styles.todayCalendarDay
+              isToday && !isSelected && styles.todayCalendarDay,
+              isDisabled && styles.disabledCalendarDay
             ]}>
               {day}
             </Text>
@@ -331,6 +363,19 @@ const CalendarPicker = ({
                   <View style={styles.calendarGridContainer}>
                     {renderCalendarDays()}
                   </View>
+                  
+                  {/* Display minimum date info if provided */}
+                  {minDate && (
+                    <View style={styles.minDateInfoContainer}>
+                      <Text style={[styles.minDateInfoText, { color: colors.textSecondary }]}>
+                        Minimum date: {minDate.toLocaleDateString([], { 
+                          year: 'numeric', 
+                          month: 'long', 
+                          day: 'numeric' 
+                        })}
+                      </Text>
+                    </View>
+                  )}
                   
                   {/* Display current time in Vietnam timezone */}
                   <View style={styles.timeInfoContainer}>
@@ -420,11 +465,18 @@ const styles = StyleSheet.create({
   selectedCalendarCell: {
     borderRadius: 20
   },
+  disabledCalendarCell: {
+    opacity: 0.3
+  },
   calendarDay: {
     fontSize: 16
   },
   selectedCalendarDay: {
     fontWeight: 'bold'
+  },
+  disabledCalendarDay: {
+    color: '#ccc',
+    textDecorationLine: 'line-through'
   },
   // Today highlight styles
   todayIndicator: {
@@ -439,6 +491,19 @@ const styles = StyleSheet.create({
   todayCalendarDay: {
     fontWeight: 'bold',
     color: '#5fc1f1'
+  },
+  disabledIndicator: {
+    borderColor: '#ccc',
+    backgroundColor: 'transparent'
+  },
+  minDateInfoContainer: {
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 4
+  },
+  minDateInfoText: {
+    fontSize: 12,
+    fontStyle: 'italic'
   },
   timeInfoContainer: {
     alignItems: 'center',

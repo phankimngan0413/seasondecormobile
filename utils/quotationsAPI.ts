@@ -1,6 +1,19 @@
 import { initApiClient } from "@/config/axiosConfig";
 import { getToken, getUserIdFromToken } from "@/services/auth";
+export interface ICancelType {
+  id: number;
+  type: string;
+  name?: string;
+  description?: string;
+  isActive?: boolean;
+}
 
+export interface ICancelTypeResponse {
+  success: boolean;
+  message?: string;
+  errors?: string[];
+  data?: ICancelType[];
+}
 /**
  * Get paginated quotations for the current customer
  */
@@ -540,83 +553,213 @@ export const addProductToQuotationAPI = async (
     };
   }
 };
-export const rejectQuotationAPI = async (quotationCode: string, rejectReason: string = ''): Promise<any> => {
+// ✅ Thêm các API này vào file quotationsAPI.ts
+
+// API Request to Change Quotation
+export const requestToChangeQuotationAPI = async (
+  quotationCode: string,
+  changeReason: string
+): Promise<{
+  success: boolean;
+  message?: string;
+}> => {
+  const url = `/api/Quotation/requestToChangeQuotation/${quotationCode}`;
+
+  const apiClient = await initApiClient();
+  const token = await getToken();
+  
+  if (!token) {
+    return Promise.reject(new Error("Unauthorized: Please log in."));
+  }
+
+  console.log("🟡 API Endpoint:", apiClient.defaults.baseURL + url);
+
   try {
-    const apiClient = await initApiClient();
-    const token = await getToken();
-    
-    if (!token) {
-      console.error("No authentication token found");
-      return {
-        success: false,
-        message: "Unauthorized: Please log in.",
-        errors: [],
-        data: null
-      };
-    }
-    
-    console.log(`🔍 Sending requestDeniedQuotation request for code: ${quotationCode}`);
-    
-    // Create the URL with the optional reject reason as a query parameter
-    let url = `/api/Quotation/requestDeniedQuotation/${quotationCode}`;
-    if (rejectReason && rejectReason.trim() !== '') {
-      url = `${url}?rejectReason=${encodeURIComponent(rejectReason.trim())}`;
-    }
-    
-    // Send the request to reject the quotation
-    const response = await apiClient.put(
-      url,
-      null, // No body needed
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+    const response = await apiClient.put(url, null, {
+      params: {
+        changeReason: changeReason
+      },
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
       }
-    );
-    
-    console.log(`🔍 Reject quotation response:`, response.data);
-    
-    // Handle null response case
-    if (response.data === null) {
-      console.log(`🔍 API returned null - assuming success`);
+    });
+
+    console.log("✅ Request Change Quotation Response:", response.data);
+
+    // Handle successful response
+    if (response.status === 200) {
       return {
         success: true,
-        message: "Quotation rejected successfully",
-        data: null
+        message: "Change request submitted successfully"
       };
     }
-    
-    // Return the API response if it exists
-    return response.data;
-    
-  } catch (error: any) {
-    console.error("🔴 Error rejecting quotation:", error);
-    
-    // If the error contains a response from the server, use that information
-    if (error.response && error.response.data) {
-      console.log("🔴 Server error response:", error.response.data);
-      
-      // If the server response is already in our expected format
-      if (typeof error.response.data === 'object' && 'success' in error.response.data) {
-        return error.response.data;
-      }
-      
-      // Otherwise create a standardized error response
-      return {
-        success: false,
-        message: error.response.data.message || "Failed to reject quotation",
-        errors: error.response.data.errors || [],
-        data: null
-      };
-    }
-    
-    // For network errors or other issues
+
     return {
       success: false,
-      message: error.message || "Network error or server unavailable",
-      errors: [],
-      data: null
+      message: "Failed to submit change request"
     };
+
+  } catch (error: any) {
+    console.error("🔴 Request Change Quotation API Error:", error);
+
+    if (error.response) {
+      // Server responded with error status
+      const statusCode = error.response.status;
+      const errorMessage = error.response.data?.message || error.response.data || "Unknown error";
+
+      switch (statusCode) {
+        case 401:
+          return Promise.reject(new Error("Unauthorized. Please login again."));
+        case 403:
+          return Promise.reject(new Error("You don't have permission to perform this action."));
+        case 404:
+          return Promise.reject(new Error("Quotation not found."));
+        case 400:
+          return Promise.reject(new Error(`Bad request: ${errorMessage}`));
+        default:
+          return Promise.reject(new Error(`Server error: ${errorMessage}`));
+      }
+    }
+
+    if (error.message.includes("Network Error")) {
+      return Promise.reject(new Error("⚠️ Cannot connect to server. Please check your internet connection."));
+    }
+
+    return Promise.reject(new Error("Network error, please try again."));
+  }
+};
+
+// API Request to Cancel Quotation
+export const requestToCancelQuotationAPI = async (
+  quotationCode: string,
+  quotationCancelId: number,
+  cancelReason: string
+): Promise<{
+  success: boolean;
+  message?: string;
+}> => {
+  const url = `/api/Quotation/requestCancelQuotation/${quotationCode}`;
+
+  const apiClient = await initApiClient();
+  const token = await getToken();
+  
+  if (!token) {
+    return Promise.reject(new Error("Unauthorized: Please log in."));
+  }
+
+  console.log("🟡 API Endpoint:", apiClient.defaults.baseURL + url);
+
+  try {
+    const response = await apiClient.put(url, null, {
+      params: {
+        quotationCancelId: quotationCancelId,
+        cancelReason: cancelReason
+      },
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    console.log("✅ Request Cancel Quotation Response:", response.data);
+
+    // Handle successful response
+    if (response.status === 200) {
+      return {
+        success: true,
+        message: "Cancellation request submitted successfully"
+      };
+    }
+
+    return {
+      success: false,
+      message: "Failed to submit cancellation request"
+    };
+
+  } catch (error: any) {
+    console.error("🔴 Request Cancel Quotation API Error:", error);
+
+    if (error.response) {
+      // Server responded with error status
+      const statusCode = error.response.status;
+      const errorMessage = error.response.data?.message || error.response.data || "Unknown error";
+
+      switch (statusCode) {
+        case 401:
+          return Promise.reject(new Error("Unauthorized. Please login again."));
+        case 403:
+          return Promise.reject(new Error("You don't have permission to perform this action."));
+        case 404:
+          return Promise.reject(new Error("Quotation not found."));
+        case 400:
+          return Promise.reject(new Error(`Bad request: ${errorMessage}`));
+        default:
+          return Promise.reject(new Error(`Server error: ${errorMessage}`));
+      }
+    }
+
+    if (error.message.includes("Network Error")) {
+      return Promise.reject(new Error("⚠️ Cannot connect to server. Please check your internet connection."));
+    }
+
+    return Promise.reject(new Error("Network error, please try again."));
+  }
+};
+
+// API để lấy danh sách cancel types (nếu cần)
+export interface ICancelType {
+  id: number;
+  type: string;
+  description?: string;
+}
+
+export const getCancelTypesAPI = async (): Promise<ICancelType[]> => {
+  const url = "/api/CancelType/getList"; // Adjust endpoint if needed
+
+  const apiClient = await initApiClient();
+  const token = await getToken();
+  
+  if (!token) {
+    return Promise.reject(new Error("Unauthorized: Please log in."));
+  }
+
+  console.log("🟡 API Endpoint:", apiClient.defaults.baseURL + url);
+
+  try {
+    const response = await apiClient.get(url, {
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    // Handle response data properly
+    const responseData = response.data as any;
+
+    if (Array.isArray(responseData)) {
+      return responseData as ICancelType[];
+    }
+
+    // Handle case where API returns object with data property
+    if (responseData && typeof responseData === 'object' && 'data' in responseData && Array.isArray(responseData.data)) {
+      return responseData.data as ICancelType[];
+    }
+
+    return [];
+
+  } catch (error: any) {
+    console.error("🔴 Get Cancel Types API Error:", error);
+
+    if (error.response && error.response.status === 404) {
+      // Return empty array if no cancel types found
+      return [];
+    }
+
+    if (error.message.includes("Network Error")) {
+      return Promise.reject(new Error("⚠️ Cannot connect to server. Please check your internet connection."));
+    }
+
+    return Promise.reject(new Error("Network error, please try again."));
   }
 };
