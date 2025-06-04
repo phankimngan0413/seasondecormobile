@@ -350,70 +350,7 @@ export const createBookingAPIAlternative = async (bookingData: IBookingRequest):
 /**
  * Helper function for debugging array formats
  */
-export const debugArrayFormats = async (bookingData: IBookingRequest): Promise<void> => {
-  const token = await getToken();
-  if (!token) return;
-  
-  console.log("🧪 Testing different array formats...");
-  
-  // Test Format 1: Array notation ThemeColorIds[0], ThemeColorIds[1]
-  if (Array.isArray(bookingData.themeColorIds)) {
-    console.log("Format 1 - Array notation: ThemeColorIds[0]=1, ThemeColorIds[1]=2");
-    bookingData.themeColorIds.forEach((colorId, index) => {
-      console.log(`ThemeColorIds[${index}]=${colorId}`);
-    });
-  }
-  
-  // Test Format 2: Repeated field names
-  if (Array.isArray(bookingData.themeColorIds)) {
-    console.log("Format 2 - Repeated names: ThemeColorIds=1, ThemeColorIds=2");
-    bookingData.themeColorIds.forEach((colorId) => {
-      console.log(`ThemeColorIds=${colorId}`);
-    });
-  }
-  
-  // Test Format 3: JSON string
-  if (Array.isArray(bookingData.themeColorIds)) {
-    console.log("Format 3 - JSON string: ThemeColorIds='[1,2]'");
-    console.log(`ThemeColorIds=${JSON.stringify(bookingData.themeColorIds)}`);
-  }
-  
-  console.log("🔍 Try these formats if current one fails");
-};
-export const testArrayFormats = async (bookingData: IBookingRequest): Promise<void> => {
-  const token = await getToken();
-  if (!token) return;
-  
-  console.log("🧪 Testing different array formats...");
-  
-  // Test Format 1: Array notation ThemeColorIds[0], ThemeColorIds[1]
-  const formData1 = new FormData();
-  if (Array.isArray(bookingData.themeColorIds)) {
-    bookingData.themeColorIds.forEach((colorId, index) => {
-      formData1.append(`ThemeColorIds[${index}]`, String(colorId));
-    });
-  }
-  console.log("Format 1 - Array notation: ThemeColorIds[0]=1, ThemeColorIds[1]=2");
-  
-  // Test Format 2: Repeated field names
-  const formData2 = new FormData();
-  if (Array.isArray(bookingData.themeColorIds)) {
-    bookingData.themeColorIds.forEach((colorId) => {
-      formData2.append('ThemeColorIds', String(colorId));
-    });
-  }
-  console.log("Format 2 - Repeated names: ThemeColorIds=1, ThemeColorIds=2");
-  
-  // Test Format 3: JSON string
-  const formData3 = new FormData();
-  if (Array.isArray(bookingData.themeColorIds)) {
-    formData3.append('ThemeColorIds', JSON.stringify(bookingData.themeColorIds));
-  }
-  console.log("Format 3 - JSON string: ThemeColorIds='[1,2]'");
-  
-  // Log all formats for debugging
-  console.log("🔍 Try these formats if current one fails");
-};
+
 export const createBookingAPIAxios = async (bookingData: IBookingRequest): Promise<IBookingResponse> => {
   try {
     const token = await getToken();

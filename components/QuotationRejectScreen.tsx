@@ -20,14 +20,53 @@ import { Colors } from '@/constants/Colors';
 import { 
   requestToChangeQuotationAPI, 
   requestToCancelQuotationAPI,
-  getCancelTypesAPI,
-  ICancelType 
 } from '@/utils/quotationsAPI';
+import {
+  getAllCancelTypesAPI,
+  ICancelType 
+} from '@/utils/bookingAPI';
 
 const PRIMARY_COLOR = "#5fc1f1";
 const CHANGE_COLOR = "#4f46e5"; // Indigo for change requests
 const CANCEL_COLOR = "#ef4444"; // Red for cancel
 const WARNING_COLOR = "#ff9500";
+
+// Function to clean HTML content and extract plain text
+const cleanHtmlContent = (htmlString: string): string => {
+  if (!htmlString) return '';
+  
+  // Remove HTML tags and decode HTML entities
+  let cleanText = htmlString
+    .replace(/<[^>]*>/g, '') // Remove HTML tags
+    .replace(/&nbsp;/g, ' ') // Replace &nbsp; with space
+    .replace(/&amp;/g, '&') // Replace &amp; with &
+    .replace(/&lt;/g, '<') // Replace &lt; with <
+    .replace(/&gt;/g, '>') // Replace &gt; with >
+    .replace(/&quot;/g, '"') // Replace &quot; with "
+    .replace(/&#39;/g, "'") // Replace &#39; with '
+    .replace(/&apos;/g, "'") // Replace &apos; with '
+    .trim(); // Remove leading/trailing whitespace
+  
+  return cleanText;
+};
+
+// Check if content contains HTML tags
+const containsHtml = (content: string): boolean => {
+  if (!content) return false;
+  return /<[^>]*>/g.test(content);
+};
+
+// Function to safely process text content
+const processTextContent = (text: string | undefined): string => {
+  if (!text) return '';
+  
+  // If contains HTML, clean it
+  if (containsHtml(text)) {
+    return cleanHtmlContent(text);
+  }
+  
+  return text.trim();
+};
 
 // Types for action selection
 type ActionType = 'change' | 'cancel';
@@ -87,10 +126,31 @@ const QuotationRejectScreen: React.FC<QuotationRejectScreenProps> = ({
   const fetchCancelTypes = async () => {
     try {
       setLoadingCancelTypes(true);
-      const types = await getCancelTypesAPI();
-      setCancelTypes(types);
+      const response = await getAllCancelTypesAPI();
+      
+      // Handle different response formats
+      let types: ICancelType[] = [];
+      
+      if (Array.isArray(response)) {
+        // Direct array response
+        types = response;
+      } else if (response && typeof response === 'object' && 'data' in response && Array.isArray(response.data)) {
+        // Response with data wrapper
+        types = response.data;
+      } else {
+        types = [];
+      }
+      
+      // Clean HTML content from cancel types
+      const cleanedTypes = types.map(cancelType => ({
+        ...cancelType,
+        type: processTextContent(cancelType.type),
+        name: cancelType.name ? processTextContent(cancelType.name) : undefined,
+        description: cancelType.description ? processTextContent(cancelType.description) : undefined
+      }));
+      
+      setCancelTypes(cleanedTypes);
     } catch (error) {
-      console.error('Error fetching cancel types:', error);
       setCancelTypes([]);
     } finally {
       setLoadingCancelTypes(false);
@@ -100,8 +160,10 @@ const QuotationRejectScreen: React.FC<QuotationRejectScreenProps> = ({
   const validateForm = (): boolean => {
     const newErrors: { cancelType?: string; comments?: string } = {};
 
-    // Check comments for all actions
-    if (!additionalComments.trim()) {
+    // Clean and validate comments
+    const cleanedComments = processTextContent(additionalComments);
+    
+    if (!cleanedComments) {
       if (selectedAction === 'change') {
         newErrors.comments = "Please provide details about what you'd like changed";
       } else {
@@ -124,6 +186,66 @@ const QuotationRejectScreen: React.FC<QuotationRejectScreenProps> = ({
     setErrors({});
   };
 
+  // Helper function to check if API response indicates success
+  const isApiResponseSuccessful = (result: any): boolean => {
+    // If result is null or undefined, it's not successful
+    if (!result) {
+      return false;
+    }
+    
+    // If result is a boolean true, it's successful
+    if (result === true) {
+      return true;
+    }
+    
+    // If result is an object, check for success indicators
+    if (typeof result === 'object') {
+      // Check for explicit success property
+      if ('success' in result && result.success === true) {
+        return true;
+      }
+      
+      // Check for HTTP status codes indicating success
+      if ('status' in result && typeof result.status === 'number' && result.status >= 200 && result.status < 300) {
+        return true;
+      }
+      
+      // Check for common success indicators in message
+      if ('message' in result && typeof result.message === 'string') {
+        const messageText = result.message.toLowerCase();
+        if (messageText.includes('success') || 
+            messageText.includes('submitted') || 
+            messageText.includes('completed') ||
+            messageText.includes('awaiting') ||
+            messageText.includes('approved')) {
+          return true;
+        }
+      }
+      
+      // Check for errors property being empty/null
+      if ('errors' in result && (result.errors === null || (Array.isArray(result.errors) && result.errors.length === 0))) {
+        return true;
+      }
+      
+      // If no explicit success/error indicators and it's an object, assume success
+      if (!('success' in result) && !('error' in result) && !('message' in result)) {
+        return true;
+      }
+      
+      return false;
+    }
+    
+    return false;
+  };
+
+  // Helper function to extract message from API response
+  const getMessageFromResponse = (result: any, defaultMessage: string): string => {
+    if (result && typeof result === 'object' && 'message' in result && typeof result.message === 'string') {
+      return result.message;
+    }
+    return defaultMessage;
+  };
+
   const handleSubmit = async () => {
     if (!validateForm()) {
       return;
@@ -132,14 +254,22 @@ const QuotationRejectScreen: React.FC<QuotationRejectScreenProps> = ({
     try {
       setIsSubmitting(true);
 
+      // Clean the comments before submitting
+      const cleanedComments = processTextContent(additionalComments);
+
       if (selectedAction === 'change') {
         // Submit change request
-        const result = await requestToChangeQuotationAPI(quotationCode, additionalComments.trim());
+        const result = await requestToChangeQuotationAPI(quotationCode, cleanedComments);
         
-        if (result.success) {
+        if (isApiResponseSuccessful(result)) {
+          const successMessage = getMessageFromResponse(
+            result, 
+            'Your change request has been submitted. The provider will review and update the quotation.'
+          );
+            
           Alert.alert(
             'Success',
-            'Your change request has been submitted. The provider will review and update the quotation.',
+            successMessage,
             [
               {
                 text: 'OK',
@@ -151,7 +281,8 @@ const QuotationRejectScreen: React.FC<QuotationRejectScreenProps> = ({
             ]
           );
         } else {
-          Alert.alert('Error', result.message || 'Failed to submit change request');
+          const errorMessage = getMessageFromResponse(result, 'Failed to submit change request');
+          Alert.alert('Error', errorMessage);
         }
       } else {
         // Submit cancel request
@@ -159,14 +290,19 @@ const QuotationRejectScreen: React.FC<QuotationRejectScreenProps> = ({
         
         const result = await requestToCancelQuotationAPI(
           quotationCode, 
-          selectedCancelType, 
-          additionalComments.trim()
+          selectedCancelType,  // This is now quotationCancelId 
+          cleanedComments
         );
         
-        if (result.success) {
+        if (isApiResponseSuccessful(result)) {
+          const successMessage = getMessageFromResponse(
+            result,
+            'Your cancellation request has been submitted and will be reviewed.'
+          );
+            
           Alert.alert(
             'Success',
-            'Your cancellation request has been submitted and will be reviewed.',
+            successMessage,
             [
               {
                 text: 'OK',
@@ -178,15 +314,37 @@ const QuotationRejectScreen: React.FC<QuotationRejectScreenProps> = ({
             ]
           );
         } else {
-          Alert.alert('Error', result.message || 'Failed to submit cancellation request');
+          const errorMessage = getMessageFromResponse(result, 'Failed to submit cancellation request');
+          Alert.alert('Error', errorMessage);
         }
       }
     } catch (error: any) {
-      console.error('Error submitting:', error);
-      Alert.alert(
-        'Error',
-        error.message || 'An error occurred. Please try again.'
-      );
+      // Even if there's an error, if the request was sent successfully, show success
+      // This handles cases where API returns 200 but throws due to response format
+      if (error.response && error.response.status && 
+          typeof error.response.status === 'number' && 
+          error.response.status >= 200 && error.response.status < 300) {
+        Alert.alert(
+          'Success',
+          selectedAction === 'change' 
+            ? 'Your change request has been submitted successfully.'
+            : 'Your cancellation request has been submitted successfully.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                onClose();
+                if (onSuccess) onSuccess();
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Error',
+          error.message || 'An error occurred. Please try again.'
+        );
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -323,33 +481,33 @@ const QuotationRejectScreen: React.FC<QuotationRejectScreenProps> = ({
           </View>
         ) : cancelTypes.length > 0 ? (
           <View style={styles.cancelTypesList}>
-            {cancelTypes.map((type) => (
+            {cancelTypes.map((cancelType) => (
               <TouchableOpacity
-                key={type.id}
+                key={cancelType.id}
                 style={[
                   styles.cancelTypeOption,
                   {
-                    backgroundColor: selectedCancelType === type.id ? `${CANCEL_COLOR}15` : colors.background,
-                    borderColor: selectedCancelType === type.id ? CANCEL_COLOR : colors.border,
+                    backgroundColor: selectedCancelType === cancelType.id ? `${CANCEL_COLOR}15` : colors.background,
+                    borderColor: selectedCancelType === cancelType.id ? CANCEL_COLOR : colors.border,
                   }
                 ]}
                 onPress={() => {
-                  setSelectedCancelType(type.id);
+                  setSelectedCancelType(cancelType.id);
                   setErrors((prev) => ({ ...prev, cancelType: undefined }));
                 }}
                 disabled={isSubmitting}
                 activeOpacity={0.7}
               >
                 <Ionicons
-                  name={selectedCancelType === type.id ? "radio-button-on" : "radio-button-off"}
+                  name={selectedCancelType === cancelType.id ? "radio-button-on" : "radio-button-off"}
                   size={18}
-                  color={selectedCancelType === type.id ? CANCEL_COLOR : colors.textSecondary}
+                  color={selectedCancelType === cancelType.id ? CANCEL_COLOR : colors.textSecondary}
                 />
                 <Text style={[
                   styles.cancelTypeText,
-                  { color: selectedCancelType === type.id ? CANCEL_COLOR : colors.text }
+                  { color: selectedCancelType === cancelType.id ? CANCEL_COLOR : colors.text }
                 ]}>
-                  {type.type}
+                  {cancelType.type}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -395,6 +553,11 @@ const QuotationRejectScreen: React.FC<QuotationRejectScreenProps> = ({
           ]}
           value={additionalComments}
           onChangeText={(text) => {
+            // Prevent HTML input
+            if (containsHtml(text)) {
+              Alert.alert("Invalid Input", "HTML content is not allowed. Please enter plain text only.");
+              return;
+            }
             setAdditionalComments(text);
             if (errors.comments) {
               setErrors((prev) => ({ ...prev, comments: undefined }));

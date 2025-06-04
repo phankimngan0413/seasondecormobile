@@ -1129,7 +1129,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   finalPaymentButton: {
-    backgroundColor: '#34c759', // Green color for final payment
+    backgroundColor: '#63826b', // Green color for final payment
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 6,

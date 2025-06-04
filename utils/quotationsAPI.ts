@@ -559,10 +559,7 @@ export const addProductToQuotationAPI = async (
 export const requestToChangeQuotationAPI = async (
   quotationCode: string,
   changeReason: string
-): Promise<{
-  success: boolean;
-  message?: string;
-}> => {
+): Promise<any> => {  // Changed from specific type to any to handle different response formats
   const url = `/api/Quotation/requestToChangeQuotation/${quotationCode}`;
 
   const apiClient = await initApiClient();
@@ -575,6 +572,8 @@ export const requestToChangeQuotationAPI = async (
   console.log("🟡 API Endpoint:", apiClient.defaults.baseURL + url);
 
   try {
+    console.log("🚀 Making API request...");
+    
     const response = await apiClient.put(url, null, {
       params: {
         changeReason: changeReason
@@ -586,15 +585,38 @@ export const requestToChangeQuotationAPI = async (
     });
 
     console.log("✅ Request Change Quotation Response:", response.data);
+    console.log("✅ Response Status:", response.status);
+    console.log("✅ Response Headers:", response.headers);
+    console.log("✅ Full Response Object:", response);
 
-    // Handle successful response
+    // Check if response is already transformed (has success property directly)
+    if (response && typeof response === 'object' && 'success' in response) {
+      console.log("🎯 Detected transformed response object");
+      return response; // Return the transformed response directly
+    }
+
+    // Standard Axios response handling
     if (response.status === 200) {
+      console.log("🎯 Status 200 detected, checking data...");
+      
+      // If response.data exists, return it
+      if (response.data) {
+        console.log("📦 Response data exists:", response.data);
+        return response.data;
+      }
+      
+      // If response.data is null but status is 200, assume success
+      console.log("📦 Response data is null, creating success object");
       return {
         success: true,
-        message: "Change request submitted successfully"
+        message: "Change request submitted successfully",
+        errors: [],
+        data: null
       };
     }
 
+    console.log("⚠️ Non-200 status code:", response.status);
+    // Fallback for unexpected response format
     return {
       success: false,
       message: "Failed to submit change request"
@@ -602,11 +624,36 @@ export const requestToChangeQuotationAPI = async (
 
   } catch (error: any) {
     console.error("🔴 Request Change Quotation API Error:", error);
+    console.error("🔴 Error type:", typeof error);
+    console.error("🔴 Error message:", error.message);
+    console.error("🔴 Error response:", error.response);
+    console.error("🔴 Error response status:", error.response?.status);
+    console.error("🔴 Error response data:", error.response?.data);
 
     if (error.response) {
       // Server responded with error status
       const statusCode = error.response.status;
       const errorMessage = error.response.data?.message || error.response.data || "Unknown error";
+
+      console.log("🔴 Server error response - Status:", statusCode);
+      console.log("🔴 Server error response - Data:", error.response.data);
+
+      // Handle successful status codes that might be in error block
+      if (statusCode === 200) {
+        console.log("🎯 Status 200 in error block - checking data...");
+        
+        if (error.response.data) {
+          console.log("📦 Returning error response data as success:", error.response.data);
+          return error.response.data;
+        }
+        
+        return {
+          success: true,
+          message: "Change request submitted successfully",
+          errors: [],
+          data: null
+        };
+      }
 
       switch (statusCode) {
         case 401:
@@ -629,17 +676,15 @@ export const requestToChangeQuotationAPI = async (
     return Promise.reject(new Error("Network error, please try again."));
   }
 };
-
-// API Request to Cancel Quotation
 export const requestToCancelQuotationAPI = async (
   quotationCode: string,
-  quotationCancelId: number,
+  cancelTypeId: number,
   cancelReason: string
-): Promise<{
-  success: boolean;
-  message?: string;
-}> => {
-  const url = `/api/Quotation/requestCancelQuotation/${quotationCode}`;
+): Promise<any> => {  // Changed from specific type to any to handle different response formats
+  const url = `/api/Quotation/requestCancelQuotation/${quotationCode}`;  // Double check: no "To" in URL
+  
+  console.log("🔍 URL being constructed:", url);
+  console.log("🔍 Expected URL should be: /api/Quotation/requestCancelQuotation/{code}");
 
   const apiClient = await initApiClient();
   const token = await getToken();
@@ -649,11 +694,18 @@ export const requestToCancelQuotationAPI = async (
   }
 
   console.log("🟡 API Endpoint:", apiClient.defaults.baseURL + url);
+  console.log("🟡 Full URL being called:", `${apiClient.defaults.baseURL}${url}`);
 
   try {
+    console.log("🚀 Making API request...");
+    
+    // Log the exact URL that will be called with parameters
+    const finalUrl = `${apiClient.defaults.baseURL}${url}?quotationCancelId=${cancelTypeId}&cancelReason=${encodeURIComponent(cancelReason)}`;
+    console.log("🎯 Final URL with params:", finalUrl);
+    
     const response = await apiClient.put(url, null, {
       params: {
-        quotationCancelId: quotationCancelId,
+        quotationCancelId: cancelTypeId,  // ✅ FIXED: Use quotationCancelId instead of cancelTypeId
         cancelReason: cancelReason
       },
       headers: { 
@@ -663,15 +715,37 @@ export const requestToCancelQuotationAPI = async (
     });
 
     console.log("✅ Request Cancel Quotation Response:", response.data);
+    console.log("✅ Response Status:", response.status);
+    console.log("✅ Full Response Object:", response);
 
-    // Handle successful response
+    // Check if response is already transformed (has success property directly)
+    if (response && typeof response === 'object' && 'success' in response) {
+      console.log("🎯 Detected transformed response object");
+      return response; // Return the transformed response directly
+    }
+
+    // Standard Axios response handling
     if (response.status === 200) {
+      console.log("🎯 Status 200 detected, checking data...");
+      
+      // If response.data exists, return it
+      if (response.data) {
+        console.log("📦 Response data exists:", response.data);
+        return response.data;
+      }
+      
+      // If response.data is null but status is 200, assume success
+      console.log("📦 Response data is null, creating success object");
       return {
         success: true,
-        message: "Cancellation request submitted successfully"
+        message: "Cancellation request submitted successfully",
+        errors: [],
+        data: null
       };
     }
 
+    console.log("⚠️ Non-200 status code:", response.status);
+    // Fallback for unexpected response format
     return {
       success: false,
       message: "Failed to submit cancellation request"
@@ -697,63 +771,6 @@ export const requestToCancelQuotationAPI = async (
         default:
           return Promise.reject(new Error(`Server error: ${errorMessage}`));
       }
-    }
-
-    if (error.message.includes("Network Error")) {
-      return Promise.reject(new Error("⚠️ Cannot connect to server. Please check your internet connection."));
-    }
-
-    return Promise.reject(new Error("Network error, please try again."));
-  }
-};
-
-// API để lấy danh sách cancel types (nếu cần)
-export interface ICancelType {
-  id: number;
-  type: string;
-  description?: string;
-}
-
-export const getCancelTypesAPI = async (): Promise<ICancelType[]> => {
-  const url = "/api/CancelType/getList"; // Adjust endpoint if needed
-
-  const apiClient = await initApiClient();
-  const token = await getToken();
-  
-  if (!token) {
-    return Promise.reject(new Error("Unauthorized: Please log in."));
-  }
-
-  console.log("🟡 API Endpoint:", apiClient.defaults.baseURL + url);
-
-  try {
-    const response = await apiClient.get(url, {
-      headers: { 
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    // Handle response data properly
-    const responseData = response.data as any;
-
-    if (Array.isArray(responseData)) {
-      return responseData as ICancelType[];
-    }
-
-    // Handle case where API returns object with data property
-    if (responseData && typeof responseData === 'object' && 'data' in responseData && Array.isArray(responseData.data)) {
-      return responseData.data as ICancelType[];
-    }
-
-    return [];
-
-  } catch (error: any) {
-    console.error("🔴 Get Cancel Types API Error:", error);
-
-    if (error.response && error.response.status === 404) {
-      // Return empty array if no cancel types found
-      return [];
     }
 
     if (error.message.includes("Network Error")) {

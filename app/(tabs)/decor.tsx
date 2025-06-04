@@ -67,6 +67,14 @@ const formatCurrency = (price: number | undefined): string => {
   }).format(price);
 };
 
+// Helper function to count decor services for each season
+const getSeasonServiceCount = (seasonName: string, decorServices: IDecor[]): number => {
+  return decorServices.filter(service => 
+    Array.isArray(service.seasons) && 
+    service.seasons.some(season => getSeasonName(season) === seasonName)
+  ).length;
+};
+
 const DecorListScreen = () => {
   const [decorServices, setDecorServices] = useState<IDecor[]>([]);
   const [filteredServices, setFilteredServices] = useState<IDecor[]>([]);
@@ -97,9 +105,26 @@ const DecorListScreen = () => {
       case 'summer':
         return "sunny-outline";
       case 'autumn':
+      case 'fall':
         return "umbrella-outline";
       case 'winter':
         return "snow-outline";
+      case 'christmas':
+        return "gift-outline";
+      case 'tet':
+        return "flower-outline";
+      case 'valentine':
+        return "heart-outline";
+      case 'halloween':
+        return "skull-outline";
+      case 'easter':
+        return "egg-outline";
+      case 'birthday':
+        return "balloon-outline";
+      case 'wedding':
+        return "diamond-outline";
+      case 'anniversary':
+        return "heart-circle-outline";
       default:
         return "calendar-outline";
     }
@@ -157,26 +182,23 @@ const DecorListScreen = () => {
 
   // Fetch all seasons from API
   const fetchSeasons = async () => {
-  try {
-    setLoadingSeasons(true);
-    
-    // Use the imported getSeasonsAPI function instead of direct fetch
-    const data = await getSeasonsAPI();
-    
-    if (data && Array.isArray(data)) {
-      console.log(`✅ Retrieved ${data.length} seasons successfully`);
-      setSeasons(data);
-    } else {
-      console.error('❌ Failed to retrieve seasons:', 'Invalid data format');
+    try {
+      setLoadingSeasons(true);
+      
+      // Use the imported getSeasonsAPI function instead of direct fetch
+      const data = await getSeasonsAPI();
+      
+      if (data && Array.isArray(data)) {
+        setSeasons(data);
+      } else {
+        setSeasons([]);
+      }
+    } catch (err) {
       setSeasons([]);
+    } finally {
+      setLoadingSeasons(false);
     }
-  } catch (err) {
-    console.error('❌ Error fetching seasons:', err);
-    setSeasons([]);
-  } finally {
-    setLoadingSeasons(false);
-  }
-};
+  };
 
   const fetchDecorServices = async () => {
     try {
@@ -196,11 +218,9 @@ const DecorListScreen = () => {
         setDecorServices(data);
         setFilteredServices(data);
       } else {
-        console.error('❌ Invalid data format:', data);
         setError("Invalid data format received.");
       }
     } catch (err: any) {
-      console.error('❌ Error fetching decor services:', err);
       setError(err.message || "Failed to fetch decor services.");
     } finally {
       setLoading(false);
@@ -242,9 +262,7 @@ const DecorListScreen = () => {
         }
         
         // Call the search API with our parameters
-        console.log("📊 Searching with params:", searchParams);
         const results = await searchDecorServicesAPI(searchParams);
-        console.log(`🔍 Found ${results.length} services via API search`);
         
         setFilteredServices(results);
       } else {
@@ -252,7 +270,6 @@ const DecorListScreen = () => {
         setFilteredServices(decorServices);
       }
     } catch (err: any) {
-      console.error('❌ Error searching decor services:', err);
       // Don't show error to user, just fallback to showing all services
       setFilteredServices(decorServices);
     } finally {
@@ -270,7 +287,6 @@ const DecorListScreen = () => {
         onPress={() => {
           // Đảm bảo item.id là string
           const id = typeof item.id === 'number' ? item.id.toString() : item.id;
-          console.log(`🔍 Navigating to decor detail: ${id}`);
           
           router.push({
             pathname: "/decor/[id]",
@@ -338,6 +354,11 @@ const DecorListScreen = () => {
       return found ? getSeasonIcon(found.seasonName) : "apps-outline";
     };
 
+    // Filter seasons that have at least one decor service
+    const availableSeasons = seasons.filter(season => 
+      getSeasonServiceCount(season.seasonName, decorServices) > 0
+    );
+
     return (
       <View style={styles.dropdownContainer}>
         <TouchableOpacity 
@@ -351,7 +372,7 @@ const DecorListScreen = () => {
             color={PRIMARY_COLOR} 
             style={styles.dropdownIcon}
           />
-          <Text style={[styles.dropdownButtonText, { color: colors.text }]}>
+          <Text style={[styles.dropdownButtonText, { color: colors.text }]} numberOfLines={1}>
             {selectedSeason || 'All Seasons'}
           </Text>
           <Ionicons name="chevron-down" size={18} color={colors.textSecondary || '#666'} />
@@ -375,7 +396,7 @@ const DecorListScreen = () => {
               {/* Season options */}
               {!loadingSeasons ? (
                 seasons.length > 0 ? (
-                  <>
+                  <ScrollView style={styles.dropdownScrollView} showsVerticalScrollIndicator={false}>
                     <TouchableOpacity 
                       style={[
                         styles.dropdownItem,
@@ -433,7 +454,7 @@ const DecorListScreen = () => {
                         </Text>
                       </TouchableOpacity>
                     ))}
-                  </>
+                  </ScrollView>
                 ) : (
                   <View style={styles.dropdownEmptyContainer}>
                     <Ionicons name="calendar-outline" size={30} color={colors.textSecondary} />
@@ -678,7 +699,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
-    maxHeight: '70%', // Prevent it from being too tall on small screens
+    maxHeight: '70%',
+  },
+  dropdownScrollView: {
+    maxHeight: 350,
   },
   dropdownItem: {
     flexDirection: 'row',
@@ -692,17 +716,6 @@ const styles = StyleSheet.create({
   dropdownItemSubtext: {
     fontSize: 12,
     marginTop: 2,
-  },
-  statusBadge: {
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  statusBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
   },
   selectedDropdownItem: {
     backgroundColor: `${PRIMARY_COLOR}15`,

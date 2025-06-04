@@ -5,7 +5,7 @@ import { Platform } from "react-native";
 import { getUniqueId } from "react-native-device-info";
 
 // API URL configurations
-// const SEASON_DECOR_API = "https://seasondecor.azurewebsites.net";
+const SEASON_DECOR_API = "https://seasondecor.azurewebsites.net";
 const TUNNEL_API = process.env.REACT_APP_API_URL;
 const LAN_IP = process.env.REACT_APP_LAN_IP || "http://10.0.2.2:5297";
 const EMULATOR_IP = process.env.REACT_APP_EMULATOR_IP || "http://10.0.2.2:5297";
@@ -45,10 +45,10 @@ const isEmulator = async (): Promise<boolean> => {
 // Set up the base URL for API requests
 const setupBaseUrl = async (): Promise<string> => {
   // Logic for development environment
-  let BASE_URL = LAN_IP;
-  // SEASON_DECOR_API
+  let BASE_URL = SEASON_DECOR_API;
+  SEASON_DECOR_API
   if (LOCALHOST) {
-    // BASE_URL = SEASON_DECOR_API;
+    BASE_URL = SEASON_DECOR_API;
   } else if (isWeb) {
     BASE_URL = LOCALHOST;
   } else if (await isEmulator()) {

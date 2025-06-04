@@ -22,7 +22,7 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
 import { getStyleColorByServiceIdAPI, getScopeOfWorkAPI } from "@/utils/decorserviceAPI";
-import { launchImageLibrary, launchCamera, ImagePickerResponse, MediaType, CameraOptions, ImageLibraryOptions } from 'react-native-image-picker';
+import { launchImageLibrary, launchCamera, ImagePickerResponse, CameraOptions, ImageLibraryOptions } from 'react-native-image-picker';
 
 const { width } = Dimensions.get('window');
 
