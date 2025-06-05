@@ -1,8 +1,8 @@
-// src/config/apiConfig.ts
+// // src/config/apiConfig.ts
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 
-// API URLs
+// // API URLs
 const SEASON_DECOR_API = "https://seasondecor.azurewebsites.net";
 const TUNNEL_API = Constants.expoConfig?.extra?.apiUrl;
 const LOCALHOST = "http://localhost:5297";

@@ -18,12 +18,19 @@ export interface ICancelTypeResponse {
  * Get paginated quotations for the current customer
  */
 // Updated API function that works without parameters
-export const getPaginatedQuotationsForCustomerAPI = async () => {
+interface PaginationParams {
+  quotationCode?: string;
+  status?: number;
+  pageIndex?: number;
+  pageSize?: number;
+  sortBy?: string;
+  descending?: boolean;
+}
+
+export const getPaginatedQuotationsForCustomerAPI = async (params: PaginationParams = {}) => {
   try {
-    console.log('🔍 Initializing API client');
     const apiClient = await initApiClient();
-    
-    console.log('🔍 Getting authentication token');
+        
     const token = await getToken();
 
     if (!token) {
@@ -31,22 +38,44 @@ export const getPaginatedQuotationsForCustomerAPI = async () => {
       throw new Error("Unauthorized: Please log in.");
     }
 
-    console.log('🔍 Token available, proceeding with request');
     
-    // Make the request without any parameters since that works
+    // Set default pagination values
+    const {
+      quotationCode,
+      status,
+      pageIndex = 1,
+      pageSize = 100,
+      sortBy,
+      descending
+    } = params;
+
+    // Build query parameters
+    const queryParams = new URLSearchParams();
+    
+    if (quotationCode) queryParams.append('QuotationCode', quotationCode);
+    if (status !== undefined) queryParams.append('Status', status.toString());
+    queryParams.append('PageIndex', pageIndex.toString());
+    queryParams.append('PageSize', pageSize.toString());
+    if (sortBy) queryParams.append('SortBy', sortBy);
+    if (descending !== undefined) queryParams.append('Descending', descending.toString());
+
+
+    // Make the request with pagination parameters
     const response = await apiClient.get(
-      "/api/Quotation/getPaginatedQuotationsForCustomer",
+      `/api/Quotation/getPaginatedQuotationsForCustomer?${queryParams.toString()}`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
+    console.log('✅ API response received successfully');
     return response.data || { success: false, data: [], message: "No data received from API" };
+    
   } catch (error: any) {
     console.error("🔴 Get Paginated Quotations API Error:", error);
-    
+        
     return { 
-      success: false, 
-      data: [], 
-      message: error.response?.data?.message || "Failed to retrieve quotations." 
+      success: false,
+      data: [],
+      message: error.response?.data?.message || "Failed to retrieve quotations."
     };
   }
 };
@@ -426,7 +455,7 @@ export const getPaginatedRelatedProductAPI = async (
     
     // Make the API request
     const response = await apiClient.get(
-      `/api/Quotation/getPaginatedRelatedProduct`,
+      `/api/DecorService/getPaginatedRelatedProduct`,
       {
         params,
         headers: { 

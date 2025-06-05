@@ -14,17 +14,25 @@ import {
   Dimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getPaginatedRelatedProductAPI, addProductToQuotationAPI } from '@/utils/quotationsAPI';
+import { 
+  getPaginatedRelatedProductAPI, 
+  addProductToServiceHolderAPI, 
+  removeProductFromServiceHolderAPI,
+  getAddedProductAPI
+} from '@/utils/bookingAPI';
 
 // Get screen dimensions for better layout calculations
 const { width, height } = Dimensions.get('window');
 
 interface Product {
   id: number;
+  productId?: number; // For added products
   productName: string;
-  productPrice: number;
+  productPrice?: number; // For available products
+  unitPrice?: number; // For added products
   category?: string;
-  imageUrls?: string[];
+  imageUrls?: string[]; // For available products
+  image?: string; // For added products
   status?: string;
   quantity?: number;
   rate?: number;
@@ -32,8 +40,9 @@ interface Product {
 }
 
 interface ProductCatalogProps {
-  quotationCode: string;
-  onProductAdded: () => void;
+  serviceId?: number;
+  onAddProduct?: (productId: number, quantity: number) => void;
+  onRemoveProduct?: (productId: number) => void;
 }
 
 interface SuccessNotificationProps {
@@ -89,15 +98,19 @@ const SuccessNotification: React.FC<SuccessNotificationProps> = ({
 
 // Main component
 const ProductCatalog: React.FC<ProductCatalogProps> = ({ 
-  quotationCode,
-  onProductAdded
+  serviceId,
+  onAddProduct,
+  onRemoveProduct
 }) => {
   const [products, setProducts] = useState<Product[]>([]);
+  const [addedProducts, setAddedProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState<number | null>(null);
+  const [removing, setRemoving] = useState<number | null>(null);
   const [searchText, setSearchText] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<'available' | 'added'>('available');
   
   // Success notification state
   const [showSuccess, setShowSuccess] = useState<boolean>(false);
@@ -117,21 +130,31 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
   const apiTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchProducts();
-    }, 300);
-    
-    return () => {
-      clearTimeout(timer);
-      if (apiTimeoutRef.current) {
-        clearTimeout(apiTimeoutRef.current);
-      }
-    };
-  }, [quotationCode]);
+    if (serviceId) {
+      const timer = setTimeout(() => {
+        fetchAllData();
+      }, 300);
+      
+      return () => {
+        clearTimeout(timer);
+        if (apiTimeoutRef.current) {
+          clearTimeout(apiTimeoutRef.current);
+        }
+      };
+    }
+  }, [serviceId]);
+  
+  // Function to fetch all data (both available and added products)
+  const fetchAllData = async (refresh = false) => {
+    await Promise.all([
+      fetchProducts(refresh),
+      fetchAddedProducts(refresh)
+    ]);
+  };
   
   // Function to fetch products
   const fetchProducts = async (refresh = false) => {
-    if (isLoadingRef.current) return;
+    if (isLoadingRef.current || !serviceId) return;
     
     isLoadingRef.current = true;
     if (refresh) {
@@ -152,7 +175,14 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
     }, LOADING_TIMEOUT);
     
     try {
-      const result = await getPaginatedRelatedProductAPI(quotationCode, {});
+      console.log(`🔍 Fetching products for service: ${serviceId}`);
+      const result = await getPaginatedRelatedProductAPI(serviceId, {
+        pageSize: 20
+        // Don't pass pageIndex to avoid negative offset error
+      }); await getPaginatedRelatedProductAPI(serviceId, {
+        pageSize: 20,
+        pageIndex: 0
+      });
       
       if (apiTimeoutRef.current) {
         clearTimeout(apiTimeoutRef.current);
@@ -161,20 +191,22 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
       
       if (!isLoadingRef.current) return;
       
-      if (result && Array.isArray(result)) {
-        setProducts(result);
-      } else if (result && result.data && Array.isArray(result.data)) {
-        setProducts(result.data);
-      } else if (result && result.data && result.data.data && Array.isArray(result.data.data)) {
-        setProducts(result.data.data);
-      } else if (result && typeof result === 'object') {
-        if (Array.isArray(result.data)) {
+      
+      if (result && result.success !== false) {
+        // Handle the specific API response structure
+        if (result.data && Array.isArray(result.data)) {
           setProducts(result.data);
+        } else if (Array.isArray(result)) {
+          setProducts(result);
+        } else if (result.items && Array.isArray(result.items)) {
+          setProducts(result.items);
         } else {
-          setError("Couldn't parse product data");
+          console.warn('⚠️ Unexpected data structure, setting empty array:', result);
+          setProducts([]);
         }
       } else {
-        setError("Failed to load products");
+        setError(result?.message || "Failed to load products");
+        setProducts([]);
       }
     } catch (err: any) {
       if (apiTimeoutRef.current) {
@@ -182,7 +214,9 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
         apiTimeoutRef.current = null;
       }
       
+      console.error('🔴 Products fetch error:', err);
       setError(err.message || "Failed to load products");
+      setProducts([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -190,9 +224,41 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
     }
   };
   
-  // Refresh products
+  // Function to fetch added products
+  const fetchAddedProducts = async (refresh = false) => {
+    if (!serviceId) return;
+    
+    try {
+      console.log(`🔍 Fetching added products for service: ${serviceId}`);
+      const result = await getAddedProductAPI(serviceId);
+      
+      
+      if (result && result.success !== false) {
+        if (Array.isArray(result)) {
+          setAddedProducts(result);
+        } else if (result.data && Array.isArray(result.data)) {
+          setAddedProducts(result.data);
+        } else if (result.data && result.data.data && Array.isArray(result.data.data)) {
+          setAddedProducts(result.data.data);
+        } else if (result.items && Array.isArray(result.items)) {
+          setAddedProducts(result.items);
+        } else {
+          console.warn('⚠️ Unexpected added products data structure:', result);
+          setAddedProducts([]);
+        }
+      } else {
+        console.warn('⚠️ Failed to load added products:', result?.message);
+        setAddedProducts([]);
+      }
+    } catch (err: any) {
+      console.error('🔴 Added products fetch error:', err);
+      setAddedProducts([]);
+    }
+  };
+  
+  // Refresh all data
   const onRefresh = () => {
-    fetchProducts(true);
+    fetchAllData(true);
   };
   
   // Open quantity selection modal
@@ -222,9 +288,9 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
     }
   };
   
-  // Handle add product
-  const handleAddProduct = () => {
-    if (!selectedProduct) return;
+  // Handle add product to service
+  const handleAddProduct = async () => {
+    if (!selectedProduct || !serviceId) return;
     
     setShowQuantityModal(false);
     const parsedQuantity = parseInt(quantity);
@@ -243,108 +309,203 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
       }
     }, LOADING_TIMEOUT);
     
-    addProductToQuotationAPI(quotationCode, selectedProduct.id, parsedQuantity)
-      .then(result => {
-        if (result && (result.success === true || result.addedProduct || result.productDetails)) {
-          // Format the success message
-          const productName = selectedProduct.productName;
-          let message = `${parsedQuantity} ${productName}`;
-          let details = '';
-          
-          if (result.productCost) {
-            const formattedCost = new Intl.NumberFormat('vi-VN', { 
-              style: 'decimal', 
-              maximumFractionDigits: 0 
-            }).format(result.productCost);
-            details = `Total: ${formattedCost} đ`;
-          }
-          
-          // Show custom success notification
-          setSuccessMessage(message);
-          setSuccessDetails(details);
-          setShowSuccess(true);
-          
-          // Refresh quotation and products
-          if (onProductAdded) {
-            onProductAdded();
-          }
-          onRefresh();
-        } else {
-          Alert.alert("Error", result?.message || "Failed to add product");
-        }
-      })
-      .catch(error => {
-        Alert.alert("Error", error.message || "Failed to add product");
-      })
-      .finally(() => {
-        clearTimeout(addTimeout);
-        setAdding(null);
-      });
-  };
-  
-  // Filter products
-  const filteredProducts = searchText 
-    ? products.filter(p => 
-        p.productName?.toLowerCase().includes(searchText.toLowerCase()) ||
-        (p.category && p.category.toLowerCase().includes(searchText.toLowerCase()))
-      )
-    : products;
-  
-  // Render product item - with price displayed
-  const renderProduct = (product: Product, index: number) => (
-    <View 
-      key={`product-${product.id}-${index}`} 
-      style={[
-        styles.productCardSimple,
-        // Remove bottom border for the last item
-        index === filteredProducts.length - 1 ? { borderBottomWidth: 0 } : null
-      ]}
-    >
-      {/* Product Image */}
-      <View style={styles.productImageContainer}>
-        {product.imageUrls && product.imageUrls.length > 0 ? (
-          <Image 
-            source={{ uri: product.imageUrls[0] }}
-            style={styles.productImage}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={styles.placeholderImage}>
-            <Ionicons name="image-outline" size={18} color="#ccc" />
-          </View>
-        )}
-      </View>
+    try {
+      const result = await addProductToServiceHolderAPI(serviceId, selectedProduct.id, parsedQuantity);
       
-      {/* Product Info */}
-      <View style={styles.productInfoColumn}>
-        <Text style={styles.productNameSimple} numberOfLines={1}>
-          {product.productName}
-        </Text>
-        <Text style={styles.productCategory}>
-          {product.category || "Product"}
-        </Text>
-        <Text style={styles.productPriceSimple}>
-          {new Intl.NumberFormat('vi-VN', { 
+      
+      if (result && result.success !== false) {
+        // Format the success message
+        const productName = selectedProduct.productName;
+        let message = `Added ${parsedQuantity} ${productName}`;
+        let details = '';
+        
+        const productPrice = selectedProduct.productPrice || selectedProduct.unitPrice;
+        if (productPrice) {
+          const totalCost = productPrice * parsedQuantity;
+          const formattedCost = new Intl.NumberFormat('vi-VN', { 
             style: 'decimal', 
             maximumFractionDigits: 0 
-          }).format(product.productPrice)} đ
-        </Text>
-      </View>
-      
-      {/* Add Button */}
-      <TouchableOpacity 
-        style={styles.addButtonSimple}
-        onPress={() => openQuantityModal(product)}
-        disabled={adding === product.id}
+          }).format(totalCost);
+          details = `Total: ${formattedCost} đ`;
+        }
+        
+        // Show custom success notification
+        setSuccessMessage(message);
+        setSuccessDetails(details);
+        setShowSuccess(true);
+        
+        // Call parent callback
+        if (onAddProduct) {
+          onAddProduct(selectedProduct.id, parsedQuantity);
+        }
+        
+        // Refresh both product lists
+        fetchAllData();
+      } else {
+        Alert.alert("Error", result?.message || "Failed to add product to service");
+      }
+    } catch (error: any) {
+      console.error('🔴 Add product error:', error);
+      Alert.alert("Error", error.message || "Failed to add product to service");
+    } finally {
+      clearTimeout(addTimeout);
+      setAdding(null);
+    }
+  };
+  
+  // Handle remove product from service
+  const handleRemoveProduct = async (productId: number) => {
+    if (!serviceId) return;
+    
+    Alert.alert(
+      "Remove Product",
+      "Are you sure you want to remove this product from the service?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Remove", 
+          style: "destructive",
+          onPress: async () => {
+            setRemoving(productId);
+            
+            try {
+              const result = await removeProductFromServiceHolderAPI(serviceId, productId);
+              
+              console.log('🟢 Remove product result:', result);
+              
+              if (result && result.success !== false) {
+                // Call parent callback
+                if (onRemoveProduct) {
+                  onRemoveProduct(productId);
+                }
+                
+                // Refresh both product lists
+                fetchAllData();
+                
+                Alert.alert("Success", "Product removed from service");
+              } else {
+                Alert.alert("Error", result?.message || "Failed to remove product from service");
+              }
+            } catch (error: any) {
+              console.error('🔴 Remove product error:', error);
+              Alert.alert("Error", error.message || "Failed to remove product from service");
+            } finally {
+              setRemoving(null);
+            }
+          }
+        }
+      ]
+    );
+  };
+  
+  const getFilteredProducts = () => {
+    const sourceProducts = activeTab === 'available' ? products : addedProducts;
+    const filtered = searchText 
+      ? sourceProducts.filter(p => 
+          p.productName?.toLowerCase().includes(searchText.toLowerCase()) ||
+          (p.category && p.category.toLowerCase().includes(searchText.toLowerCase()))
+        )
+      : sourceProducts;
+    return filtered;
+  };
+  
+  const filteredProducts = getFilteredProducts();
+  
+  // Render product item - with price displayed
+  const renderProduct = (product: Product, index: number) => {
+    // Get the appropriate price and image based on product type
+    const price = product.productPrice || product.unitPrice || 0;
+    const imageUrl = product.imageUrls && product.imageUrls.length > 0 
+      ? product.imageUrls[0] 
+      : product.image;
+    const productId = product.productId || product.id;
+    
+    // Debug log to see the actual product data
+    
+    
+    return (
+      <View 
+        key={`product-${productId}-${index}-${activeTab}`} 
+        style={[
+          styles.productCardSimple,
+          // Remove bottom border for the last item
+          index === filteredProducts.length - 1 ? { borderBottomWidth: 0 } : null
+        ]}
       >
-        {adding === product.id ? (
-          <ActivityIndicator size="small" color="#fff" />
-        ) : (
-          <Ionicons name="add" size={20} color="#fff" />
-        )}
-      </TouchableOpacity>
-    </View>
-  );
+        {/* Product Image */}
+        <View style={styles.productImageContainer}>
+          {imageUrl ? (
+            <Image 
+              source={{ uri: imageUrl }}
+              style={styles.productImage}
+              resizeMode="cover"
+              onError={(error) => {
+                console.error(`❌ Image load error for product ${productId}:`, error);
+              }}
+              onLoad={() => {
+                console.log(`✅ Image loaded for product ${productId}`);
+              }}
+            />
+          ) : (
+            <View style={styles.placeholderImage}>
+              <Ionicons name="image-outline" size={18} color="#ccc" />
+            </View>
+          )}
+        </View>
+        
+        {/* Product Info */}
+        <View style={styles.productInfoColumn}>
+          <Text style={styles.productNameSimple} numberOfLines={1}>
+            {product.productName || 'Unknown Product'}
+          </Text>
+          <Text style={styles.productCategory}>
+            {product.category || "Product"}
+          </Text>
+          <Text style={styles.productPriceSimple}>
+            {price ? new Intl.NumberFormat('vi-VN', { 
+              style: 'decimal', 
+              maximumFractionDigits: 0 
+            }).format(price) : '0'} đ
+          </Text>
+          {/* Show quantity for added products */}
+          {activeTab === 'added' && product.quantity && (
+            <Text style={styles.productQuantity}>
+              Qty: {product.quantity}
+            </Text>
+          )}
+        </View>
+        
+        {/* Action Buttons */}
+        <View style={styles.actionButtons}>
+          {activeTab === 'available' ? (
+            <TouchableOpacity 
+              style={styles.addButtonSimple}
+              onPress={() => openQuantityModal(product)}
+              disabled={adding === productId}
+            >
+              {adding === productId ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="add" size={20} color="#fff" />
+              )}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity 
+              style={styles.removeButtonSimple}
+              onPress={() => handleRemoveProduct(product.productId || product.id)}
+              disabled={removing === (product.productId || product.id)}
+            >
+              {removing === (product.productId || product.id) ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="remove" size={16} color="#fff" />
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  };
   
   // Render quantity selection modal
   const renderQuantityModal = () => (
@@ -367,10 +528,10 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
             <View style={styles.modalProductInfo}>
               <Text style={styles.modalProductName}>{selectedProduct.productName}</Text>
               <Text style={styles.modalProductPrice}>
-                {new Intl.NumberFormat('vi-VN', { 
+                {(selectedProduct.productPrice || selectedProduct.unitPrice || 0) ? new Intl.NumberFormat('vi-VN', { 
                   style: 'decimal', 
                   maximumFractionDigits: 0 
-                }).format(selectedProduct.productPrice)} đ
+                }).format(selectedProduct.productPrice || selectedProduct.unitPrice || 0) : '0'} đ
               </Text>
             </View>
           )}
@@ -411,7 +572,7 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
               style={styles.confirmButton}
               onPress={handleAddProduct}
             >
-              <Text style={styles.confirmButtonText}>Add to Quotation</Text>
+              <Text style={styles.confirmButtonText}>Add to Service</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -419,8 +580,20 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
     </Modal>
   );
   
+  // Handle case when serviceId is not provided
+  if (!serviceId) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.centerContent}>
+          <Ionicons name="information-circle-outline" size={40} color="#ccc" />
+          <Text style={styles.emptyText}>Service ID required to load products</Text>
+        </View>
+      </View>
+    );
+  }
+  
   // Main component rendering
-  if (loading && products.length === 0) {
+  if (loading && products.length === 0 && addedProducts.length === 0) {
     return (
       <View style={styles.container}>
         <View style={styles.headerRow}>
@@ -435,7 +608,7 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
     );
   }
   
-  if (error && products.length === 0) {
+  if (error && products.length === 0 && addedProducts.length === 0) {
     return (
       <View style={styles.container}>
         <View style={styles.headerRow}>
@@ -461,71 +634,109 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
     );
   }
   
-  
-    // Remove the scrollContainer style and let it grow naturally with content
-return (
-  <View style={styles.container}>
-    <View style={styles.headerRow}>
-      <Text style={styles.sectionTitle}>Products</Text>
-      <TouchableOpacity 
-        style={styles.refreshButton}
-        onPress={onRefresh}
-        disabled={refreshing}
-      >
-        {refreshing ? (
-          <ActivityIndicator size="small" color="#34c759" />
-        ) : (
-          <Ionicons name="refresh-outline" size={18} color="#34c759" />
-        )}
-      </TouchableOpacity>
-    </View>
-    
-    {/* Search bar */}
-    <View style={styles.searchContainer}>
-      <Ionicons name="search-outline" size={16} color="#888" style={styles.searchIcon} />
-      <TextInput
-        style={styles.searchInput}
-        placeholder="Search products..."
-        value={searchText}
-        onChangeText={setSearchText}
-      />
-      {searchText ? (
-        <TouchableOpacity onPress={() => setSearchText('')}>
-          <Ionicons name="close-circle" size={16} color="#888" />
+  return (
+    <View style={styles.container}>
+      <View style={styles.headerRow}>
+        <Text style={styles.sectionTitle}>Products</Text>
+        <TouchableOpacity 
+          style={styles.refreshButton}
+          onPress={onRefresh}
+          disabled={refreshing}
+        >
+          {refreshing ? (
+            <ActivityIndicator size="small" color="#34c759" />
+          ) : (
+            <Ionicons name="refresh-outline" size={18} color="#34c759" />
+          )}
         </TouchableOpacity>
-      ) : null}
+      </View>
+      
+      {/* Tab Selector */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity 
+          style={[
+            styles.tabButton, 
+            activeTab === 'available' && styles.activeTabButton
+          ]}
+          onPress={() => setActiveTab('available')}
+        >
+          <Text style={[
+            styles.tabButtonText,
+            activeTab === 'available' && styles.activeTabButtonText
+          ]}>
+            Available ({products.length})
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[
+            styles.tabButton, 
+            activeTab === 'added' && styles.activeTabButton
+          ]}
+          onPress={() => setActiveTab('added')}
+        >
+          <Text style={[
+            styles.tabButtonText,
+            activeTab === 'added' && styles.activeTabButtonText
+          ]}>
+            Added ({addedProducts.length})
+          </Text>
+        </TouchableOpacity>
+      </View>
+      
+      {/* Search bar */}
+      <View style={styles.searchContainer}>
+        <Ionicons name="search-outline" size={16} color="#888" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search products..."
+          value={searchText}
+          onChangeText={setSearchText}
+        />
+        {searchText ? (
+          <TouchableOpacity onPress={() => setSearchText('')}>
+            <Ionicons name="close-circle" size={16} color="#888" />
+          </TouchableOpacity>
+        ) : null}
+      </View>
+      
+      {/* Product list */}
+      {filteredProducts.length > 0 ? (
+        <ScrollView 
+          style={styles.scrollContainer}
+          contentContainerStyle={styles.scrollContent}
+          ref={scrollViewRef}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
+          {filteredProducts.map((product, index) => renderProduct(product, index))}
+          <View style={styles.scrollBottomPadding} />
+        </ScrollView>
+      ) : (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="cube-outline" size={40} color="#ccc" />
+          <Text style={styles.emptyText}>
+            {searchText ? "No products match your search" : 
+             activeTab === 'available' ? "No products available" : "No products added yet"}
+          </Text>
+        </View>
+      )}
+      
+      {/* Modals */}
+      {renderQuantityModal()}
+      <SuccessNotification 
+        visible={showSuccess}
+        message={successMessage}
+        details={successDetails}
+        onClose={() => setShowSuccess(false)}
+      />
     </View>
-    
-    {/* Product list without fixed height container */}
-    {filteredProducts.length > 0 ? (
-      <View>
-        {filteredProducts.map((product, index) => renderProduct(product, index))}
-      </View>
-    ) : (
-      <View style={styles.emptyContainer}>
-        <Ionicons name="cube-outline" size={40} color="#ccc" />
-        <Text style={styles.emptyText}>
-          {searchText ? "No products match your search" : "No products available"}
-        </Text>
-      </View>
-    )}
-    
-    {/* Modals remain the same */}
-    {renderQuantityModal()}
-    <SuccessNotification 
-      visible={showSuccess}
-      message={successMessage}
-      details={successDetails}
-      onClose={() => setShowSuccess(false)}
-    />
-  </View>
-);
-  
+  );
 };
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 15,
     borderRadius: 12,
     backgroundColor: '#fff',
     shadowColor: '#000',
@@ -569,18 +780,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
   },
-  // Improved scroll container with better height calculation
   scrollContainer: {
-    height: Math.min(500, height * 0.4), // Either 300 or 35% of screen height, whichever is smaller
+    maxHeight: 400,
     borderRadius: 8,
     overflow: 'hidden',
   },
   scrollContent: {
     paddingTop: 5,
-    paddingBottom: 15, // Increased bottom padding
+    paddingBottom: 15,
   },
   scrollBottomPadding: {
-    height: 30, // Significantly increased padding at bottom
+    height: 20,
   },
   centerContent: {
     padding: 20,
@@ -588,15 +798,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     height: 150,
   },
-  // Improved product card with cleaner layout
   productCardSimple: {
     flexDirection: 'row',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  paddingVertical: 10, // Reduced from 12 to 10
-  borderBottomWidth: 1,
-  borderBottomColor: '#f0f0f0',
-  marginHorizontal: 2,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    marginHorizontal: 2,
   },
   productImageContainer: {
     width: 48,
@@ -638,7 +847,17 @@ const styles = StyleSheet.create({
     color: '#34c759',
     marginTop: 2,
   },
-  // Simplified add button with just the + icon
+  productQuantity: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   addButtonSimple: {
     backgroundColor: '#34c759',
     width: 40,
@@ -646,6 +865,39 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  removeButtonSimple: {
+    backgroundColor: '#ff3b30',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    marginBottom: 15,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+    padding: 4,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  activeTabButton: {
+    backgroundColor: '#34c759',
+  },
+  tabButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#666',
+  },
+  activeTabButtonText: {
+    color: '#fff',
   },
   loadingText: {
     marginTop: 10,
@@ -677,6 +929,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#888',
     textAlign: 'center',
+  },
+  emptyContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 100,
   },
   
   // Quantity Modal Styles
@@ -779,12 +1037,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: 'white',
   },
-  emptyContainer: {
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 100, // Fixed minimum height for empty state
-  },
+  
   // Custom Success Notification Styles
   notificationOverlay: {
     flex: 1,

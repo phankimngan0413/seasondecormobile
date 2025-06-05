@@ -1,4 +1,5 @@
 import { initApiClient } from "@/config/axiosConfig";
+import { getToken } from "@/services/auth";
 
 // Types for contract operations
 export interface IContractResponse {
@@ -240,6 +241,138 @@ export const getContractFileAPI = async (quotationCode: string) => {
     return {
       success: false,
       message: error.response?.data?.message || "Failed to retrieve contract file"
+    };
+  }
+};
+export const requestTerminationOtpAPI = async (contractCode: string): Promise<any> => {
+  try {
+    console.log(`🔍 Requesting termination OTP for contract: ${contractCode}`);
+    const apiClient = await initApiClient();
+    const token = await getToken();
+    
+    if (!token) {
+      console.error('🔍 No token available');
+      throw new Error("Unauthorized: Please log in.");
+    }
+    
+    // Validate parameters
+    if (!contractCode) {
+      throw new Error("Contract code is required");
+    }
+    
+    // Log the request
+    console.log(`🔍 API request: POST /api/Contract/requestTerminationOtp/${contractCode}`);
+    
+    // Make the API request
+    const response = await apiClient.post(
+      `/api/Contract/requestTerminationOtp/${contractCode}`,
+      null, // No request body needed
+      {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    console.log(`🟢 Request termination OTP response status: ${response.status}`);
+    console.log(`🟢 Request termination OTP data:`, response.data);
+    
+    return response.data;
+    
+  } catch (error: any) {
+    console.error("🔴 Request Termination OTP API Error:", error);
+    
+    if (error.response) {
+      console.error(`🔴 API Error [${error.response.status}]:`, error.response.data);
+      
+      return {
+        success: false,
+        message: error.response.data?.message || "Failed to request termination OTP",
+        errors: error.response.data?.errors || [],
+        data: null
+      };
+    } 
+    
+    return {
+      success: false,
+      message: error.message || "Failed to request termination OTP",
+      errors: [],
+      data: null
+    };
+  }
+};
+
+/**
+ * Terminate contract with OTP
+ * PUT /api/Contract/terminateContract/{contractCode}
+ */
+export const terminateContractAPI = async (
+  contractCode: string, 
+  otp: string
+): Promise<any> => {
+  try {
+    console.log(`🔍 Terminating contract: ${contractCode} with OTP`);
+    const apiClient = await initApiClient();
+    const token = await getToken();
+    
+    if (!token) {
+      console.error('🔍 No token available');
+      throw new Error("Unauthorized: Please log in.");
+    }
+    
+    // Validate parameters
+    if (!contractCode) {
+      throw new Error("Contract code is required");
+    }
+    
+    if (!otp) {
+      throw new Error("OTP is required");
+    }
+    
+    // Log the request
+    console.log(`🔍 API request: PUT /api/Contract/terminateContract/${contractCode}`);
+    console.log(`🔍 OTP length: ${otp.length}`);
+    
+    // Make the API request
+    const response = await apiClient.put(
+      `/api/Contract/terminateContract/${contractCode}`,
+      null, // No request body needed
+      {
+        params: {
+          otp: otp
+        },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    console.log(`🟢 Terminate contract response status: ${response.status}`);
+    console.log(`🟢 Terminate contract data:`, response.data);
+    
+    return response.data;
+    
+  } catch (error: any) {
+    console.error("🔴 Terminate Contract API Error:", error);
+    
+    if (error.response) {
+      console.error(`🔴 API Error [${error.response.status}]:`, error.response.data);
+      
+      return {
+        success: false,
+        message: error.response.data?.message || "Failed to terminate contract",
+        errors: error.response.data?.errors || [],
+        data: null
+      };
+    } 
+    
+    return {
+      success: false,
+      message: error.message || "Failed to terminate contract",
+      errors: [],
+      data: null
     };
   }
 };

@@ -22,7 +22,7 @@ import { useTheme } from '@/constants/ThemeContext';
 import { Colors } from '@/constants/Colors';
 import { getQuotationDetailByCustomerAPI, confirmQuotationAPI,removeProductFromQuotationAPI } from '@/utils/quotationsAPI';
 import { WebView } from 'react-native-webview';
-import ProductCatalog from '@/components/RelatedProductsSection';
+
 import QuotationRejectScreen from '@/components/QuotationRejectScreen';
 
 const PRIMARY_COLOR = "#5fc1f1";
@@ -1195,13 +1195,13 @@ const QuotationDetailScreen: React.FC = () => {
                   </View>
                   
                   {/* Delete button */}
-                  <TouchableOpacity 
+                  {/* <TouchableOpacity 
                     style={styles.deleteButton}
                     onPress={() => handleRemoveProduct(product.productId)}
                     hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
                   >
                     <Ionicons name="trash-outline" size={18} color="#FF6B6B" />
-                  </TouchableOpacity>
+                  </TouchableOpacity> */}
                 </View>
               </View>
             ))}
@@ -1299,12 +1299,12 @@ const QuotationDetailScreen: React.FC = () => {
           </Text>
         </View>
 
-        {quotation && quotation.status !== 1 && (
+        {/* {quotation && quotation.status !== 1 && (
           <ProductCatalog
             quotationCode={quotation.quotationCode}
             onProductAdded={fetchQuotationDetails}
           />
-        )}
+        )} */}
 
         <View style={styles.bottomSpace} />
         

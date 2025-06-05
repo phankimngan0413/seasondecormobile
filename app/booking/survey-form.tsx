@@ -23,6 +23,7 @@ import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
 import { getStyleColorByServiceIdAPI, getScopeOfWorkAPI } from "@/utils/decorserviceAPI";
 import { launchImageLibrary, launchCamera, ImagePickerResponse, CameraOptions, ImageLibraryOptions } from 'react-native-image-picker';
+import ProductCatalog from '@/components/RelatedProductsSection';
 
 const { width } = Dimensions.get('window');
 
@@ -1376,6 +1377,30 @@ const SurveyFormScreen = () => {
 
             {/* 9. Image Upload Section */}
             {renderImageUploadSection()}
+          </View>
+
+          {/* Product Catalog Section */}
+          <View style={[styles.formCard, { backgroundColor: colors.card }]}>
+            <View style={styles.formHeader}>
+              <Ionicons name="storefront" size={24} color={colors.primary} />
+              <Text style={[styles.formTitle, { color: colors.text }]}>
+                Related Products
+              </Text>
+            </View>
+            <Text style={[styles.formSubtitle, { color: colors.textSecondary }]}>
+              Explore products that complement your design preferences
+            </Text>
+            <ProductCatalog 
+              serviceId={bookingData?.decorServiceId || Number(params.decorServiceId || params.serviceId)}
+              onAddProduct={(productId: number, quantity: number) => {
+                console.log(`Adding product ${productId} with quantity ${quantity} to service`);
+                // Handle add product to service logic here
+              }}
+              onRemoveProduct={(productId: number) => {
+                console.log(`Removing product ${productId} from service`);
+                // Handle remove product from service logic here
+              }}
+            />
           </View>
           
           {/* Error Display */}

@@ -46,7 +46,7 @@ const isEmulator = async (): Promise<boolean> => {
 const setupBaseUrl = async (): Promise<string> => {
   // Logic for development environment
   let BASE_URL = SEASON_DECOR_API;
-  SEASON_DECOR_API
+  // SEASON_DECOR_API
   if (LOCALHOST) {
     BASE_URL = SEASON_DECOR_API;
   } else if (isWeb) {

@@ -206,13 +206,11 @@ export const createBookingAPI = async (bookingData: IBookingRequest): Promise<IB
     
     // Add images if present with correct field name for your API
     if (bookingData.images && bookingData.images.length > 0) {
-      console.log(`📷 Adding ${bookingData.images.length} images to FormData...`);
       
       let validImageCount = 0;
       for (let index = 0; index < bookingData.images.length; index++) {
         const file = bookingData.images[index] as any; // Type assertion for React Native compatibility
         if (file && (file.size > 0 || file.uri)) { // Accept both File objects and RN objects
-          console.log(`📎 Adding image ${index + 1}: ${file.name} (${file.size || 'unknown size'} bytes, ${file.type})`);
           
           // Use the field name that your API expects
           formData.append('Images', file); // Try PascalCase first
@@ -223,13 +221,12 @@ export const createBookingAPI = async (bookingData: IBookingRequest): Promise<IB
         }
       }
       
-      console.log(`✅ Added ${validImageCount} valid images to FormData with field name 'Images'`);
     } else {
-      console.log('📷 No images to add');
+      console.log(' No images to add');
     }
     
     // Use direct fetch with exact same headers as successful test
-    const response = await fetch("http://10.0.2.2:5297/api/Booking/create", {
+    const response = await fetch("https://seasondecor.azurewebsites.net/api/Booking/create", {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -263,7 +260,6 @@ export const createBookingAPIAlternative = async (bookingData: IBookingRequest):
     const token = await getToken();
     if (!token) throw new Error("No token found!");
     
-    console.log("🔄 Trying alternative format for multiple arrays...");
     
     const formData = new FormData();
     
@@ -323,7 +319,7 @@ export const createBookingAPIAlternative = async (bookingData: IBookingRequest):
       console.log(`✅ Added ${validImageCount} valid images with field name 'Images'`);
     }
     
-    const response = await fetch("http://10.0.2.2:5297/api/Booking/create", {
+    const response = await fetch("https://seasondecor.azurewebsites.net/api/Booking/create", {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -406,7 +402,7 @@ export const createBookingAPIAxios = async (bookingData: IBookingRequest): Promi
     
     // BYPASS interceptors by creating a fresh axios instance
     const freshAxios = require('axios').create({
-      baseURL: 'http://10.0.2.2:5297',
+      baseURL: 'https://seasondecor.azurewebsites.net',
       timeout: 30000,
     });
     
@@ -654,6 +650,280 @@ export const processCommitDepositAPI = async (bookingCode: string): Promise<IBoo
       success: false,
       message: error.message || "Failed to process deposit",
       errors: []
+    };
+  }
+};
+export const getAddedProductAPI = async (serviceId: number): Promise<any> => {
+  try {
+    const apiClient = await initApiClient();
+    const token = await getToken();
+    
+    if (!token) {
+      throw new Error("Unauthorized: Please log in.");
+    }
+    
+    // Check that we have valid serviceId
+    if (!serviceId) {
+      throw new Error("Service ID is required");
+    }
+    
+    // Log the request
+    
+    // Make the API request
+    const response = await apiClient.get(
+      `/api/DecorService/getAddedProduct/${serviceId}`,
+      {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+  
+    return response.data;
+    
+  } catch (error: any) {
+    console.error("🔴 Get Added Products API Error:", error);
+    
+    if (error.response) {
+      console.error(`🔴 API Error [${error.response.status}]:`, error.response.data);
+      
+      return {
+        success: false,
+        message: error.response.data?.message || "Failed to get added products",
+        errors: error.response.data?.errors || [],
+        data: null
+      };
+    } 
+    
+    return {
+      success: false,
+      message: error.message || "Failed to get added products",
+      errors: [],
+      data: null
+    };
+  }
+};
+
+/**
+ * Get paginated related products for a service
+ * GET /api/DecorService/getPaginatedRelatedProduct
+ */
+export const getPaginatedRelatedProductAPI = async (
+  serviceId: number,
+  options: {
+    userId?: number;
+    category?: string;
+    pageIndex?: number;
+    pageSize?: number;
+    sortBy?: string;
+    descending?: boolean;
+  } = {}
+): Promise<any> => {
+  try {
+    const apiClient = await initApiClient();
+    const token = await getToken();
+    
+    if (!token) {
+      throw new Error("Unauthorized: Please log in.");
+    }
+    
+    // Check that we have valid serviceId
+    if (!serviceId) {
+      throw new Error("Service ID is required");
+    }
+
+    // Prepare the query parameters
+    const params: Record<string, any> = {
+      ServiceId: serviceId  // Required parameter
+    };
+    
+    // Add optional parameters ONLY if they have valid values
+    if (options.userId !== undefined && options.userId > 0) params.UserId = options.userId;
+    if (options.category !== undefined && options.category.trim() !== '') params.Category = options.category;
+    // Only add pageIndex if it's greater than 0 to avoid negative offset
+    if (options.pageIndex !== undefined && options.pageIndex > 0) params.PageIndex = options.pageIndex;
+    if (options.pageSize !== undefined && options.pageSize > 0) params.PageSize = options.pageSize;
+    if (options.sortBy !== undefined && options.sortBy.trim() !== '') params.SortBy = options.sortBy;
+    if (options.descending !== undefined) params.Descending = options.descending;
+    
+    // Log the request parameters
+    console.log(`🔍 API request params:`, params);
+    
+    // Make the API request
+    const response = await apiClient.get(
+      `/api/DecorService/getPaginatedRelatedProduct`,
+      {
+        params,
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+  
+    // Return the API response
+    return response.data;
+    
+  } catch (error: any) {
+    console.error("🔴 Get Related Products API Error:", error);
+    
+    if (error.response) {
+      console.error(`🔴 API Error [${error.response.status}]:`, error.response.data);
+      
+      return {
+        success: false,
+        message: error.response.data?.message || "Failed to get related products",
+        errors: error.response.data?.errors || [],
+        data: null
+      };
+    } 
+    
+    return {
+      success: false,
+      message: error.message || "Failed to get related products",
+      errors: [],
+      data: null
+    };
+  }
+};
+
+/**
+ * Add product to service holder
+ * POST /api/DecorService/addProductToServiceHolder/{serviceId}
+ */
+export const addProductToServiceHolderAPI = async (
+  serviceId: number,
+  productId: number,
+  quantity: number
+): Promise<any> => {
+  try {
+    console.log(`🔍 Adding product ${productId} (quantity: ${quantity}) to service ${serviceId}`);
+    const apiClient = await initApiClient();
+    const token = await getToken();
+    
+    if (!token) {
+      console.error('🔍 No token available');
+      throw new Error("Unauthorized: Please log in.");
+    }
+    
+    // Validate parameters
+    if (!serviceId) {
+      throw new Error("Service ID is required");
+    }
+    
+    if (productId === undefined || productId === null) {
+      throw new Error("Product ID is required");
+    }
+    
+    if (quantity === undefined || quantity === null || quantity <= 0) {
+      throw new Error("Valid quantity is required (must be greater than 0)");
+    }
+    
+    // Log the request parameters
+    console.log(`🔍 API request: serviceId=${serviceId}, productId=${productId}, quantity=${quantity}`);
+    
+    // Make the API request
+    const response = await apiClient.post(
+      `/api/DecorService/addProductToServiceHolder/${serviceId}`,
+      null, // No request body needed
+      {
+        params: {
+          productId,
+          quantity
+        },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    return response.data;
+    
+  } catch (error: any) {
+    console.error("🔴 Add Product To Service Holder API Error:", error);
+    
+    if (error.response) {
+      console.error(`🔴 API Error [${error.response.status}]:`, error.response.data);
+      
+      return {
+        success: false,
+        message: error.response.data?.message || "Failed to add product to service",
+        errors: error.response.data?.errors || [],
+        data: null
+      };
+    } 
+    
+    return {
+      success: false,
+      message: error.message || "Failed to add product to service",
+      errors: [],
+      data: null
+    };
+  }
+};
+
+/**
+ * Remove product from service holder
+ * DELETE /api/DecorService/removeProductFromServiceHolder/{serviceId}
+ */
+export const removeProductFromServiceHolderAPI = async (
+  serviceId: number, 
+  productId: number
+): Promise<any> => {
+  try {
+    console.log(`🔍 Removing product ${productId} from service ${serviceId}`);
+    const apiClient = await initApiClient();
+    const token = await getToken();
+    
+    if (!token) {
+      throw new Error("Unauthorized: Please log in.");
+    }
+    
+    // Validate parameters
+    if (!serviceId) {
+      throw new Error("Service ID is required");
+    }
+    
+    if (!productId && productId !== 0) {
+      throw new Error("Product ID is required");
+    }
+
+    const response = await apiClient.delete(
+      `/api/DecorService/removeProductFromServiceHolder/${serviceId}`, 
+      {
+        params: {
+          productId: productId
+        },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    return response.data;
+    
+  } catch (error: any) {
+    console.error("🔴 Remove Product From Service Holder API Error:", error);
+    
+    if (error.response) {
+      console.error(`🔴 API Error [${error.response.status}]:`, error.response.data);
+      
+      return {
+        success: false,
+        message: error.response.data?.message || "Failed to remove product from service",
+        errors: error.response.data?.errors || [],
+        data: null
+      };
+    } 
+    
+    return {
+      success: false,
+      message: error.message || "Failed to remove product from service",
+      errors: [],
+      data: null
     };
   }
 };

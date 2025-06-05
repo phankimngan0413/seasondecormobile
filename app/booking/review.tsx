@@ -21,7 +21,7 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 import { useTheme } from "@/constants/ThemeContext";
 import { Colors } from "@/constants/Colors";
 import { createBookingAPI, createBookingAPIAlternative, IBookingRequest } from "@/utils/bookingAPI";
-
+import AddedProductsReview from '@/components/AddedProductsReview';
 const { width } = Dimensions.get('window');
 
 interface ReviewData {
@@ -661,7 +661,20 @@ const BookingReviewScreen = () => {
       </View>
     );
   };
+  const renderSelectedProductsSection = () => {
+  if (!reviewData?.bookingData?.decorServiceId) {
+    return null;
+  }
   
+  return (
+    <AddedProductsReview 
+      serviceId={reviewData.bookingData.decorServiceId}
+    />
+  );
+};
+
+// In the main render ScrollView, add this line after {renderImagesPreview()}:
+
   const renderImagesPreview = () => {
     if (!reviewData?.surveyData.uploadedImages || reviewData.surveyData.uploadedImages.length === 0) {
       return (
@@ -1006,7 +1019,7 @@ const BookingReviewScreen = () => {
           )}
           
           {renderImagesPreview()}
-          
+          {renderSelectedProductsSection()}
           <View style={[styles.summaryCard, { backgroundColor: colors.card }]}>
             <View style={styles.summaryHeader}>
               <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
@@ -1097,6 +1110,7 @@ const BookingReviewScreen = () => {
       </KeyboardAvoidingView>
       
       {renderConfirmModal()}
+
       {renderImageModal()}
     </SafeAreaView>
   );
